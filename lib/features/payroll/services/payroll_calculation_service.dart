@@ -236,7 +236,20 @@ class PayrollCalculationService {
       return (emiAmount: double.parse(finalEmi.toStringAsFixed(2)), loanDescription: desc);
     }
 
-    // 2. Case A: Current month has an approved full EMI pause request (0 deduction)
+    // 2. Check if original tenure has finished and awaits admin extension decision
+    final (reqYear, reqMonthNum) = EmployeeLoan.parseMonthYear(month);
+    final (origLastYear, origLastMonthNum) = EmployeeLoan.parseMonthYear(loan.originalLastDeductionMonth);
+    final isBeyondOriginalTenure = reqYear > origLastYear || (reqYear == origLastYear && reqMonthNum > origLastMonthNum);
+
+    if (isBeyondOriginalTenure && loan.extensionInstallments <= 0) {
+      // Payroll must not deduct loan EMI beyond original tenure until an extension is approved by Admin
+      final desc = loan.loanId.isNotEmpty
+          ? 'Tenure Completed (Pending Balance ₹${loan.actualRemainingBalance.toStringAsFixed(0)} - Awaiting Extension Decision) - ${loan.loanId}'
+          : 'Tenure Completed (Pending Balance ₹${loan.actualRemainingBalance.toStringAsFixed(0)} - Awaiting Extension Decision)';
+      return (emiAmount: 0.0, loanDescription: desc);
+    }
+
+    // 3. Case A: Current month has an approved full EMI pause request (0 deduction)
     if (loan.isMonthPaused(month)) {
       final String pauseNote = loan.loanId.isNotEmpty
           ? 'EMI Deferred for $month (${loan.loanId}) - Carried forward'
@@ -248,7 +261,7 @@ class PayrollCalculationService {
     final double scheduledTargetEmi;
     final String baseDescription;
 
-    // 3. Case B: Current month has an approved Flexible EMI request (partial deduction)
+    // 4. Case B: Current month has an approved Flexible EMI request (partial deduction)
     final flexibleReq = loan.getApprovedFlexibleRequestForMonth(month);
     if (flexibleReq != null) {
       final approvedAmt = flexibleReq.approvedAmount ?? flexibleReq.requestedAmount ?? (loan.emiAmount / 2);
@@ -260,7 +273,7 @@ class PayrollCalculationService {
       scheduledTargetEmi = finalEmi;
       baseDescription = flexNote;
     } else {
-      // 4. Case C: Recovering an unrecovered deferred pause from an earlier month (2x EMI)
+      // 5. Case C: Recovering an unrecovered deferred pause from an earlier month (2x EMI)
       final unrecoveredDeferred = loan.getUnrecoveredDeferredRequestBefore(month);
       if (unrecoveredDeferred != null) {
         final defMonthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == unrecoveredDeferred.month.trim().toLowerCase());
@@ -284,21 +297,22 @@ class PayrollCalculationService {
         scheduledTargetEmi = finalEmi;
         baseDescription = note;
       } else {
-        // 5. Case D: Normal installment or extended tenure installment
+        // 6. Case D: Normal installment or admin-approved extended tenure installment
         final monthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == month.trim().toLowerCase());
-        final currentMonthEmi = monthIdx != -1 && monthIdx < loan.installments
+        final currentMonthEmi = monthIdx != -1
             ? loan.emiForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
             : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
 
         final maxRecoverable = loan.actualRemainingBalance;
         final finalEmi = (currentMonthEmi > maxRecoverable && maxRecoverable > 0) ? maxRecoverable : currentMonthEmi;
 
-        final bool isExtended = monthIdx != -1 && (monthIdx + 1 > loan.baseInstallments);
+        final bool isExtended = monthIdx != -1 && (monthIdx >= loan.baseInstallments);
         final String installmentNote;
         if (isExtended) {
+          final extNum = monthIdx - loan.baseInstallments + 1;
           installmentNote = loan.loanId.isNotEmpty
-              ? 'Extended Installment ${monthIdx + 1} of ${loan.totalTenureMonths} (${loan.loanId})'
-              : 'Extended Installment ${monthIdx + 1} of ${loan.totalTenureMonths}';
+              ? 'Admin Extended Installment $extNum of ${loan.extensionInstallments} (${loan.loanId})'
+              : 'Admin Extended Installment $extNum of ${loan.extensionInstallments}';
         } else if (finalEmi < currentMonthEmi && finalEmi == maxRecoverable) {
           installmentNote = loan.loanId.isNotEmpty
               ? 'Final Installment (Balance ₹${finalEmi.toStringAsFixed(0)}) - ${loan.loanId}'

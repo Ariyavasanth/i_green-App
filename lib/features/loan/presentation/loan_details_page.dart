@@ -15,6 +15,7 @@ import '../domain/employee_loan.dart';
 import '../providers/loan_providers.dart';
 import '../services/loan_statement_pdf_generator.dart';
 import 'widgets/approve_loan_dialog.dart';
+import 'widgets/configure_loan_extension_dialog.dart';
 import 'widgets/record_direct_payment_dialog.dart';
 import 'widgets/request_emi_pause_dialog.dart';
 import 'widgets/review_emi_pause_dialog.dart';
@@ -39,24 +40,6 @@ class LoanDetailsPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
-        ),
-        title: const Text(
-          'Loan Details',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        centerTitle: false,
-      ),
       body: loanAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('Error loading loan: $err')),
@@ -305,7 +288,7 @@ class LoanDetailsPage extends ConsumerWidget {
           ] else if (canRequestPause) ...[
             const SizedBox(height: 10),
             const Text(
-              'Facing temporary financial difficulty? Click "Flexible EMI / Pause" to request a partial deduction or pause for an upcoming month. Any unpaid balance automatically carries forward and extends your loan tenure.',
+              'Facing temporary financial difficulty? Click "Flexible EMI / Pause" to request a partial deduction or pause for an upcoming month. Any unpaid balance will accumulate in your remaining balance. If any balance remains when the original loan duration ends, the admin will determine the extension schedule.',
               style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
             ),
           ],
@@ -687,9 +670,13 @@ class LoanDetailsPage extends ConsumerWidget {
           _buildRowDetail('Remaining Balance', formatCurrency.format(loan.actualRemainingBalance)),
           _buildRowDetail('Paid Installments', '${loan.paidInstallments} of ${loan.totalTenureMonths}'),
           _buildRowDetail('Remaining Installments', '${loan.remainingInstallments}'),
-          _buildRowDetail('Tenure', loan.isTenureExtended ? '${loan.totalTenureMonths} Months (${loan.extendedMonthsCount} Month${loan.extendedMonthsCount > 1 ? 's' : ''} Extended)' : '${loan.installments} Months'),
+          _buildRowDetail('Tenure', loan.isTenureExtended ? '${loan.baseInstallments} Months + ${loan.extendedMonthsCount} Month${loan.extendedMonthsCount > 1 ? 's' : ''} Extension (${loan.totalTenureMonths} Months total)' : '${loan.installments} Months'),
           _buildRowDetail('First Deduction Month', loan.firstDeductionMonth),
-          _buildRowDetail('Last Deduction Month', loan.isTenureExtended ? '${loan.effectiveLastDeductionMonth} (Extended from ${loan.lastDeductionMonth})' : loan.lastDeductionMonth),
+          _buildRowDetail('Last Deduction Month', loan.isTenureExtended ? '${loan.effectiveLastDeductionMonth} (Extended from ${loan.originalLastDeductionMonth})' : loan.lastDeductionMonth),
+          if (loan.isAwaitingExtensionDecision)
+            _buildRowDetail('Extension Status', 'Awaiting Admin Extension Decision', isStatus: true),
+          if (loan.isTenureExtended)
+            _buildRowDetail('Extension Approved By', '${loan.extensionApprovedBy} on ${loan.extensionApprovalDate}'),
           _buildRowDetail('Next EMI Month', loan.nextEmiMonth),
           _buildRowDetail('Disbursement Date', loan.disbursementDate.isNotEmpty ? loan.disbursementDate : '-'),
           _buildRowDetail('Purpose', loan.purpose.isNotEmpty ? loan.purpose : '-'),
@@ -709,6 +696,13 @@ class LoanDetailsPage extends ConsumerWidget {
     EmployeeLoan loan,
     List<PayrollRecord> payrolls,
   ) {
+    final currentEmp = ref.watch(currentEmployeeProvider);
+    final location = GoRouterState.of(context).uri.path;
+    final isEmployeeRoute = location.startsWith('/loan/details');
+    final isAdminManagementView = !isEmployeeRoute &&
+        currentEmp != null &&
+        (currentEmp.isSuperAdmin || currentEmp.hasPermission('Loan Management'));
+
     final formatCurrency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     final hasRepaymentDetails = loan.installments > 0 && loan.firstDeductionMonth.isNotEmpty && loan.scheduleMonths.isNotEmpty;
     final scheduleMonths = loan.scheduleMonths;
@@ -846,6 +840,67 @@ class LoanDetailsPage extends ConsumerWidget {
           const SizedBox(height: 14),
           const Divider(height: 1, color: Color(0xFFE5E7EB)),
           const SizedBox(height: 12),
+          if (loan.isAwaitingExtensionDecision) ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              margin: const EdgeInsets.only(bottom: 14),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.amber.shade300),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.hourglass_top_rounded, color: Colors.amber.shade800, size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Original Tenure Completed • Awaiting Extension Decision',
+                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'The initial ${loan.baseInstallments}-month tenure ended with an unpaid balance of ${formatCurrency.format(loan.actualRemainingBalance)}. Admin must configure the extension duration to resume monthly payroll deductions.',
+                          style: TextStyle(fontSize: 12, color: Colors.amber.shade900.withValues(alpha: 0.85)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else if (loan.isTenureExtended) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 14),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: Colors.blue.shade700, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Admin Extension Active: ${loan.extensionInstallments} additional months (${loan.extensionStartMonth} onwards) at ${formatCurrency.format(loan.extensionEmiAmount)}/month approved by ${loan.extensionApprovedBy}.',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.blue.shade900),
+                    ),
+                  ),
+                  if (isAdminManagementView)
+                    TextButton(
+                      onPressed: () => ConfigureLoanExtensionDialog.show(context, loan),
+                      child: const Text('Edit Extension', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                ],
+              ),
+            ),
+          ],
+          _buildLoanOutstandingSummary(context, loan, formatCurrency, isAdminManagementView: isAdminManagementView),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: () {
@@ -933,8 +988,8 @@ class LoanDetailsPage extends ConsumerWidget {
                   amountDue = monthEmi + deferredEmi;
                   amountDueSubtext = '${formatCurrency.format(deferredEmi)} def. + ${formatCurrency.format(monthEmi)} cur.';
                 } else if (isExtended) {
-                  amountDue = (runningPrincipal > 0 && runningPrincipal < monthEmi) ? runningPrincipal : monthEmi;
-                  amountDueSubtext = 'Extended Tenure';
+                  amountDue = loan.emiForInstallment(index, payrollStartDay: pStart, payrollEndDay: pEnd);
+                  amountDueSubtext = 'Admin Extended';
                 }
 
                 final paidAmount = isPaid
@@ -1191,6 +1246,285 @@ class LoanDetailsPage extends ConsumerWidget {
     );
   }
 
+  Widget _buildLoanOutstandingSummary(
+    BuildContext context,
+    EmployeeLoan loan,
+    NumberFormat formatCurrency, {
+    bool isAdminManagementView = false,
+  }) {
+    // Determine loan status text and badge colors
+    final String statusText;
+    final Color statusTextColor;
+    final Color statusBgColor;
+    final IconData statusIcon;
+
+    if (loan.actualRemainingBalance <= 0.01 || loan.status.trim().toLowerCase() == 'closed') {
+      statusText = 'Closed';
+      statusTextColor = const Color(0xFF16A34A);
+      statusBgColor = const Color(0xFFDCFCE7);
+      statusIcon = Icons.check_circle_outline;
+    } else if (loan.isAwaitingExtensionDecision) {
+      statusText = 'Awaiting Extension';
+      statusTextColor = Colors.amber.shade900;
+      statusBgColor = Colors.amber.shade50;
+      statusIcon = Icons.hourglass_top_rounded;
+    } else if (loan.isTenureExtended) {
+      statusText = 'Extended';
+      statusTextColor = Colors.blue.shade800;
+      statusBgColor = Colors.blue.shade50;
+      statusIcon = Icons.update;
+    } else {
+      statusText = 'Outstanding';
+      statusTextColor = AppColors.active;
+      statusBgColor = const Color(0xFFF1F5F9);
+      statusIcon = Icons.pending_actions_outlined;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.account_balance_wallet_outlined, color: AppColors.primary, size: 16),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Loan Outstanding Summary',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth >= 640;
+
+              final items = [
+                _buildSummaryMetricTile(
+                  label: 'Original Loan',
+                  value: formatCurrency.format(loan.loanAmount),
+                  icon: Icons.payments_outlined,
+                  iconColor: AppColors.textSecondary,
+                  valueColor: AppColors.textPrimary,
+                ),
+                _buildSummaryMetricTile(
+                  label: 'Total Repaid',
+                  value: formatCurrency.format(loan.totalPaid),
+                  icon: Icons.check_circle_outline,
+                  iconColor: const Color(0xFF16A34A),
+                  valueColor: const Color(0xFF16A34A),
+                ),
+                _buildSummaryMetricTile(
+                  label: 'Outstanding Balance',
+                  value: formatCurrency.format(loan.actualRemainingBalance),
+                  icon: Icons.error_outline,
+                  iconColor: loan.actualRemainingBalance > 0 ? Colors.amber.shade900 : const Color(0xFF16A34A),
+                  valueColor: loan.actualRemainingBalance > 0 ? Colors.amber.shade900 : const Color(0xFF16A34A),
+                  isHighlighted: true,
+                ),
+                _buildSummaryMetricTile(
+                  label: 'Original Tenure',
+                  value: '${loan.baseInstallments} Months',
+                  icon: Icons.calendar_today_outlined,
+                  iconColor: AppColors.textSecondary,
+                  valueColor: AppColors.textPrimary,
+                  subtext: loan.isTenureExtended ? '+${loan.extendedMonthsCount} mo extension' : null,
+                ),
+                _buildSummaryStatusTile(
+                  label: 'Loan Status',
+                  statusText: statusText,
+                  textColor: statusTextColor,
+                  bgColor: statusBgColor,
+                  icon: statusIcon,
+                ),
+              ];
+
+              if (isWide) {
+                return Row(
+                  children: [
+                    for (int i = 0; i < items.length; i++) ...[
+                      Expanded(child: items[i]),
+                      if (i < items.length - 1) const SizedBox(width: 10),
+                    ],
+                  ],
+                );
+              }
+
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: items.map((tile) {
+                  return SizedBox(
+                    width: (constraints.maxWidth - 10) / 2 > 140
+                        ? (constraints.maxWidth - 10) / 2
+                        : constraints.maxWidth,
+                    child: tile,
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryMetricTile({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color iconColor,
+    required Color valueColor,
+    String? subtext,
+    bool isHighlighted = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: isHighlighted ? Colors.amber.shade50.withValues(alpha: 0.6) : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isHighlighted ? Colors.amber.shade300 : const Color(0xFFE2E8F0),
+          width: isHighlighted ? 1.2 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 13, color: iconColor),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: valueColor,
+            ),
+          ),
+          if (subtext != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              subtext,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 10,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryStatusTile({
+    required String label,
+    required String statusText,
+    required Color textColor,
+    required Color bgColor,
+    required IconData icon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.info_outline, size: 13, color: AppColors.textSecondary),
+              SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  'Loan Status',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 12, color: textColor),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    statusText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatusWithSubtext({
     required IconData icon,
     required Color color,
@@ -1282,6 +1616,22 @@ class LoanDetailsPage extends ConsumerWidget {
               onPressed: () => _disburseLoan(context, ref, loan),
             ),
           if (isActive) ...[
+            if (loan.actualRemainingBalance > 0.01)
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: loan.isAwaitingExtensionDecision
+                      ? Colors.amber.shade800
+                      : (loan.isTenureExtended ? const Color(0xFF414A51) : AppColors.primary),
+                  foregroundColor: Colors.white,
+                ),
+                icon: const Icon(Icons.extension_rounded, size: 16),
+                label: Text(
+                  loan.isTenureExtended
+                      ? 'Edit Extension (${loan.extensionInstallments} mo)'
+                      : 'Configure Tenure Extension',
+                ),
+                onPressed: () => ConfigureLoanExtensionDialog.show(context, loan),
+              ),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,

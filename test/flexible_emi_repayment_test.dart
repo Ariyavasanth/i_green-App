@@ -57,12 +57,10 @@ void main() {
       expect(loan.scheduleMonths.last, 'May 2024');
     });
 
-    test('2. Flexible EMI partial deduction extends total tenure automatically', () {
+    test('2. Flexible EMI partial deduction stops auto-extension and accumulates deficit until Admin extension', () {
       // In January, 2000 paid. In February, only 1000 paid.
       // Total paid = 3000, actualRemainingBalance = 7000.
-      // paidInstallments = 2.
-      // With EMI 2000, 7000 requires ceil(7000/2000) = 4 more installments.
-      // Total tenure needed = 2 + 4 = 6 months (extended by 1 month to June 2024).
+      // Under admin-controlled tenure, original tenure stays fixed at 5 months.
       final loan = buildTestLoan(
         repayments: const [
           LoanRepayment(
@@ -82,12 +80,25 @@ void main() {
         ],
       );
 
-      expect(loan.totalTenureMonths, 6);
-      expect(loan.isTenureExtended, isTrue);
-      expect(loan.extendedMonthsCount, 1);
-      expect(loan.effectiveLastDeductionMonth, 'June 2024');
-      expect(loan.scheduleMonths.length, 6);
-      expect(loan.scheduleMonths.last, 'June 2024');
+      // Tenure does NOT auto-extend without admin decision
+      expect(loan.totalTenureMonths, 5);
+      expect(loan.isTenureExtended, isFalse);
+      expect(loan.extendedMonthsCount, 0);
+      expect(loan.effectiveLastDeductionMonth, 'May 2024');
+      expect(loan.accumulatedUnpaidDeficit, 1000.0);
+
+      // When admin configures extension:
+      final adminExtended = loan.copyWith(
+        extensionInstallments: 1,
+        extensionEmiAmount: 1000.0,
+        extensionStartMonth: 'June 2024',
+      );
+      expect(adminExtended.totalTenureMonths, 6);
+      expect(adminExtended.isTenureExtended, isTrue);
+      expect(adminExtended.extendedMonthsCount, 1);
+      expect(adminExtended.effectiveLastDeductionMonth, 'June 2024');
+      expect(adminExtended.scheduleMonths.length, 6);
+      expect(adminExtended.scheduleMonths.last, 'June 2024');
     });
 
     test('3. LoanEmiPauseRequest supports Flexible vs Full Pause request types', () {
@@ -181,7 +192,7 @@ void main() {
       expect(metrics.loanDescription, contains('Partial EMI (₹1250 of ₹2000) - ₹750 carried forward (LN1005)'));
     });
 
-    test('6. Dynamic extended installment description tags extended month properly', () {
+    test('6. Dynamic extended installment description tags extended month properly when admin extends', () {
       // 5 repayments of 1800 paid = 9000 total paid. Remaining = 1000.
       final extendedLoan = buildTestLoan(
         repayments: const [
@@ -191,6 +202,10 @@ void main() {
           LoanRepayment(repaymentId: 'R4', payrollId: 'P4', month: 'April 2024', amount: 1800.0, paymentDate: '2024-04-30'),
           LoanRepayment(repaymentId: 'R5', payrollId: 'P5', month: 'May 2024', amount: 1800.0, paymentDate: '2024-05-31'),
         ],
+      ).copyWith(
+        extensionInstallments: 1,
+        extensionEmiAmount: 1000.0,
+        extensionStartMonth: 'June 2024',
       );
 
       const settings = PayrollSettings();
@@ -200,12 +215,12 @@ void main() {
         settings: settings,
       );
 
-      // Remaining balance is 1000, so only 1000 is deducted to finish loan completely
+      // Remaining balance is 1000, so 1000 is deducted to finish loan completely
       expect(metrics.emiAmount, 1000.0);
-      expect(metrics.loanDescription, contains('Extended Installment 6 of 6 (LN1005)'));
+      expect(metrics.loanDescription, contains('Admin Extended Installment 1 of 1 (LN1005)'));
     });
 
-    test('7. Approved flexible request before payroll runs extends tenure from 12 to 13 months and generates Month 13', () {
+    test('7. Approved flexible request accumulates deficit and admin extends tenure from 12 to 13 months', () {
       final loan12 = EmployeeLoan(
         id: 2,
         loanId: 'LN2000',
@@ -246,16 +261,26 @@ void main() {
         ],
       );
 
-      // Tenure must auto-extend to 13 months
-      expect(loan12.totalTenureMonths, 13);
-      expect(loan12.isTenureExtended, isTrue);
-      expect(loan12.extendedMonthsCount, 1);
-      expect(loan12.effectiveLastDeductionMonth, 'October 2027');
-      expect(loan12.scheduleMonths.length, 13);
-      expect(loan12.scheduleMonths[0], 'October 2026');
-      expect(loan12.scheduleMonths[1], 'November 2026');
-      expect(loan12.scheduleMonths[11], 'September 2027');
-      expect(loan12.scheduleMonths[12], 'October 2027');
+      // Tenure does not auto-extend without admin approval
+      expect(loan12.totalTenureMonths, 12);
+      expect(loan12.isTenureExtended, isFalse);
+
+      // Admin configures 1-month extension
+      final adminExtendedLoan = loan12.copyWith(
+        extensionInstallments: 1,
+        extensionEmiAmount: 834.0,
+        extensionStartMonth: 'October 2027',
+      );
+
+      expect(adminExtendedLoan.totalTenureMonths, 13);
+      expect(adminExtendedLoan.isTenureExtended, isTrue);
+      expect(adminExtendedLoan.extendedMonthsCount, 1);
+      expect(adminExtendedLoan.effectiveLastDeductionMonth, 'October 2027');
+      expect(adminExtendedLoan.scheduleMonths.length, 13);
+      expect(adminExtendedLoan.scheduleMonths[0], 'October 2026');
+      expect(adminExtendedLoan.scheduleMonths[1], 'November 2026');
+      expect(adminExtendedLoan.scheduleMonths[11], 'September 2027');
+      expect(adminExtendedLoan.scheduleMonths[12], 'October 2027');
     });
 
     test('8. Employee gives 3000 directly to admin in Month 2: balance drops from 9000 to 6000, and Month 2 payroll deducts 0 from salary', () {

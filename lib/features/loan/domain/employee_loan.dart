@@ -247,6 +247,15 @@ class EmployeeLoan {
   final List<LoanRepayment> repayments;
   final List<LoanEmiPauseRequest> pauseRequests;
 
+  // ── Admin-Controlled Extension Fields ──
+  final int extensionInstallments; // Number of additional months approved by admin
+  final double extensionEmiAmount; // Approved EMI per month for the extension
+  final String extensionStartMonth; // First month of the extension
+  final String extensionApprovedBy; // Admin who approved the extension
+  final String extensionApprovalDate; // Date extension was approved
+  final String extensionRemarks; // Optional notes/remarks for the extension
+  final double extensionInterestRate; // Optional interest/markup % applied during extension (default 0.0)
+
   const EmployeeLoan({
     required this.id,
     required this.loanId,
@@ -275,6 +284,13 @@ class EmployeeLoan {
     required this.remainingBalance,
     this.repayments = const [],
     this.pauseRequests = const [],
+    this.extensionInstallments = 0,
+    this.extensionEmiAmount = 0.0,
+    this.extensionStartMonth = '',
+    this.extensionApprovedBy = '',
+    this.extensionApprovalDate = '',
+    this.extensionRemarks = '',
+    this.extensionInterestRate = 0.0,
   });
 
   /// Parse "Month Year" (e.g. "September 2026") into (year, monthNumber)
@@ -381,12 +397,24 @@ class EmployeeLoan {
   }
 
   /// Total EMI for a specific installment month (0-indexed)
-  /// = Monthly Principal + Full-Month Interest for that month
+  /// = Monthly Principal + Full-Month Interest for that month.
+  /// For admin-approved extension months, uses extensionEmiAmount with final installment rounding.
   double emiForInstallment(
     int index, {
     int payrollStartDay = 20,
     int payrollEndDay = 20,
   }) {
+    if (index >= baseInstallments && extensionInstallments > 0) {
+      if (extensionEmiAmount > 0) {
+        // Final installment clears exact remaining balance without overcharging
+        if (index == totalTenureMonths - 1) {
+          if (actualRemainingBalance > 0 && actualRemainingBalance < extensionEmiAmount) {
+            return actualRemainingBalance;
+          }
+        }
+        return extensionEmiAmount;
+      }
+    }
     return monthlyPrincipal + interestForInstallment(
       index,
       payrollStartDay: payrollStartDay,
@@ -473,83 +501,73 @@ class EmployeeLoan {
   /// Base installment count representing original agreed duration
   int get baseInstallments => originalInstallments > 0 ? originalInstallments : installments;
 
-  /// Calculate effective total installments needed to fully recover the loan,
-  /// factoring in both historical partial repayments and approved future flexible/pause requests.
-  int get effectiveInstallments {
-    if (actualRemainingBalance <= 0 || status == 'Closed' || emiAmount <= 0) {
-      return installments;
-    }
-
-    final baseline = baseInstallments;
-    if (firstDeductionMonth.isEmpty) {
-      final paidCount = repayments.length;
-      final futureCount = (actualRemainingBalance / emiAmount).ceil();
-      final totalNeeded = paidCount + futureCount;
-      return totalNeeded > baseline ? totalNeeded : baseline;
-    }
-
-    double balance = totalRepayableAmount;
-    int monthIndex = 0;
-
-    // Simulate month-by-month deduction until balance reaches 0 (or at least baseline installments)
-    while ((balance > 0.01 || monthIndex < baseline) && monthIndex < 240) {
-      final month = getMonthAtOffset(firstDeductionMonth, monthIndex);
-      final monthNorm = month.trim().toLowerCase();
-
-      // Check if this month is already recorded in repayments (including direct payments to admin)
-      final monthRepayments = repayments.where((r) => r.month.trim().toLowerCase() == monthNorm);
-      if (monthRepayments.isNotEmpty) {
-        final paidInMonth = monthRepayments.fold<double>(0.0, (sum, r) => sum + r.amount);
-        balance -= paidInMonth;
-      } else {
-        // Upcoming month: check for approved pause or flexible request
-        final pauseReq = getPauseRequestForMonth(month);
-        final isApproved = pauseReq != null && pauseReq.status.trim().toLowerCase() == 'approved';
-
-        if (isApproved && pauseReq.isFullPause) {
-          // Full pause: 0 deduction in this month
-        } else if (isApproved && pauseReq.isFlexible) {
-          final approvedAmt = pauseReq.approvedAmount ?? pauseReq.requestedAmount ?? emiAmount;
-          final deduction = approvedAmt < balance ? approvedAmt : balance;
-          balance -= deduction;
-        } else {
-          // Standard EMI deduction
-          final deduction = emiAmount < balance ? emiAmount : balance;
-          balance -= deduction;
-        }
-      }
-
-      monthIndex++;
-      if (balance <= 0.01 && monthIndex >= baseline) {
-        break;
-      }
-    }
-
-    return monthIndex > baseline ? monthIndex : baseline;
+  /// Original last deduction month before any admin extension
+  String get originalLastDeductionMonth {
+    if (firstDeductionMonth.isEmpty || baseInstallments <= 0) return lastDeductionMonth;
+    return getMonthAtOffset(firstDeductionMonth, baseInstallments - 1);
   }
 
-  /// Total tenure in months taking into account any extended tenure
+  /// Whether the original agreed tenure has elapsed / finished
+  bool get isOriginalTenureFinished {
+    if (firstDeductionMonth.isEmpty || baseInstallments <= 0) return false;
+    final distinctMonthsPaid = repayments.map((r) => r.month.trim().toLowerCase()).toSet().length;
+    if (distinctMonthsPaid >= baseInstallments || repayments.length >= baseInstallments || payrollRepayments.length >= baseInstallments || paidInstallments >= baseInstallments) {
+      return true;
+    }
+    final now = DateTime.now();
+    final (lastYear, lastMonth) = parseMonthYear(originalLastDeductionMonth);
+    if (now.year > lastYear || (now.year == lastYear && now.month > lastMonth)) {
+      return true;
+    }
+    return false;
+  }
+
+  /// Whether the loan is awaiting Admin extension decision:
+  /// original duration finished with pending balance, but admin hasn't configured extension yet.
+  bool get isAwaitingExtensionDecision {
+    if (actualRemainingBalance <= 0.01 || status == 'Closed' || status == 'Rejected' || status == 'Pending') {
+      return false;
+    }
+    if (extensionInstallments > 0) {
+      return false;
+    }
+    return isOriginalTenureFinished;
+  }
+
+  /// Accumulated unpaid deficit from partial deductions during original tenure
+  double get accumulatedUnpaidDeficit {
+    if (repayments.isEmpty) return 0.0;
+    double deficit = 0.0;
+    for (int i = 0; i < baseInstallments; i++) {
+      final month = getMonthAtOffset(firstDeductionMonth, i);
+      final monthPaid = getTotalRepaymentsForMonth(month);
+      final monthEmi = emiForInstallment(i);
+      if (monthPaid > 0 && monthPaid < monthEmi) {
+        deficit += (monthEmi - monthPaid);
+      }
+    }
+    return deficit > actualRemainingBalance ? actualRemainingBalance : deficit;
+  }
+
+  /// Effective total installments (strictly controlled by baseInstallments + admin-approved extension)
+  int get effectiveInstallments => totalTenureMonths;
+
+  /// Total tenure in months taking into account admin-approved extension
   int get totalTenureMonths {
-    int maxM = baseInstallments;
-    if (installments > maxM) {
-      maxM = installments;
+    int count = baseInstallments + extensionInstallments;
+    if (repayments.isNotEmpty && repayments.length > count) {
+      count = repayments.length;
     }
-    if (effectiveInstallments > maxM) {
-      maxM = effectiveInstallments;
-    }
-    if (repayments.isNotEmpty && repayments.length > maxM) {
-      maxM = repayments.length;
-    }
-    return maxM;
+    return count;
   }
 
-  /// Check if total tenure has been extended beyond original duration
-  bool get isTenureExtended => totalTenureMonths > baseInstallments;
+  /// Check if total tenure has been extended beyond original duration by admin
+  bool get isTenureExtended => extensionInstallments > 0;
 
-  /// Number of extra months added to the loan
-  int get extendedMonthsCount => isTenureExtended ? totalTenureMonths - baseInstallments : 0;
+  /// Number of extra months added to the loan by admin
+  int get extendedMonthsCount => extensionInstallments;
 
-  /// Effective last deduction month (extended if needed)
+  /// Effective last deduction month (extended if approved by admin)
   String get effectiveLastDeductionMonth {
     final months = scheduleMonths;
     if (months.isNotEmpty) return months.last;
@@ -688,6 +706,13 @@ class EmployeeLoan {
       'remaining_balance': actualRemainingBalance,
       'repayments': repayments.map((r) => r.toMap()).toList(),
       'pause_requests': pauseRequests.map((r) => r.toMap()).toList(),
+      'extension_installments': extensionInstallments,
+      'extension_emi_amount': extensionEmiAmount,
+      'extension_start_month': extensionStartMonth,
+      'extension_approved_by': extensionApprovedBy,
+      'extension_approval_date': extensionApprovalDate,
+      'extension_remarks': extensionRemarks,
+      'extension_interest_rate': extensionInterestRate,
     };
   }
 
@@ -736,6 +761,13 @@ class EmployeeLoan {
       remainingBalance: (map['remaining_balance'] as num?)?.toDouble() ?? 0.0,
       repayments: repaymentsList,
       pauseRequests: pauseList,
+      extensionInstallments: map['extension_installments'] as int? ?? 0,
+      extensionEmiAmount: (map['extension_emi_amount'] as num?)?.toDouble() ?? 0.0,
+      extensionStartMonth: map['extension_start_month'] as String? ?? '',
+      extensionApprovedBy: map['extension_approved_by'] as String? ?? '',
+      extensionApprovalDate: map['extension_approval_date'] as String? ?? '',
+      extensionRemarks: map['extension_remarks'] as String? ?? '',
+      extensionInterestRate: (map['extension_interest_rate'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
@@ -767,6 +799,13 @@ class EmployeeLoan {
     double? remainingBalance,
     List<LoanRepayment>? repayments,
     List<LoanEmiPauseRequest>? pauseRequests,
+    int? extensionInstallments,
+    double? extensionEmiAmount,
+    String? extensionStartMonth,
+    String? extensionApprovedBy,
+    String? extensionApprovalDate,
+    String? extensionRemarks,
+    double? extensionInterestRate,
   }) {
     return EmployeeLoan(
       id: id ?? this.id,
@@ -796,6 +835,13 @@ class EmployeeLoan {
       remainingBalance: remainingBalance ?? this.remainingBalance,
       repayments: repayments ?? this.repayments,
       pauseRequests: pauseRequests ?? this.pauseRequests,
+      extensionInstallments: extensionInstallments ?? this.extensionInstallments,
+      extensionEmiAmount: extensionEmiAmount ?? this.extensionEmiAmount,
+      extensionStartMonth: extensionStartMonth ?? this.extensionStartMonth,
+      extensionApprovedBy: extensionApprovedBy ?? this.extensionApprovedBy,
+      extensionApprovalDate: extensionApprovalDate ?? this.extensionApprovalDate,
+      extensionRemarks: extensionRemarks ?? this.extensionRemarks,
+      extensionInterestRate: extensionInterestRate ?? this.extensionInterestRate,
     );
   }
 }

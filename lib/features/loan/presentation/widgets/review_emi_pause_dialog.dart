@@ -228,8 +228,8 @@ class _ReviewEmiPauseDialogState extends ConsumerState<ReviewEmiPauseDialog> {
                   Expanded(
                     child: Text(
                       isFlexible
-                          ? 'Approving will set salary deduction to ${formatCurrency.format(approvedNum)} for ${widget.request.month}. Unpaid ${formatCurrency.format(carriedForward)} automatically carries forward, and loan tenure auto-extends by 1 month to recover the balance.'
-                          : 'Approving this request will skip EMI deduction (₹0) for ${widget.request.month}. The salary deduction will recover in subsequent cycles, auto-extending tenure.',
+                          ? 'Approving will set salary deduction to ${formatCurrency.format(approvedNum)} for ${widget.request.month}. Unpaid ${formatCurrency.format(carriedForward)} will accumulate in the remaining balance. If any balance remains after the original duration ends, admin will configure the extension schedule.'
+                          : 'Approving this request will skip EMI deduction (₹0) for ${widget.request.month}. The salary deduction will recover in subsequent cycles or be scheduled by the admin upon tenure completion.',
                       style: TextStyle(color: Colors.blue.shade900, fontSize: 12, height: 1.3),
                     ),
                   ),

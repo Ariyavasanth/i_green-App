@@ -14,6 +14,7 @@ import '../domain/employee_loan.dart';
 import '../providers/loan_providers.dart';
 import '../services/loan_statement_pdf_generator.dart';
 import 'widgets/approve_loan_dialog.dart';
+import 'widgets/configure_loan_extension_dialog.dart';
 import 'widgets/record_direct_payment_dialog.dart';
 import 'widgets/review_emi_pause_dialog.dart';
 
@@ -697,12 +698,16 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
           emi: currencyFormat.format(loan.emiAmount),
           balance: currencyFormat.format(loan.remainingBalance),
           status: loan.status,
+          isAwaitingExtension: loan.isAwaitingExtensionDecision,
           onView: () => context.push('/loan-management/details/${loan.id}'),
           onHistory: () => _showEmployeeLoanHistory(loan),
           onEdit: (loan.status == 'Pending' || loan.status.startsWith('Pending '))
               ? () => context.push('/loan-management/create', extra: loan)
               : null,
           onDownload: () => _downloadStatement(loan),
+          onConfigureExtension: (loan.isAwaitingExtensionDecision || loan.isTenureExtended || (loan.isOriginalTenureFinished && loan.actualRemainingBalance > 0.01))
+              ? () => ConfigureLoanExtensionDialog.show(context, loan)
+              : null,
           onApprove: (loan.status == 'Pending' || loan.status.startsWith('Pending '))
               ? () => _handleAction('approve', loan)
               : null,
@@ -773,7 +778,7 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
                     DataCell(Text(loan.loanId, style: const TextStyle(fontWeight: FontWeight.w500))),
                     DataCell(Text(loan.loanType)),
                     DataCell(Text(currencyFormat.format(loan.loanAmount), style: const TextStyle(fontWeight: FontWeight.w600))),
-                    DataCell(_buildStatusBadge(loan.status)),
+                    DataCell(_buildStatusBadgeForLoan(loan)),
                     DataCell(_buildActionsCell(loan)),
                   ],
                 );
@@ -783,6 +788,45 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
         ),
       ),
     );
+  }
+
+  Widget _buildStatusBadgeForLoan(EmployeeLoan loan) {
+    if (loan.isAwaitingExtensionDecision) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.amber.shade50,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.amber.shade300),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.hourglass_top_rounded, size: 12, color: Colors.amber.shade800),
+            const SizedBox(width: 4),
+            Text(
+              'Awaiting Extension',
+              style: TextStyle(color: Colors.amber.shade900, fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      );
+    }
+    if (loan.isTenureExtended && loan.status.trim().toLowerCase() == 'active') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.blue.shade50,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.blue.shade200),
+        ),
+        child: Text(
+          'Active (Extended)',
+          style: TextStyle(color: Colors.blue.shade800, fontSize: 11, fontWeight: FontWeight.bold),
+        ),
+      );
+    }
+    return _buildStatusBadge(loan.status);
   }
 
   Widget _buildStatusBadge(String status) {
@@ -860,6 +904,17 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
             value: 'direct_payment',
             child: Row(children: [Icon(Icons.payments_outlined, size: 16, color: AppColors.primary), SizedBox(width: 8), Text('Record Payment')]),
           ),
+        if (loan.isAwaitingExtensionDecision || loan.isTenureExtended || (loan.isOriginalTenureFinished && loan.actualRemainingBalance > 0.01))
+          PopupMenuItem(
+            value: 'configure_extension',
+            child: Row(
+              children: [
+                const Icon(Icons.extension_outlined, size: 16, color: Colors.indigo),
+                const SizedBox(width: 8),
+                Text(loan.extensionInstallments > 0 ? 'Edit Extension' : 'Configure Extension', style: const TextStyle(color: Colors.indigo)),
+              ],
+            ),
+          ),
         if (loan.status == 'Active')
           const PopupMenuItem(
             value: 'close',
@@ -886,6 +941,9 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
           break;
         case 'edit':
           context.push('/loan-management/create', extra: loan);
+          break;
+        case 'configure_extension':
+          await ConfigureLoanExtensionDialog.show(context, loan);
           break;
         case 'approve':
           await ApproveLoanDialog.show(context, loan);
@@ -1083,10 +1141,12 @@ class MobileLoanCard extends StatelessWidget {
   final String emi;
   final String balance;
   final String status;
+  final bool isAwaitingExtension;
   final VoidCallback onView;
   final VoidCallback onHistory;
   final VoidCallback? onEdit;
   final VoidCallback onDownload;
+  final VoidCallback? onConfigureExtension;
   final VoidCallback? onApprove;
   final VoidCallback? onReject;
   final VoidCallback? onActivate;
@@ -1101,10 +1161,12 @@ class MobileLoanCard extends StatelessWidget {
     required this.emi,
     required this.balance,
     required this.status,
+    this.isAwaitingExtension = false,
     required this.onView,
     required this.onHistory,
     this.onEdit,
     required this.onDownload,
+    this.onConfigureExtension,
     this.onApprove,
     this.onReject,
     this.onActivate,
@@ -1194,6 +1256,9 @@ class MobileLoanCard extends StatelessWidget {
                     case 'download':
                       onDownload();
                       break;
+                    case 'configure_extension':
+                      onConfigureExtension?.call();
+                      break;
                     case 'approve':
                       onApprove?.call();
                       break;
@@ -1265,6 +1330,16 @@ class MobileLoanCard extends StatelessWidget {
                         contentPadding: EdgeInsets.zero,
                         leading: Icon(Icons.play_circle_outline, color: Colors.green, size: 20),
                         title: Text('Activate Loan', style: TextStyle(color: Colors.green)),
+                      ),
+                    ),
+                  if (onConfigureExtension != null)
+                    const PopupMenuItem(
+                      value: 'configure_extension',
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.extension_outlined, color: Colors.indigo, size: 20),
+                        title: Text('Configure Extension', style: TextStyle(color: Colors.indigo)),
                       ),
                     ),
                   if (onClose != null)

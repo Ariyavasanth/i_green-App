@@ -382,8 +382,8 @@ class _RequestEmiPauseDialogState extends ConsumerState<RequestEmiPauseDialog> {
                     Expanded(
                       child: Text(
                         _requestType == 'Flexible'
-                            ? 'If approved, only ${formatCurrency.format(enteredAmt)} will be deducted in $_selectedMonth. The unpaid ${formatCurrency.format(carriedForwardAmt)} will automatically carry forward to your remaining balance, and your loan tenure will auto-extend by 1 month to recover the balance.'
-                            : 'If approved, ₹0 will be deducted in $_selectedMonth. The full EMI will carry forward and the tenure will be extended accordingly.',
+                            ? 'If approved, only ${formatCurrency.format(enteredAmt)} will be deducted in $_selectedMonth. The unpaid ${formatCurrency.format(carriedForwardAmt)} will accumulate in your remaining balance. If any balance remains when the original loan duration ends, the admin will determine the extension schedule.'
+                            : 'If approved, ₹0 will be deducted in $_selectedMonth. The full EMI will carry forward to subsequent cycles or be scheduled by the admin upon tenure completion.',
                         style: TextStyle(color: Colors.blue.shade900, fontSize: 12, height: 1.3),
                       ),
                     ),

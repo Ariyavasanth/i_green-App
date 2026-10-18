@@ -216,10 +216,10 @@ class LoanStatementPdfGenerator {
                         ),
                         pw.SizedBox(height: 6),
                         _buildInfoRow('Loan Type:', loan.loanType),
-                        _buildInfoRow('Tenure:', loan.isTenureExtended ? '${loan.totalTenureMonths} Months (${loan.extendedMonthsCount} mo extended)' : '${loan.installments} Months'),
+                        _buildInfoRow('Tenure:', loan.isTenureExtended ? '${loan.baseInstallments} Months + ${loan.extendedMonthsCount} mo extension (${loan.totalTenureMonths} mo total)' : '${loan.installments} Months'),
                         _buildInfoRow('Disbursement Date:', loan.disbursementDate.isNotEmpty ? loan.disbursementDate : '-'),
-                        _buildInfoRow('Last Deduction Month:', loan.effectiveLastDeductionMonth),
-                        _buildInfoRow('Status:', loan.status),
+                        _buildInfoRow('Last Deduction Month:', loan.isTenureExtended ? '${loan.effectiveLastDeductionMonth} (Extended)' : loan.lastDeductionMonth),
+                        _buildInfoRow('Status:', loan.isAwaitingExtensionDecision ? 'Tenure Completed (Awaiting Extension)' : loan.status),
                       ],
                     ),
                   ),
@@ -340,7 +340,7 @@ class LoanStatementPdfGenerator {
                   } else if (is2xDue) {
                     amountDue = monthEmi + deferredEmi;
                   } else if (isExtended) {
-                    amountDue = (runningPrincipal > 0 && runningPrincipal < monthEmi) ? runningPrincipal : monthEmi;
+                    amountDue = loan.emiForInstallment(index);
                   }
 
                   // Dynamic principal deduction
@@ -365,7 +365,7 @@ class LoanStatementPdfGenerator {
                       ? (ledgerRepayment?.amount ?? (matchingPayroll != null ? matchingPayroll.companyLoan : (is2xPaid ? amountDue : (isFlexibleReq ? amountDue : monthEmi))))
                       : 0.0;
                   final rowBgColor = index % 2 == 0 ? PdfColors.white : lightBgColor;
-                  String statusText = isExtended ? 'EXTENDED' : 'SCHEDULED';
+                  String statusText = isExtended ? 'ADMIN EXTENDED' : 'SCHEDULED';
                   PdfColor statusColor = PdfColors.grey700;
 
                   if (isPaid) {
