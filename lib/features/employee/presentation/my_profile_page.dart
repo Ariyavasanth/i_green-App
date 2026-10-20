@@ -234,10 +234,99 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    final empStream = ref.watch(currentEmployeeStreamProvider);
+    final employeesAsync = ref.watch(employeesProvider);
     final emp = ref.watch(currentEmployeeProvider);
+    final authEmail = ref.watch(currentUserEmailProvider);
+
+    final isLoading = (empStream.isLoading || employeesAsync.isLoading) && emp == null;
+
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A)));
+    }
 
     if (emp == null) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 480),
+          margin: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE5E8E2)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFFFF8E1),
+                  border: Border.all(color: const Color(0xFFFFE082)),
+                ),
+                child: const Icon(Icons.person_off_outlined, size: 36, color: Color(0xFFF57C00)),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Profile Not Found',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'No employee profile record was found for account "${authEmail ?? 'current user'}".\nPlease contact your administrator or retry syncing.',
+                style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.5),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF414A51),
+                        side: const BorderSide(color: Color(0xFFCBD5E1)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: _logout,
+                      icon: const Icon(Icons.logout, size: 18),
+                      label: const Text('Log Out'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF9CC70A),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () {
+                        ref.invalidate(currentEmployeeStreamProvider);
+                        ref.invalidate(employeesProvider);
+                        ref.invalidate(currentEmployeeProvider);
+                      },
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text('Retry'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     _syncEmployeeData(emp);

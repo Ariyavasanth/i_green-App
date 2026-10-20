@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/theme/app_colors.dart';
+import '../features/authentication/providers/authentication_providers.dart';
+import '../features/employee/domain/employee.dart';
 import '../features/employee/providers/employee_providers.dart';
 import '../widgets/brand_logo.dart';
 import '../widgets/module_card.dart';
@@ -14,9 +16,20 @@ class ModuleDashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final employeeStream = ref.watch(currentEmployeeStreamProvider);
+    final employeesAsync = ref.watch(employeesProvider);
     final employee = ref.watch(currentEmployeeProvider);
-    final employeeName = employee?.firstName ?? '';
-    final designation = employee?.designation ?? 'Enterprise User';
+    final authEmail = ref.watch(currentUserEmailProvider);
+
+    final isLoading = (employeeStream.isLoading || employeesAsync.isLoading) && employee == null;
+    final hasError = (employeeStream.hasError || employeesAsync.hasError) && employee == null;
+    final employeeCount = employeesAsync.asData?.value.length ?? 0;
+
+    void refreshProfile() {
+      ref.invalidate(currentEmployeeStreamProvider);
+      ref.invalidate(currentEmployeeProvider);
+      ref.invalidate(employeesProvider);
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8F6),
@@ -25,17 +38,17 @@ class ModuleDashboardScreen extends ConsumerWidget {
           children: [
             // ── Top Header ──
             _DashboardTopBar(
-              employeeName: employeeName,
-              designation: designation,
-              photoUrl: employee?.profileImageUrl,
+              employee: employee,
+              authEmail: authEmail,
+              isLoading: isLoading,
+              hasError: hasError,
             ),
             // ── Main Content Area ──
             Expanded(
               child: RefreshIndicator(
                 color: AppColors.active,
                 onRefresh: () async {
-                  ref.invalidate(currentEmployeeProvider);
-                  ref.invalidate(employeesProvider);
+                  refreshProfile();
                   await Future.delayed(const Duration(milliseconds: 500));
                 },
                 child: SingleChildScrollView(
@@ -56,10 +69,19 @@ class ModuleDashboardScreen extends ConsumerWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 // ── Greeting & Hero Section ──
-                                _GreetingHero(employeeName: employeeName),
+                                _GreetingHero(
+                                  employee: employee,
+                                  authEmail: authEmail,
+                                  isLoading: isLoading,
+                                  hasError: hasError,
+                                  onRetry: refreshProfile,
+                                ),
                                 SizedBox(height: isSmall ? 20 : 28),
                                 // ── Workspace Modules Section ──
-                                _WorkspaceSection(employee: employee),
+                                _WorkspaceSection(
+                                  employee: employee,
+                                  employeeCount: employeeCount,
+                                ),
                                 SizedBox(height: isSmall ? 24 : 32),
                                 // ── Brand Footer Card ──
                                 const _BrandFooterCard(),
@@ -78,20 +100,43 @@ class ModuleDashboardScreen extends ConsumerWidget {
         ),
       ),
     );
-
   }
 }
 
 class _DashboardTopBar extends StatelessWidget {
   const _DashboardTopBar({
-    required this.employeeName,
-    required this.designation,
-    this.photoUrl,
+    this.employee,
+    this.authEmail,
+    required this.isLoading,
+    required this.hasError,
   });
 
-  final String employeeName;
-  final String designation;
-  final String? photoUrl;
+  final Employee? employee;
+  final String? authEmail;
+  final bool isLoading;
+  final bool hasError;
+
+  String get _displayName {
+    if (isLoading) return 'Loading profile...';
+    if (hasError) return authEmail?.isNotEmpty == true ? authEmail! : 'Sync Error';
+    if (employee != null) {
+      if (employee!.fullName.isNotEmpty) return employee!.fullName;
+      if (employee!.firstName.isNotEmpty) return employee!.firstName;
+      if (employee!.employeeId.isNotEmpty) return employee!.employeeId;
+    }
+    return authEmail?.isNotEmpty == true ? authEmail! : 'Account';
+  }
+
+  String get _designationText {
+    if (isLoading) return 'Please wait...';
+    if (hasError) return 'Error loading profile';
+    if (employee != null) {
+      if (employee!.designation.isNotEmpty) return employee!.designation;
+      if (employee!.isSuperAdmin) return 'Super Administrator';
+      return 'Staff Member';
+    }
+    return 'Setup Required';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -168,7 +213,7 @@ class _DashboardTopBar extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              employeeName.isNotEmpty ? employeeName : 'Aswin',
+                              _displayName,
                               style: const TextStyle(
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.w700,
@@ -177,7 +222,7 @@ class _DashboardTopBar extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              designation,
+                              _designationText,
                               style: const TextStyle(
                                 fontSize: 11,
                                 color: AppColors.textSecondary,
@@ -205,9 +250,39 @@ class _DashboardTopBar extends StatelessWidget {
   }
 
   Widget _buildAvatar() {
-    final cleanUrl = photoUrl?.trim() ?? '';
-    final initial = employeeName.isNotEmpty ? employeeName[0].toUpperCase() : 'U';
+    if (isLoading) {
+      return Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: AppColors.primary.withValues(alpha: 0.15),
+        ),
+        child: const Center(
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+          ),
+        ),
+      );
+    }
 
+    if (hasError) {
+      return Container(
+        width: 36,
+        height: 36,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          color: Color(0xFFEF4444),
+        ),
+        child: const Center(
+          child: Icon(Icons.error_outline, size: 18, color: Colors.white),
+        ),
+      );
+    }
+
+    final cleanUrl = employee?.profileImageUrl.trim() ?? '';
     if (cleanUrl.isNotEmpty) {
       if (cleanUrl.startsWith('data:')) {
         try {
@@ -228,6 +303,19 @@ class _DashboardTopBar extends StatelessWidget {
           backgroundImage: NetworkImage(cleanUrl),
         );
       }
+    }
+
+    String initial = 'U';
+    if (employee != null) {
+      if (employee!.firstName.isNotEmpty) {
+        initial = employee!.firstName[0].toUpperCase();
+      } else if (employee!.fullName.isNotEmpty) {
+        initial = employee!.fullName[0].toUpperCase();
+      } else if (employee!.employeeId.isNotEmpty) {
+        initial = employee!.employeeId[0].toUpperCase();
+      }
+    } else if (authEmail?.isNotEmpty == true) {
+      initial = authEmail![0].toUpperCase();
     }
 
     return Container(
@@ -326,8 +414,19 @@ class _TopBarIconButton extends StatelessWidget {
 }
 
 class _GreetingHero extends StatelessWidget {
-  const _GreetingHero({required this.employeeName});
-  final String employeeName;
+  const _GreetingHero({
+    this.employee,
+    this.authEmail,
+    required this.isLoading,
+    required this.hasError,
+    this.onRetry,
+  });
+
+  final Employee? employee;
+  final String? authEmail;
+  final bool isLoading;
+  final bool hasError;
+  final VoidCallback? onRetry;
 
   String _getTimeBasedGreeting() {
     final hour = DateTime.now().hour;
@@ -340,10 +439,107 @@ class _GreetingHero extends StatelessWidget {
     }
   }
 
+  String get _greetingHeadline {
+    final greeting = _getTimeBasedGreeting();
+    if (isLoading) return '$greeting 👋';
+    if (hasError) return '$greeting 👋';
+    if (employee != null) {
+      final name = employee!.firstName.isNotEmpty
+          ? employee!.firstName
+          : (employee!.fullName.isNotEmpty ? employee!.fullName : employee!.employeeId);
+      return '$greeting, $name 👋';
+    }
+    final fallbackIdentifier = authEmail?.isNotEmpty == true ? authEmail! : '';
+    if (fallbackIdentifier.isNotEmpty) {
+      return '$greeting, $fallbackIdentifier 👋';
+    }
+    return '$greeting 👋';
+  }
+
+  String get _greetingSubtitle {
+    if (isLoading) return 'Loading your profile and workspace...';
+    if (hasError) return 'Could not load your employee profile from the server.';
+    if (employee == null) return 'No employee profile is currently linked to this account.';
+    return 'What would you like to manage today?';
+  }
+
+  Widget? _buildStatusOrAlertNotice() {
+    if (hasError) {
+      return Container(
+        margin: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF2F2),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFFCA5A5)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Color(0xFFDC2626), size: 18),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Could not load employee profile from server.',
+                style: TextStyle(fontSize: 12, color: Color(0xFFDC2626), fontWeight: FontWeight.w500),
+              ),
+            ),
+            if (onRetry != null)
+              TextButton(
+                onPressed: onRetry,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFDC2626),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('Retry', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              ),
+          ],
+        ),
+      );
+    }
+
+    if (!isLoading && employee == null) {
+      return Container(
+        margin: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF8E1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFFFE082)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline, color: Color(0xFFF57C00), size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Profile Setup Required: No employee record found matching "${authEmail ?? 'your account'}". Contact an administrator to link your profile.',
+                style: const TextStyle(fontSize: 12, color: Color(0xFFE65100), fontWeight: FontWeight.w500),
+              ),
+            ),
+            if (onRetry != null)
+              TextButton(
+                onPressed: onRetry,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFE65100),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('Refresh', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              ),
+          ],
+        ),
+      );
+    }
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final greeting = _getTimeBasedGreeting();
-    final displayName = employeeName.isNotEmpty ? employeeName : 'Aswin';
+    final alertNotice = _buildStatusOrAlertNotice();
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -370,33 +566,32 @@ class _GreetingHero extends StatelessWidget {
               ),
             ],
           ),
-          child: isNarrow
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$greeting, $displayName 👋',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                        letterSpacing: -0.4,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'What would you like to manage today?',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    _SystemStatusBadge(),
-                  ],
-                )
-              : Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (isNarrow) ...[
+                Text(
+                  _greetingHeadline,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _greetingSubtitle,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _SystemStatusBadge(),
+              ] else ...[
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Expanded(
@@ -404,7 +599,7 @@ class _GreetingHero extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '$greeting, $displayName 👋',
+                            _greetingHeadline,
                             style: const TextStyle(
                               fontSize: 23,
                               fontWeight: FontWeight.w800,
@@ -413,9 +608,9 @@ class _GreetingHero extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          const Text(
-                            'What would you like to manage today?',
-                            style: TextStyle(
+                          Text(
+                            _greetingSubtitle,
+                            style: const TextStyle(
                               fontSize: 13.5,
                               color: AppColors.textSecondary,
                               fontWeight: FontWeight.w400,
@@ -428,6 +623,10 @@ class _GreetingHero extends StatelessWidget {
                     _SystemStatusBadge(),
                   ],
                 ),
+              ],
+              ?alertNotice,
+            ],
+          ),
         );
       },
     );
@@ -474,8 +673,9 @@ class _SystemStatusBadge extends StatelessWidget {
 }
 
 class _WorkspaceSection extends StatelessWidget {
-  const _WorkspaceSection({this.employee});
+  const _WorkspaceSection({this.employee, this.employeeCount = 0});
   final dynamic employee;
+  final int employeeCount;
 
   @override
   Widget build(BuildContext context) {
@@ -491,7 +691,9 @@ class _WorkspaceSection extends StatelessWidget {
           icon: Icons.people_alt_rounded,
           color: const Color(0xFF9CC70A),
           description: 'Human Resource\nManagement',
-          meta: '12 Employees',
+          meta: employeeCount > 0
+              ? '$employeeCount ${employeeCount == 1 ? "Employee" : "Employees"}'
+              : 'Employees',
           metaIcon: Icons.people_outline_rounded,
           onTap: () => context.go('/module/hrms'),
         ),

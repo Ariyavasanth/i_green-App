@@ -142,6 +142,16 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     final target = emailOrId.trim();
     if (target.isEmpty) return Stream.value(null);
 
+    final lower = target.toLowerCase();
+    if (lower == 'admin' || lower == 'super admin' || lower == 'superadmin') {
+      return _employeesRef.doc('EMP-001').snapshots().map((doc) {
+        if (doc.exists && doc.data() != null) {
+          return _employeeFromFirestore(doc.data()!, doc.id);
+        }
+        return _superAdminMotherAccount;
+      });
+    }
+
     if (target.contains('@')) {
       return _employeesRef
           .where('email_address', isEqualTo: target)
@@ -155,7 +165,8 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
           });
     }
 
-    return _employeesRef.doc(target).snapshots().map((doc) {
+    final docKey = target.toUpperCase();
+    return _employeesRef.doc(docKey).snapshots().map((doc) {
       if (doc.exists && doc.data() != null) {
         return _employeeFromFirestore(doc.data()!, doc.id);
       }
@@ -600,6 +611,8 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     await _registrationLinksRef.doc(linkId).set(data);
     return link;
   }
+
+  static const Employee superAdminMotherAccount = _superAdminMotherAccount;
 
   static const Employee _superAdminMotherAccount = Employee(
     id: 1,
