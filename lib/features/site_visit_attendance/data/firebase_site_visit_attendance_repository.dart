@@ -71,8 +71,10 @@ class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceReposi
   Future<void> saveVisit(SiteVisitRecord record) async {
     final data = record.toMap();
     if (record.id == 0) {
-      data.remove('id');
-      await _visitsRef.add(data);
+      final docRef = _visitsRef.doc();
+      final intId = _docIdToInt(docRef.id);
+      data['id'] = intId;
+      await docRef.set(data);
       return;
     }
     await _visitsRef.doc(record.id.toString()).set(data, SetOptions(merge: true));
@@ -88,6 +90,17 @@ class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceReposi
     required double longitude,
     String notes = '',
   }) async {
+    // Prevent duplicate Day Checkout entries on the same day
+    final existing = await _visitsRef
+        .where('employee_id', isEqualTo: employeeId)
+        .where('visit_date', isEqualTo: visitDate)
+        .where('site_name', isEqualTo: 'Day Checkout')
+        .limit(1)
+        .get();
+    if (existing.docs.isNotEmpty) {
+      return;
+    }
+
     await saveVisit(
       SiteVisitRecord(
         id: 0,
@@ -119,7 +132,19 @@ class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceReposi
       await _deleteStoragePhotoIfPresent(publicId, photoUrl);
       return;
     }
-    await _visitsRef.doc(id.toString()).delete();
+    // Fallback: check matching doc ID or _docIdToInt(doc.id)
+    final allDocs = await _visitsRef.get();
+    for (final d in allDocs.docs) {
+      if (d.id == id.toString() || _docIdToInt(d.id) == id) {
+        final data = d.data();
+        final photoUrl = data['photo_url'] as String? ?? '';
+        final publicId = data['photo_public_id'] as String? ?? '';
+        await d.reference.delete();
+        await _deleteLocalPhotoIfPresent(photoUrl);
+        await _deleteStoragePhotoIfPresent(publicId, photoUrl);
+        return;
+      }
+    }
   }
 
   @override

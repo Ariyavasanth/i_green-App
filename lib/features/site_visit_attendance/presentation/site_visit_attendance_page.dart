@@ -365,6 +365,44 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
   }
 
   Future<void> _openCheckoutAndSave(Employee employee) async {
+    if (_saving) return;
+
+    final todayKey = _formatKey(DateTime.now());
+    final currentVisits = ref.read(siteVisitRecordsProvider((employeeId: employee.id, visitDate: todayKey))).value ?? [];
+    if (currentVisits.any((v) => v.siteName == 'Day Checkout')) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You have already checked out for today.')),
+        );
+      }
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Check Out for the Day?'),
+        content: const Text('Are you sure you want to record your checkout for today?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF9CC70A),
+              foregroundColor: const Color(0xFF414A51),
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Check Out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    if (_saving) return;
+
     setState(() => _saving = true);
     try {
       final position = await _getCurrentLocationWithPermissionPrompt();
@@ -595,12 +633,18 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
       loading: () => _cardShell(const Center(child: CircularProgressIndicator())),
       error: (e, _) => _cardShell(Text('Error loading today\'s site visits: $e')),
       data: (visits) {
+        final hasCheckedOut = visits.any((v) => v.siteName == 'Day Checkout');
+        final checkoutRecord = visits.where((v) => v.siteName == 'Day Checkout').firstOrNull;
+        final actualVisits = visits.where((v) => v.siteName != 'Day Checkout').toList();
+
         final statusText = visits.isEmpty
             ? 'No site visit logged yet'
-            : 'At ${visits.last.siteName} since ${visits.last.visitTime}';
-        final visitCountLabel = visits.isEmpty ? '0 sites today' : '${visits.length} sites today';
+            : (hasCheckedOut
+                ? 'Checked out for the day at ${checkoutRecord?.visitTime ?? ''}'
+                : 'At ${visits.last.siteName} since ${visits.last.visitTime}');
+        final visitCountLabel = actualVisits.isEmpty ? '0 sites today' : '${actualVisits.length} sites today';
 
-        final firstVisit = visits.isNotEmpty ? visits.first : null;
+        final firstVisit = actualVisits.isNotEmpty ? actualVisits.first : (visits.isNotEmpty ? visits.first : null);
         final locationName = firstVisit != null
             ? (firstVisit.siteName.isNotEmpty ? firstVisit.siteName : (firstVisit.address.isNotEmpty ? firstVisit.address : 'Tambaram'))
             : 'Tambaram';
@@ -619,7 +663,17 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
             if (parts.length > 1 && parts[1].toUpperCase() == 'PM' && h < 12) h += 12;
             if (parts.length > 1 && parts[1].toUpperCase() == 'AM' && h == 12) h = 0;
             final startDt = DateTime(now.year, now.month, now.day, h, m);
-            final diff = now.difference(startDt);
+            DateTime endDt = now;
+            if (hasCheckedOut && checkoutRecord != null) {
+              final cParts = checkoutRecord.visitTime.split(' ');
+              final ctParts = cParts[0].split(':');
+              var ch = int.parse(ctParts[0]);
+              final cm = int.parse(ctParts[1]);
+              if (cParts.length > 1 && cParts[1].toUpperCase() == 'PM' && ch < 12) ch += 12;
+              if (cParts.length > 1 && cParts[1].toUpperCase() == 'AM' && ch == 12) ch = 0;
+              endDt = DateTime(now.year, now.month, now.day, ch, cm);
+            }
+            final diff = endDt.difference(startDt);
             if (!diff.isNegative) {
               final hours = diff.inHours.toString().padLeft(2, '0');
               final mins = (diff.inMinutes % 60).toString().padLeft(2, '0');
@@ -681,9 +735,9 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
               const SizedBox(height: 16),
 
               if (visits.isNotEmpty) ...[
-                if (firstVisit?.photoUrl.isNotEmpty == true) ...[
+                if (firstVisit != null && firstVisit.photoUrl.isNotEmpty) ...[
                   GestureDetector(
-                    onTap: () => _openPhotoViewer(context, firstVisit!.photoUrl),
+                    onTap: () => _openPhotoViewer(context, firstVisit.photoUrl),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
@@ -694,7 +748,7 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                           children: [
                             Positioned.fill(
                               child: SmartNetworkImage(
-                                url: firstVisit!.photoUrl,
+                                url: firstVisit.photoUrl,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_) => const Center(
                                   child: Icon(Icons.broken_image_outlined, color: Colors.white),
@@ -742,22 +796,26 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.check_circle, color: Color(0xFF9CC70A), size: 18),
+                          Icon(Icons.check_circle, color: hasCheckedOut ? const Color(0xFF64748B) : const Color(0xFF9CC70A), size: 18),
                           const SizedBox(width: 6),
-                          const Text(
-                            '✓ Attendance Started',
-                            style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF414A51), fontSize: 13),
+                          Text(
+                            hasCheckedOut ? '✓ Day Completed' : '✓ Attendance Started',
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF414A51), fontSize: 13),
                           ),
                           const Spacer(),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                              color: (hasCheckedOut ? const Color(0xFF64748B) : const Color(0xFF9CC70A)).withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Text(
-                              '🟢 Working',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                            child: Text(
+                              hasCheckedOut ? '⚪ Checked Out' : '🟢 Working',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: hasCheckedOut ? const Color(0xFF64748B) : const Color(0xFF414A51),
+                              ),
                             ),
                           ),
                         ],
@@ -838,7 +896,7 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                     elevation: 1,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: _openCaptureForm,
+                  onPressed: (_saving || hasCheckedOut) ? null : _openCaptureForm,
                   icon: const Icon(Icons.fingerprint, size: 22),
                   label: const Text(
                     'Capture attendance',
@@ -852,17 +910,27 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                 height: 48,
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF414A51),
-                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    foregroundColor: hasCheckedOut ? const Color(0xFF94A3B8) : const Color(0xFF414A51),
+                    side: BorderSide(color: hasCheckedOut ? const Color(0xFFE2E8F0) : const Color(0xFFCBD5E1)),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: () {
-                    _openCheckoutAndSave(employee);
-                  },
-                  icon: const Icon(Icons.logout, size: 20),
-                  label: const Text(
-                    'Check Out for the day',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  onPressed: (_saving || hasCheckedOut) ? null : () => _openCheckoutAndSave(employee),
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF414A51)),
+                        )
+                      : Icon(hasCheckedOut ? Icons.check_circle_outline : Icons.logout, size: 20),
+                  label: Text(
+                    _saving
+                        ? 'Checking out...'
+                        : (hasCheckedOut ? 'Checked Out for the day' : 'Check Out for the day'),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: hasCheckedOut ? const Color(0xFF94A3B8) : const Color(0xFF414A51),
+                    ),
                   ),
                 ),
               ),
