@@ -166,11 +166,22 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     }
 
     final docKey = target.toUpperCase();
-    return _employeesRef.doc(docKey).snapshots().map((doc) {
+    return _employeesRef.doc(docKey).snapshots().asyncMap((doc) async {
       if (doc.exists && doc.data() != null) {
         return _employeeFromFirestore(doc.data()!, doc.id);
       }
-      return null;
+      final byEmpId = await _employeesRef.where('employee_id', isEqualTo: docKey).limit(1).get();
+      if (byEmpId.docs.isNotEmpty) {
+        return _employeeFromFirestore(byEmpId.docs.first.data(), byEmpId.docs.first.id);
+      }
+      final all = await getAllEmployees();
+      return all.where((e) {
+        final t = target.toLowerCase();
+        return e.employeeId.toLowerCase() == t ||
+            e.emailAddress.toLowerCase() == t ||
+            e.firstName.toLowerCase() == t ||
+            e.fullName.toLowerCase() == t;
+      }).firstOrNull;
     });
   }
 

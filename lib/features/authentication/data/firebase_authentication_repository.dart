@@ -31,10 +31,12 @@ class FirebaseAuthenticationRepository implements AuthenticationRepository {
         final dbEmail = (data['email_address'] as String?)?.trim().toLowerCase() ?? '';
         final dbEmpId = (data['employee_id'] as String?)?.trim().toLowerCase() ?? '';
         final docId = doc.id.trim().toLowerCase();
+        final dbUserName = (data['user_name'] as String?)?.trim().toLowerCase() ?? '';
+        final dbFirstName = (data['first_name'] as String?)?.trim().toLowerCase() ?? '';
         final isAdminAlias = (cleanEmail == 'admin' || cleanEmail == 'super admin' || cleanEmail == 'superadmin') &&
             (dbEmpId == 'emp-001' || (data['user_type'] as String?)?.trim().toUpperCase() == 'SUPER ADMIN');
 
-        if (dbEmail == cleanEmail || dbEmpId == cleanEmail || docId == cleanEmail || isAdminAlias) {
+        if (dbEmail == cleanEmail || dbEmpId == cleanEmail || docId == cleanEmail || dbUserName == cleanEmail || dbFirstName == cleanEmail || isAdminAlias) {
           final savedPassword = (data['temporary_password'] as String?)?.trim() ?? '';
           final userType = (data['user_type'] as String?)?.trim().toUpperCase() ?? '';
           final phone = (data['phone_number'] as String?)?.trim() ?? '';
