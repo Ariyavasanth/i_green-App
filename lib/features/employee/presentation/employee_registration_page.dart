@@ -3068,9 +3068,27 @@ class _EmployeeRegistrationPageState
         _isDraftSaving = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Save failed: $e')));
+        final errStr = e.toString().toLowerCase();
+        final isStorageIssue = errStr.contains('indexeddb') ||
+            errStr.contains('aborterror') ||
+            errStr.contains('allocate target') ||
+            errStr.contains('unavailable');
+        final message = isStorageIssue
+            ? 'Browser connection was momentarily interrupted. Please tap Submit Registration again to complete.'
+            : 'Save failed: $e';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 5),
+            action: isStorageIssue
+                ? SnackBarAction(
+                    label: 'Retry',
+                    textColor: Colors.white,
+                    onPressed: () => _submitForm(link, isSubmit: isSubmit),
+                  )
+                : null,
+          ),
+        );
       }
     }
   }

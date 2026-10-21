@@ -62,6 +62,100 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   CollectionReference<Map<String, dynamic>> get _columnPreferencesRef =>
       _firestore.collection('column_preferences');
 
+  /// Safely fetches a DocumentSnapshot with recovery logic for browser IndexedDB
+  /// transaction aborts (e.g., Safari iOS app suspension during photo selection,
+  /// multi-tab lock conflicts, or transient storage connection drops).
+  Future<DocumentSnapshot<T>> _safeGetDoc<T>(
+    DocumentReference<T> ref, {
+    int maxRetries = 3,
+  }) async {
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt == 1) {
+          return await ref.get();
+        }
+        return await ref.get(const GetOptions(source: Source.server));
+      } catch (e) {
+        final errStr = e.toString().toLowerCase();
+        final isRecoverable =
+            errStr.contains('indexeddb') ||
+            errStr.contains('aborterror') ||
+            errStr.contains('allocate target') ||
+            errStr.contains('unavailable') ||
+            errStr.contains('failed-precondition');
+
+        if (attempt == maxRetries || !isRecoverable) {
+          try {
+            return await ref.get(const GetOptions(source: Source.server));
+          } catch (_) {
+            rethrow;
+          }
+        }
+        await Future.delayed(Duration(milliseconds: 300 * attempt));
+      }
+    }
+    return await ref.get(const GetOptions(source: Source.server));
+  }
+
+  /// Safely fetches a QuerySnapshot with recovery logic for browser IndexedDB
+  /// transaction aborts (e.g., Safari iOS app suspension during photo selection,
+  /// multi-tab lock conflicts, or transient storage connection drops).
+  Future<QuerySnapshot<T>> _safeGetQuery<T>(
+    Query<T> query, {
+    int maxRetries = 3,
+  }) async {
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt == 1) {
+          return await query.get();
+        }
+        return await query.get(const GetOptions(source: Source.server));
+      } catch (e) {
+        final errStr = e.toString().toLowerCase();
+        final isRecoverable =
+            errStr.contains('indexeddb') ||
+            errStr.contains('aborterror') ||
+            errStr.contains('allocate target') ||
+            errStr.contains('unavailable') ||
+            errStr.contains('failed-precondition');
+
+        if (attempt == maxRetries || !isRecoverable) {
+          try {
+            return await query.get(const GetOptions(source: Source.server));
+          } catch (_) {
+            rethrow;
+          }
+        }
+        await Future.delayed(Duration(milliseconds: 300 * attempt));
+      }
+    }
+    return await query.get(const GetOptions(source: Source.server));
+  }
+
+  /// Safely commits a WriteBatch with retry logic for transient browser/network drops.
+  Future<void> _safeCommitBatch(
+    WriteBatch batch, {
+    int maxRetries = 3,
+  }) async {
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await batch.commit();
+        return;
+      } catch (e) {
+        final errStr = e.toString().toLowerCase();
+        final isRecoverable =
+            errStr.contains('indexeddb') ||
+            errStr.contains('aborterror') ||
+            errStr.contains('unavailable') ||
+            errStr.contains('deadline-exceeded');
+        if (attempt == maxRetries || !isRecoverable) {
+          rethrow;
+        }
+        await Future.delayed(Duration(milliseconds: 350 * attempt));
+      }
+    }
+  }
+
   String _folderForEmployee(String employeeId, String role) {
     final normalizedRole = role.trim().isEmpty
         ? 'employees'
@@ -805,7 +899,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   @override
   Future<RegistrationLink?> getRegistrationLinkById(String linkId) async {
     try {
-      final doc = await _registrationLinksRef.doc(linkId).get();
+      final doc = await _safeGetDoc(_registrationLinksRef.doc(linkId));
       if (doc.exists && doc.data() != null) {
         final link = RegistrationLink.fromMap(doc.data()!);
         if (link.linkStatus.trim().toLowerCase() == 'pending' &&
@@ -819,18 +913,20 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         return link;
       }
 
-      final query = await _registrationLinksRef
-          .where('link_id', isEqualTo: linkId)
-          .limit(1)
-          .get();
+      final query = await _safeGetQuery(
+        _registrationLinksRef
+            .where('link_id', isEqualTo: linkId)
+            .limit(1),
+      );
       if (query.docs.isNotEmpty) {
         return RegistrationLink.fromMap(query.docs.first.data());
       }
 
-      final candQuery = await _candidateResponsesRef
-          .where('link_id', isEqualTo: linkId)
-          .limit(1)
-          .get();
+      final candQuery = await _safeGetQuery(
+        _candidateResponsesRef
+            .where('link_id', isEqualTo: linkId)
+            .limit(1),
+      );
       if (candQuery.docs.isNotEmpty) {
         final resp = CandidateResponse.fromMap(candQuery.docs.first.data());
         return RegistrationLink(
@@ -940,12 +1036,13 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     final nowIso = DateTime.now().toIso8601String();
 
     DocumentSnapshot<Map<String, dynamic>>? linkDoc =
-        await _registrationLinksRef.doc(linkId).get();
+        await _safeGetDoc(_registrationLinksRef.doc(linkId));
     if (!linkDoc.exists || linkDoc.data() == null) {
-      final query = await _registrationLinksRef
-          .where('link_id', isEqualTo: linkId)
-          .limit(1)
-          .get();
+      final query = await _safeGetQuery(
+        _registrationLinksRef
+            .where('link_id', isEqualTo: linkId)
+            .limit(1),
+      );
       if (query.docs.isNotEmpty) {
         linkDoc = query.docs.first;
       }
@@ -1023,7 +1120,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       SetOptions(merge: true),
     );
 
-    await batch.commit();
+    await _safeCommitBatch(batch);
     return finalEmployee;
   }
 
@@ -1387,7 +1484,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   /// This sequence is independent from the EMP-XXXX employee ID sequence.
   Future<String> _generateNextCandidateId() async {
     try {
-      final snapshot = await _candidateResponsesRef.get();
+      final snapshot = await _safeGetQuery(_candidateResponsesRef);
       int maxNum = 0;
       for (final doc in snapshot.docs) {
         final code = (doc.data()['candidate_id'] as String?) ?? doc.id;
@@ -1422,7 +1519,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       return 'EMP-${nextNum.toString().padLeft(4, '0')}';
     }
 
-    final snapshot = await _employeesRef.get();
+    final snapshot = await _safeGetQuery(_employeesRef);
     int maxNum = 0;
     for (final doc in snapshot.docs) {
       final code = (doc.data()['employee_id'] as String?) ?? doc.id;
@@ -1537,11 +1634,20 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         final contentType = ext == 'png'
             ? 'image/png'
             : (ext == 'webp' ? 'image/webp' : 'image/jpeg');
-        final uploadTask = await ref.putData(
-          uploadBytes,
-          SettableMetadata(contentType: contentType),
-        );
-        return await uploadTask.ref.getDownloadURL();
+        UploadTask? uploadTask;
+        for (int attempt = 1; attempt <= 3; attempt++) {
+          try {
+            uploadTask = ref.putData(
+              uploadBytes,
+              SettableMetadata(contentType: contentType),
+            );
+            final snapshot = await uploadTask;
+            return await snapshot.ref.getDownloadURL();
+          } catch (storageErr) {
+            if (attempt == 3) rethrow;
+            await Future.delayed(Duration(milliseconds: 350 * attempt));
+          }
+        }
       }
     } catch (e) {
       debugPrint('Firebase Storage upload failed: $e');
