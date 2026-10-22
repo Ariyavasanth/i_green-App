@@ -32,10 +32,12 @@ import 'widgets/attendance_audit_logs_embedded_view.dart';
 import 'widgets/attendance_matrix_view.dart';
 import 'widgets/attendance_table_view.dart';
 import 'widgets/monthly_attendance_result_view.dart';
+import 'widgets/all_employees_attendance_view.dart';
 import '../../payroll/providers/payroll_providers.dart';
 import '../../permission/providers/permission_providers.dart';
 
 enum AttendanceCategoryTab {
+  allEmployees,
   staticAttendance,
   monthlyResult,
   siteVisitAttendance,
@@ -48,7 +50,7 @@ enum AttendanceViewMode { matrix, table }
 class AttendanceManagementPage extends ConsumerStatefulWidget {
   const AttendanceManagementPage({
     super.key,
-    this.initialTab = AttendanceCategoryTab.staticAttendance,
+    this.initialTab = AttendanceCategoryTab.allEmployees,
   });
 
   final AttendanceCategoryTab initialTab;
@@ -306,20 +308,26 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     final todayStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
 
     final employeesAsync = ref.watch(employeesProvider);
-    final staticStatsAsync = _activeTab == AttendanceCategoryTab.staticAttendance
+    final staticStatsAsync = (_activeTab == AttendanceCategoryTab.staticAttendance ||
+            _activeTab == AttendanceCategoryTab.allEmployees)
         ? ref.watch(attendanceManagementStatsProvider(todayStr))
         : const AsyncValue<AttendanceManagementStats>.loading();
 
     final staticRecordsAsync = (_activeTab == AttendanceCategoryTab.staticAttendance ||
-            _activeTab == AttendanceCategoryTab.monthlyResult)
+            _activeTab == AttendanceCategoryTab.monthlyResult ||
+            _activeTab == AttendanceCategoryTab.allEmployees)
         ? ref.watch(attendanceManagementRecordsProvider((
             employeeId: _selectedEmployeeId,
             monthYear: monthYearStr,
-            statusFilter: _activeTab == AttendanceCategoryTab.monthlyResult ? 'All' : _selectedStatus,
+            statusFilter: _activeTab == AttendanceCategoryTab.monthlyResult ||
+                    _activeTab == AttendanceCategoryTab.allEmployees
+                ? 'All'
+                : _selectedStatus,
           )))
         : const AsyncValue<List<AttendanceRecord>>.data([]);
 
-    final siteVisitsAsync = _activeTab == AttendanceCategoryTab.siteVisitAttendance
+    final siteVisitsAsync = (_activeTab == AttendanceCategoryTab.siteVisitAttendance ||
+            _activeTab == AttendanceCategoryTab.allEmployees)
         ? ref.watch(allSiteVisitsProvider((visitDate: null, employeeId: null, siteName: null)))
         : const AsyncValue<List<SiteVisitRecord>>.data([]);
 
@@ -398,6 +406,12 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
               data: (visits) => _buildSiteVisitBottomSummaryBar(visits),
               loading: () => _buildSiteVisitBottomSummaryBar([]),
               error: (_, __) => const SizedBox.shrink(),
+            )
+          else if (_activeTab == AttendanceCategoryTab.allEmployees)
+            _buildAllEmployeesBottomSummaryBar(
+              allEmployeesList,
+              staticRecordsAsync.valueOrNull ?? [],
+              siteVisitsAsync.valueOrNull ?? [],
             )
           else
             const SizedBox.shrink(),
@@ -704,6 +718,11 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _buildCategoryTabItem(
+            tab: AttendanceCategoryTab.allEmployees,
+            icon: Icons.groups_outlined,
+            label: 'All Employees',
+          ),
+          _buildCategoryTabItem(
             tab: AttendanceCategoryTab.staticAttendance,
             icon: Icons.storefront_outlined,
             label: 'Office',
@@ -767,6 +786,9 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
               const SizedBox(height: 3),
               Text(
                 label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
@@ -853,6 +875,14 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     required AsyncValue<List<SiteVisitRecord>> siteVisitsAsync,
   }) {
     switch (_activeTab) {
+      case AttendanceCategoryTab.allEmployees:
+        return _buildAllEmployeesAttendanceView(
+          isMobile: isMobile,
+          allEmployees: allEmployees,
+          staticRecordsAsync: staticRecordsAsync,
+          siteVisitsAsync: siteVisitsAsync,
+        );
+
       case AttendanceCategoryTab.staticAttendance:
         return _buildStaticAttendanceView(isMobile, allEmployees, staticStatsAsync, staticRecordsAsync);
 
@@ -868,6 +898,164 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
       case AttendanceCategoryTab.auditLogs:
         return const AttendanceAuditLogsEmbeddedView();
     }
+  }
+
+  Widget _buildAllEmployeesAttendanceView({
+    required bool isMobile,
+    required List<Employee> allEmployees,
+    required AsyncValue<List<AttendanceRecord>> staticRecordsAsync,
+    required AsyncValue<List<SiteVisitRecord>> siteVisitsAsync,
+  }) {
+    if (staticRecordsAsync.isLoading || siteVisitsAsync.isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 40),
+          child: CircularProgressIndicator(color: Color(0xFF9CC70A)),
+        ),
+      );
+    }
+
+    final staticRecords = staticRecordsAsync.valueOrNull ?? [];
+    final siteVisits = siteVisitsAsync.valueOrNull ?? [];
+    final allLeaves = ref.watch(allLeaveRequestsProvider).valueOrNull;
+    final allOnDuty = ref.watch(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null))).valueOrNull;
+    final allHolidays = ref.watch(holidaysProvider).valueOrNull;
+    final allPermissions = ref.watch(allPermissionRequestsProvider(const AllPermissionRequestsFilter())).valueOrNull;
+
+    return AllEmployeesAttendanceView(
+      allEmployees: allEmployees,
+      staticRecords: staticRecords,
+      siteVisits: siteVisits,
+      leaves: allLeaves,
+      onDutyAssignments: allOnDuty,
+      holidays: allHolidays,
+      permissions: allPermissions,
+      focusedMonth: _focusedMonth,
+      onMonthChanged: (newMonth) {
+        setState(() {
+          _focusedMonth = newMonth;
+        });
+      },
+      isMobile: isMobile,
+      onOpenAttendanceCorrection: (emp, date, record, statusInfo) {
+        _openAttendanceCorrectionDialog(emp, date, record, statusInfo);
+      },
+      onOpenSiteVisitDetails: (visit) {
+        _openSiteVisitDetailsDialog(visit);
+      },
+      onOpenOfficeDetails: (emp, date, record, statusInfo) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AttendanceDetailsDialog(
+            employee: emp,
+            date: date,
+            record: record,
+            statusInfo: statusInfo,
+            permissions: allPermissions,
+            onEdit: () {
+              _openAttendanceCorrectionDialog(emp, date, record, statusInfo);
+            },
+          ),
+        );
+      },
+      onAddOfficeEntry: (record, empId, dateStr) {
+        _openAdminStaticEntryDialog(record, empId, dateStr);
+      },
+      onAddSiteEntry: (visit) {
+        _openAdminSiteEntryDialog(visit);
+      },
+      onAssignOnDuty: (emp) {
+        _openAssignOnDutyDialog(emp);
+      },
+    );
+  }
+
+  Widget _buildAllEmployeesBottomSummaryBar(
+    List<Employee> allEmployees,
+    List<AttendanceRecord> records,
+    List<SiteVisitRecord> visits,
+  ) {
+    final today = DateTime.now();
+    final todayStr = DateFormat('dd-MM-yyyy').format(today);
+
+    final todayOfficeRecords = records.where((r) {
+      final dt = _parseDateStr(r.date);
+      if (dt != null) {
+        return dt.year == today.year && dt.month == today.month && dt.day == today.day;
+      }
+      return r.date == todayStr || r.date == DateFormat('yyyy-MM-dd').format(today);
+    }).toList();
+
+    final todaySiteVisits = visits.where((v) {
+      final dt = _parseDateStr(v.visitDate);
+      if (dt != null) {
+        return dt.year == today.year && dt.month == today.month && dt.day == today.day;
+      }
+      return v.visitDate == todayStr || v.visitDate == DateFormat('yyyy-MM-dd').format(today);
+    }).toList();
+
+    final officePresentCount = todayOfficeRecords.where((r) => r.effectiveCheckInTime.isNotEmpty).length;
+    final siteVisitsCount = todaySiteVisits.length;
+    final totalStaff = allEmployees.length;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: const Border(top: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, -3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildSummaryStatItem(
+              icon: Icons.groups_outlined,
+              iconColor: const Color(0xFF2563EB),
+              value: '$totalStaff',
+              title: 'Total Staff',
+              subtitle: 'All Registered',
+            ),
+          ),
+          Container(width: 1, height: 32, color: const Color(0xFFE2E8F0)),
+          Expanded(
+            child: _buildSummaryStatItem(
+              icon: Icons.storefront_outlined,
+              iconColor: const Color(0xFF16A34A),
+              value: '$officePresentCount',
+              title: 'Office Present',
+              subtitle: 'Today\'s In',
+            ),
+          ),
+          Container(width: 1, height: 32, color: const Color(0xFFE2E8F0)),
+          Expanded(
+            child: _buildSummaryStatItem(
+              icon: Icons.location_on_outlined,
+              iconColor: const Color(0xFF0D9488),
+              value: '$siteVisitsCount',
+              title: 'Site Visits',
+              subtitle: 'Today\'s Logs',
+            ),
+          ),
+          Container(width: 1, height: 32, color: const Color(0xFFE2E8F0)),
+          Expanded(
+            child: _buildSummaryStatItem(
+              icon: Icons.sync_alt_rounded,
+              iconColor: const Color(0xFF9CC70A),
+              value: DateFormat('dd MMM').format(today),
+              title: 'Today',
+              subtitle: 'Live Tracking',
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildMonthlyResultView(
