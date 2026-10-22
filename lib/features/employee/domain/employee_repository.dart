@@ -93,4 +93,6 @@ abstract class EmployeeRepository {
   Future<void> saveColumnPreference(ColumnPreference preference);
 
   Future<String> getNextEmployeeId();
+
+  Future<List<Map<String, dynamic>>> checkEmployeesWithoutAssignedSchedule();
 }

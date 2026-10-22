@@ -1817,4 +1817,45 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     return imagePathOrData;
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> checkEmployeesWithoutAssignedSchedule() async {
+    final all = await getAllEmployees();
+    final issues = <Map<String, dynamic>>[];
+    for (final emp in all) {
+      final s = emp.status.trim().toLowerCase();
+      if (s == 'archived' || s == 'deleted') continue;
+
+      final isFixed = emp.workScheduleType == 'Fixed Schedule' ||
+          (!emp.isDynamicEmployee && emp.workScheduleType != 'Flexible Schedule');
+      if (isFixed) {
+        final missingIn = emp.inTime.trim().isEmpty;
+        final missingOut = emp.outTime.trim().isEmpty;
+        if (missingIn || missingOut) {
+          issues.add({
+            'employeeId': emp.employeeId,
+            'name': '${emp.firstName} ${emp.lastName}'.trim(),
+            'workScheduleType': emp.workScheduleType.isEmpty ? 'Unassigned' : emp.workScheduleType,
+            'inTime': emp.inTime,
+            'outTime': emp.outTime,
+            'missing': [
+              if (missingIn) 'In-Time',
+              if (missingOut) 'Out-Time',
+            ].join(', '),
+          });
+        }
+      } else {
+        if (emp.requiredWorkingHours <= 0) {
+          issues.add({
+            'employeeId': emp.employeeId,
+            'name': '${emp.firstName} ${emp.lastName}'.trim(),
+            'workScheduleType': 'Flexible Schedule',
+            'requiredWorkingHours': emp.requiredWorkingHours,
+            'missing': 'Required Working Hours',
+          });
+        }
+      }
+    }
+    return issues;
+  }
 }

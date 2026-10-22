@@ -83,10 +83,8 @@ class _EmployeeRegistrationPageState
   final _esiNumberController = TextEditingController();
   final _reportingToController = TextEditingController();
   String _reportingManagerId = '';
-  String _workScheduleType = 'Fixed Schedule';
-  final _requiredWorkingHoursController = TextEditingController(
-    text: '9 Hours',
-  );
+  String _workScheduleType = '';
+  final _requiredWorkingHoursController = TextEditingController();
   final _inTimeController = TextEditingController();
   final _outTimeController = TextEditingController();
   final _weeklyOffDayController = TextEditingController();
@@ -875,6 +873,26 @@ class _EmployeeRegistrationPageState
       if (_joiningDateController.text.trim().isEmpty) {
         errors.add('Date of Joining is required');
       }
+      if (_workScheduleType.trim().isEmpty) {
+        errors.add('Work Schedule Type is required');
+      } else if (_workScheduleType == 'Fixed Schedule') {
+        if (_inTimeController.text.trim().isEmpty) {
+          errors.add('In Time is required for Fixed Schedule');
+        }
+        if (_outTimeController.text.trim().isEmpty) {
+          errors.add('Out Time is required for Fixed Schedule');
+        }
+      } else if (_workScheduleType == 'Flexible Schedule') {
+        final hoursText = _requiredWorkingHoursController.text.trim();
+        final hours = double.tryParse(
+          hoursText.replaceAll(RegExp(r'[^0-9.]'), ''),
+        );
+        if (hoursText.isEmpty) {
+          errors.add('Required Working Hours is required for Flexible Schedule');
+        } else if (hours == null || hours <= 0) {
+          errors.add('Required Working Hours must be greater than 0');
+        }
+      }
       final coordPhone = _coordinatorPhoneController.text.trim();
       if (coordPhone.isNotEmpty) {
         final coordPhoneDetails = getCountryPhoneDetails(
@@ -1572,16 +1590,21 @@ class _EmployeeRegistrationPageState
       _inTimeController.text = emp.inTime;
       _outTimeController.text = emp.outTime;
       _weeklyOffDayController.text = emp.weeklyOffDay;
-      if (emp.isDynamicEmployee ||
-          (emp.inTime.isEmpty &&
-              emp.outTime.isEmpty &&
-              !emp.isStaticEmployee)) {
+      if (emp.workScheduleType.isNotEmpty) {
+        _workScheduleType = emp.workScheduleType;
+      } else if (emp.isDynamicEmployee) {
         _workScheduleType = 'Flexible Schedule';
-      } else {
+      } else if (emp.inTime.isNotEmpty ||
+          emp.outTime.isNotEmpty ||
+          emp.isStaticEmployee) {
         _workScheduleType = 'Fixed Schedule';
+      } else {
+        _workScheduleType = '';
       }
       _requiredWorkingHoursController.text =
-          '${emp.requiredWorkingHours > 0 ? emp.requiredWorkingHours.toStringAsFixed(0) : "9"} Hours';
+          emp.requiredWorkingHours > 0
+              ? '${emp.requiredWorkingHours.toStringAsFixed(emp.requiredWorkingHours.truncateToDouble() == emp.requiredWorkingHours ? 0 : 1)} Hours'
+              : '';
       _reportingManagerTitleController.text = emp.reportingManagerTitle;
       _adminNameController.text = emp.adminName;
       _coordinatorNameController.text = emp.coordinatorName;
@@ -2471,7 +2494,7 @@ class _EmployeeRegistrationPageState
             '',
           ),
         ) ??
-        9.0;
+        0.0;
   }
 
   void _removeProfileImage() {
@@ -4936,12 +4959,18 @@ class _EmployeeRegistrationPageState
               isMobile: isMobile,
               children: [
                 _buildDropdown(
-                  'Work Schedule Type',
+                  'Work Schedule Type *',
                   _workScheduleType,
                   ['Fixed Schedule', 'Flexible Schedule'],
                   (val) {
                     if (val != null) {
-                      setState(() => _workScheduleType = val);
+                      setState(() {
+                        _workScheduleType = val;
+                        if (_workScheduleType == 'Flexible Schedule') {
+                          _inTimeController.clear();
+                          _outTimeController.clear();
+                        }
+                      });
                       _markTabUnsaved('Job & Admin Details');
                     }
                   },
@@ -4953,16 +4982,18 @@ class _EmployeeRegistrationPageState
                 ),
                 if (_workScheduleType == 'Fixed Schedule')
                   _buildTimePickerField(
-                    'In Time',
+                    'In Time *',
                     _inTimeController,
                     placeholder: 'e.g. 09:00 AM',
                     tabName: 'Job & Admin Details',
                   )
-                else
+                else if (_workScheduleType == 'Flexible Schedule')
                   _buildTextField(
-                    'Required Working Hours',
+                    'Required Working Hours *',
                     _requiredWorkingHoursController,
                     placeholder: 'e.g. 9 Hours',
+                    isNumber: true,
+                    allowDecimal: true,
                   ),
               ],
             ),
@@ -4972,7 +5003,7 @@ class _EmployeeRegistrationPageState
               children: [
                 if (_workScheduleType == 'Fixed Schedule')
                   _buildTimePickerField(
-                    'Out Time',
+                    'Out Time *',
                     _outTimeController,
                     placeholder: 'e.g. 06:00 PM',
                     tabName: 'Job & Admin Details',

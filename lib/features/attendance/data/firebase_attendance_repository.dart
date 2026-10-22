@@ -1087,19 +1087,26 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       String status = 'Present';
       String notes = '';
 
-      final isDynamic = employee?.isDynamicEmployee ?? false;
+      final isDynamic = (employee?.isDynamicEmployee ?? false) ||
+          (employee?.workScheduleType == 'Flexible Schedule');
       String schedIn = scheduledCheckInTime.trim().isNotEmpty
           ? scheduledCheckInTime.trim()
           : (employee?.inTime.trim().isNotEmpty == true
               ? employee!.inTime.trim()
               : '');
-      if (schedIn.isEmpty) schedIn = '09:00 AM';
 
-      final scheduledMinutes = _parseMinutes(schedIn);
+      final scheduledMinutes =
+          schedIn.isNotEmpty ? _parseMinutes(schedIn) : null;
 
       if (isDynamic || isWeeklyOff || scheduledMinutes == null) {
         status = 'Present';
-        notes = isWeeklyOff ? 'Weekly off attendance' : 'Flexible schedule';
+        notes = isWeeklyOff
+            ? 'Weekly off attendance'
+            : (isDynamic
+                ? 'Flexible schedule'
+                : (schedIn.isEmpty
+                    ? 'No scheduled timing assigned'
+                    : 'Flexible schedule'));
       } else {
         final actualMinutes = now.hour * 60 + now.minute;
 

@@ -43,7 +43,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
   String _bloodGroupDocFileName = 'No file chosen';
   bool _hasCriminalCases = false;
   late final TextEditingController _criminalCaseDetailsController;
-  String _workScheduleType = 'Fixed Schedule';
+  String _workScheduleType = '';
   late final TextEditingController _requiredWorkingHoursController;
   late final TextEditingController _inTimeController;
   late final TextEditingController _outTimeController;
@@ -133,17 +133,22 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     );
 
     if (emp != null) {
-      if (emp.isDynamicEmployee ||
-          (emp.inTime.isEmpty &&
-              emp.outTime.isEmpty &&
-              !emp.isStaticEmployee)) {
+      if (emp.workScheduleType.isNotEmpty) {
+        _workScheduleType = emp.workScheduleType;
+      } else if (emp.isDynamicEmployee) {
         _workScheduleType = 'Flexible Schedule';
-      } else {
+      } else if (emp.inTime.isNotEmpty ||
+          emp.outTime.isNotEmpty ||
+          emp.isStaticEmployee) {
         _workScheduleType = 'Fixed Schedule';
+      } else {
+        _workScheduleType = '';
       }
       _requiredWorkingHoursController = TextEditingController(
         text:
-            '${emp.requiredWorkingHours > 0 ? emp.requiredWorkingHours.toStringAsFixed(0) : "9"} Hours',
+            emp.requiredWorkingHours > 0
+                ? '${emp.requiredWorkingHours.toStringAsFixed(emp.requiredWorkingHours.truncateToDouble() == emp.requiredWorkingHours ? 0 : 1)} Hours'
+                : '',
       );
       _employmentType = emp.employmentType.isEmpty
           ? 'Full-Time'
@@ -157,8 +162,8 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
           : emp.leaveType;
       _selectedPermissions = Set<String>.from(emp.accessPermissions);
     } else {
-      _workScheduleType = 'Fixed Schedule';
-      _requiredWorkingHoursController = TextEditingController(text: '9 Hours');
+      _workScheduleType = '';
+      _requiredWorkingHoursController = TextEditingController();
       _selectedPermissions = Set<String>.from(Employee.allSidebarPermissions);
     }
   }
@@ -273,6 +278,44 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_workScheduleType.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select Work Schedule Type'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    if (_workScheduleType == 'Fixed Schedule') {
+      if (_inTimeController.text.trim().isEmpty ||
+          _outTimeController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Please select both In Time and Out Time for Fixed Schedule',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+    } else if (_workScheduleType == 'Flexible Schedule') {
+      final hours = double.tryParse(
+        _requiredWorkingHoursController.text.replaceAll(RegExp(r'[^0-9.]'), ''),
+      );
+      if (hours == null || hours <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Please enter valid Required Working Hours for Flexible Schedule',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+    }
     setState(() => _isSaving = true);
 
     try {
@@ -924,12 +967,21 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 _buildFieldPair(
                   isMobile: isMobile,
                   child1: AppSearchableDropdown<String>(
-                    label: 'Work Schedule Type',
+                    label: 'Work Schedule Type *',
                     value: _workScheduleType,
                     items: const ['Fixed Schedule', 'Flexible Schedule'],
+                    placeholder: 'Select schedule type...',
                     searchHint: 'Search schedule type...',
                     onChanged: (val) {
-                      if (val != null) setState(() => _workScheduleType = val);
+                      if (val != null) {
+                        setState(() {
+                          _workScheduleType = val;
+                          if (_workScheduleType == 'Flexible Schedule') {
+                            _inTimeController.clear();
+                            _outTimeController.clear();
+                          }
+                        });
+                      }
                     },
                   ),
                   child2: _workScheduleType == 'Fixed Schedule'
@@ -938,20 +990,26 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                           readOnly: true,
                           onTap: () => _selectTime(_inTimeController),
                           decoration: const InputDecoration(
-                            labelText: 'In Time',
+                            labelText: 'In Time *',
                             hintText: '09:00 AM',
                             border: OutlineInputBorder(),
                             suffixIcon: Icon(Icons.access_time_rounded),
                           ),
                         )
-                      : TextFormField(
-                          controller: _requiredWorkingHoursController,
-                          decoration: const InputDecoration(
-                            labelText: 'Required Working Hours',
-                            hintText: 'e.g. 9 Hours',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
+                      : (_workScheduleType == 'Flexible Schedule'
+                          ? TextFormField(
+                              controller: _requiredWorkingHoursController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: 'Required Working Hours *',
+                                hintText: 'e.g. 9 Hours',
+                                border: OutlineInputBorder(),
+                              ),
+                            )
+                          : const SizedBox.shrink()),
                 ),
                 if (_workScheduleType == 'Fixed Schedule') ...[
                   const SizedBox(height: 12),
@@ -962,7 +1020,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                       readOnly: true,
                       onTap: () => _selectTime(_outTimeController),
                       decoration: const InputDecoration(
-                        labelText: 'Out Time',
+                        labelText: 'Out Time *',
                         hintText: '06:00 PM',
                         border: OutlineInputBorder(),
                         suffixIcon: Icon(Icons.access_time_rounded),
