@@ -739,16 +739,136 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     accessPermissions: Employee.allSidebarPermissions,
   );
 
+  /// Dummy employee populated with comprehensive dummy data for Employee Management,
+  /// credentials, full access permissions, and attendance testing.
+  static final Employee dummyEmployee = Employee(
+    id: 1001,
+    employeeId: 'EMP-1001',
+    firstName: 'Rahul',
+    lastName: 'Sharma',
+    emailAddress: 'rahul.sharma@igreen.com',
+    phoneNumber: '+91 9876543210',
+    personalMobile: '+91 9876543210',
+    gender: 'Male',
+    dob: '15-06-1995',
+    bloodGroup: 'O+',
+    organizationName: 'I-Green Technology',
+    businessUnit: 'Engineering',
+    department: 'Execution',
+    designation: 'Site Engineer',
+    employmentType: 'Full Time',
+    joiningDate: '01-01-2024',
+    userType: 'EMPLOYEE',
+    status: 'Active',
+    temporaryPassword: 'Password@123',
+    accessPermissions: Employee.allSidebarPermissions,
+    // Attendance & Schedule
+    workScheduleType: 'Fixed Schedule',
+    inTime: '09:00 AM',
+    outTime: '06:00 PM',
+    requiredWorkingHours: 9.0,
+    weeklyOffDay: 'Sunday',
+    leaveType: 'As Needed',
+    leaveAllocationFrequency: 'Monthly',
+    allowedLeaves: 3.0,
+    monthlyLeaveAllowance: 3.0,
+    monthlyPermissionLimitHours: 3.0,
+    dailyPermissionLimitHours: 1.0,
+    effectiveDate: '01-01-2024',
+    requiresLeaveApproval: true,
+    siteLatitude: 13.0827,
+    siteLongitude: 80.2707,
+    siteAllowedRadiusMeters: 500,
+    siteRequireGpsVerification: false,
+    isStaticEmployee: true,
+    isDynamicEmployee: false,
+    reportingManager: 'Super Admin',
+    reportingManagerId: 'EMP-001',
+    // Address
+    street: '123, Green Tech Park, Mount Road',
+    city: 'Chennai',
+    state: 'Tamil Nadu',
+    postalCode: '600002',
+    country: 'India',
+    permanentAddress: '123, Green Tech Park, Mount Road, Chennai',
+    permanentState: 'Tamil Nadu',
+    permanentCity: 'Chennai',
+    permanentDistrict: 'Chennai',
+    permanentPincode: '600002',
+    presentAddress: '123, Green Tech Park, Mount Road, Chennai',
+    presentState: 'Tamil Nadu',
+    presentCity: 'Chennai',
+    presentDistrict: 'Chennai',
+    presentPincode: '600002',
+    sameAsPermanent: true,
+    // Salary & Statutory
+    salaryType: 'Monthly',
+    salaryBasic: 35000.0,
+    salaryHra: 15000.0,
+    salarySpecialAllowance: 10000.0,
+    salaryTotalCtc: 60000.0,
+    salaryPf: 1800.0,
+    salaryEsi: 0.0,
+    pfNumber: 'MH/BAN/12345/678',
+    pfUan: '100987654321',
+    esiNumber: '31001234560001001',
+    panNumber: 'ABCDE1234F',
+    aadhaarNumber: '567812349012',
+    // Bank Details
+    bankAccountHolder: 'Rahul Sharma',
+    bankName: 'HDFC Bank',
+    bankAccountNumber: '50100234567890',
+    bankIfsc: 'HDFC0001234',
+    bankBranch: 'Mount Road',
+    bankAccountType: 'Savings',
+    // Education & Experience JSON
+    educationDegree: 'B.Tech Civil Engineering',
+    educationInstitution: 'Anna University',
+    educationYear: '2017',
+    educationGrade: 'First Class with Distinction',
+    educationListJson: jsonEncode([
+      {
+        'id': '1',
+        'degree_name': 'B.Tech Civil Engineering',
+        'institute_name': 'Anna University',
+        'result': '8.5 CGPA',
+        'passing_year': '2017',
+        'certificate_name': 'Degree Certificate',
+      }
+    ]),
+    experienceCompany: 'BuildCon Infrastructure',
+    experienceRole: 'Junior Site Engineer',
+    experienceYears: '3 Years',
+    experienceListJson: jsonEncode([
+      {
+        'id': '1',
+        'company_name': 'BuildCon Infrastructure',
+        'position': 'Junior Site Engineer',
+        'address': 'Chennai',
+        'working_duration': '3 Years',
+      }
+    ]),
+    // Family & Emergency
+    fatherName: 'Suresh Sharma',
+    motherName: 'Meena Sharma',
+    emergencyName: 'Suresh Sharma',
+    emergencyMobile: '+91 9876543211',
+    maritalStatus: 'Unmarried',
+  );
+
   @override
   Future<List<Employee>> getAllEmployees() async {
     if (isInMemory) {
+      if (!_memoryEmployees.any((e) => e.employeeId == 'EMP-1001')) {
+        _memoryEmployees.add(dummyEmployee);
+      }
       return List.unmodifiable(_memoryEmployees);
     }
     final result = <Employee>[];
     final seenKeys = <String>{};
 
     try {
-      final snapshot = await _employeesRef.get();
+      final snapshot = await _safeGetQuery(_employeesRef);
       for (final doc in snapshot.docs) {
         final emp = _employeeFromFirestore(doc.data(), doc.id);
         final key = doc.id.isNotEmpty
@@ -767,15 +887,37 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         await _employeesRef.doc('EMP-001').set(data, SetOptions(merge: true));
         result.insert(0, _superAdminMotherAccount);
       }
+
+      // Ensure the dummy employee exists in Firestore and memory
+      final hasDummyEmployee = result.any(
+        (e) =>
+            e.employeeId == 'EMP-1001' ||
+            e.emailAddress == 'rahul.sharma@igreen.com' ||
+            e.id == 1001,
+      );
+      if (!hasDummyEmployee) {
+        final data = _employeeToFirestore(dummyEmployee);
+        data['created_at'] = FieldValue.serverTimestamp();
+        data['id'] = 1001;
+        await _employeesRef.doc('EMP-1001').set(data, SetOptions(merge: true));
+        result.add(dummyEmployee);
+      }
+
       _memoryEmployees.clear();
       _memoryEmployees.addAll(result);
     } catch (e) {
       debugPrint('Firebase getAllEmployees error: $e');
       if (result.isEmpty && _memoryEmployees.isNotEmpty) {
+        if (!_memoryEmployees.any((e) => e.employeeId == 'EMP-1001')) {
+          _memoryEmployees.add(dummyEmployee);
+        }
         return List.unmodifiable(_memoryEmployees);
       }
       if (result.isEmpty) {
         result.add(_superAdminMotherAccount);
+        result.add(dummyEmployee);
+      } else if (!result.any((e) => e.employeeId == 'EMP-1001')) {
+        result.add(dummyEmployee);
       }
     }
 
