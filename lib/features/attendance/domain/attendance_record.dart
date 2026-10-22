@@ -61,6 +61,30 @@ class AttendanceRecord {
   String get formattedCheckInTime => TimeFormatter.formatToLocal12HourTime(effectiveCheckInTime);
   String get formattedCheckOutTime => TimeFormatter.formatToLocal12HourTime(checkOutTime);
 
+  /// Returns the sessions list, or synthesizes a default office session from
+  /// effectiveCheckInTime and checkOutTime if [sessions] is empty.
+  List<AttendanceSession> get effectiveSessions {
+    if (sessions.isNotEmpty) return sessions;
+    if (effectiveCheckInTime.isNotEmpty) {
+      final durMin = (totalHours > 0)
+          ? (totalHours * 60).round()
+          : (checkOutTime.isNotEmpty
+              ? ((TimeFormatter.calculateElapsedSeconds(effectiveCheckInTime, checkOutTime) ?? 0) ~/ 60)
+              : 0);
+      return [
+        AttendanceSession(
+          id: 'session_1',
+          type: 'office',
+          checkInTime: effectiveCheckInTime,
+          checkOutTime: checkOutTime,
+          durationHours: totalHours,
+          durationMinutes: durMin,
+        ),
+      ];
+    }
+    return const [];
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) {
     if (invocation.memberName == #formattedCheckInTime) {
@@ -351,6 +375,33 @@ class AttendanceRecord {
     }
   }
 
+  /// Computes total work duration in seconds across all completed sessions,
+  /// falling back to totalHours or checkIn/checkOut difference.
+  int get totalWorkDurationSeconds {
+    int totalSeconds = 0;
+    final list = effectiveSessions;
+    if (list.isNotEmpty) {
+      totalSeconds = list.fold<int>(0, (sum, s) {
+        if (s.isCompleted || s.durationMinutes > 0) {
+          return sum + s.effectiveDurationSeconds;
+        }
+        return sum;
+      });
+    }
+
+    if (totalSeconds == 0 && totalHours > 0) {
+      totalSeconds = (totalHours * 3600).round();
+    }
+
+    if (totalSeconds == 0 && effectiveCheckInTime.isNotEmpty && checkOutTime.isNotEmpty) {
+      final elapsed = TimeFormatter.calculateElapsedSeconds(effectiveCheckInTime, checkOutTime);
+      if (elapsed != null && elapsed > 0) {
+        totalSeconds = elapsed;
+      }
+    }
+
+    return totalSeconds;
+  }
 
   AttendanceRecord copyWith({
     int? id,

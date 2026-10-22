@@ -164,6 +164,26 @@ class AttendanceSession {
     return 0;
   }
 
+  /// Computes effective duration in seconds if check-in and check-out times are available.
+  int get effectiveDurationSeconds {
+    if (checkInTime.isNotEmpty && checkOutTime.isNotEmpty) {
+      final elapsed = TimeFormatter.calculateElapsedSeconds(checkInTime, checkOutTime);
+      if (elapsed != null && elapsed > 0) {
+        if (durationMinutes > 0) {
+          if ((elapsed ~/ 60) == durationMinutes || (durationMinutes * 60 - elapsed).abs() < 60) {
+            return elapsed;
+          }
+        } else {
+          return elapsed;
+        }
+      }
+    }
+    if (durationMinutes > 0) return durationMinutes * 60;
+    if (effectiveDurationMinutes > 0) return effectiveDurationMinutes * 60;
+    if (durationHours > 0) return (durationHours * 3600).round();
+    return 0;
+  }
+
   /// Parses time strings (e.g. "09:30 AM", "09:30:00 AM", ISO strings) to minutes from midnight.
   static int? parseTimeToMinutes(String timeStr) {
     try {

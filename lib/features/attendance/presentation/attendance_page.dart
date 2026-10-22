@@ -99,11 +99,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     var diff = now.difference(checkInDt);
     if (diff.isNegative) diff = Duration.zero;
 
-    final hours = diff.inHours;
-    final minutes = diff.inMinutes.remainder(60);
-    final seconds = diff.inSeconds.remainder(60);
-
-    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    return TimeFormatter.formatDuration(diff);
   }
 
   // Leave List Filter State
@@ -435,7 +431,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
               loading: () => const SizedBox.shrink(),
               error: (_, __) => const SizedBox.shrink(),
               data: (todayRec) {
-                if (todayRec == null || todayRec.sessions.isEmpty) return const SizedBox.shrink();
+                if (todayRec == null || todayRec.effectiveSessions.isEmpty) return const SizedBox.shrink();
                 return Column(
                   children: [
                     const SizedBox(height: 16),
@@ -503,10 +499,11 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
   }
 
   Widget _buildTodaySessionsBreakdownCard(AttendanceRecord record, {Employee? employee}) {
-    if (record.sessions.isEmpty) return const SizedBox.shrink();
+    final displaySessions = record.effectiveSessions;
+    if (displaySessions.isEmpty) return const SizedBox.shrink();
 
-    final totalMinutes = record.sessions.fold<int>(0, (sum, s) => sum + s.durationMinutes);
-    final totalDisplay = '${totalMinutes ~/ 60}h ${(totalMinutes % 60).toString().padLeft(2, '0')}m';
+    final totalSeconds = record.totalWorkDurationSeconds;
+    final totalDisplay = TimeFormatter.formatSecondsToHHmmss(totalSeconds);
 
     final shiftOutStr = (employee != null && employee.outTime.trim().isNotEmpty)
         ? employee.outTime.trim()
@@ -518,9 +515,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       final otStartMins = shiftOutMins + 30;
       final otStartHour = otStartMins ~/ 60;
       final otStartMin = otStartMins % 60;
-      final otStartPeriod = otStartHour >= 12 ? 'PM' : 'AM';
-      final otStartDisplayHour = otStartHour == 0 ? 12 : (otStartHour > 12 ? otStartHour - 12 : otStartHour);
-      otStartTimeStr = '${otStartDisplayHour.toString().padLeft(2, '0')}:${otStartMin.toString().padLeft(2, '0')} $otStartPeriod';
+      otStartTimeStr = '${(otStartHour % 24).toString().padLeft(2, '0')}:${otStartMin.toString().padLeft(2, '0')}:00';
     }
 
     final otMins = record.calculateOvertimeMinutes(shiftOutTime: shiftOutStr);
@@ -585,7 +580,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
           const SizedBox(height: 12),
           const Divider(height: 1, color: Color(0xFFE2E8F0)),
           const SizedBox(height: 12),
-          ...record.sessions.where((s) {
+          ...displaySessions.where((s) {
             if (s.isOd && s.durationMinutes == 0 && s.checkInTime.isNotEmpty && s.checkInTime == s.checkOutTime) {
               return false;
             }
@@ -636,18 +631,22 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
               icon = Icons.work_outline;
             }
 
+            final sessionSecs = session.effectiveDurationSeconds;
             final durationDisplay = session.isActive
                 ? (hasOt ? 'Completed' : 'Active')
-                : '${session.durationMinutes ~/ 60}h ${(session.durationMinutes % 60).toString().padLeft(2, '0')}m';
+                : TimeFormatter.formatSecondsToHHmmss(sessionSecs);
+
+            final checkIn24 = TimeFormatter.formatTo24HourTime(session.checkInTime);
+            final checkOut24 = TimeFormatter.formatTo24HourTime(session.checkOutTime);
 
             final timeRange = hasOt && session.isOffice
-                ? '${session.formattedCheckInTime} → $otStartTimeStr'
+                ? '$checkIn24 → $otStartTimeStr'
                 : (session.checkOutTime.isNotEmpty
-                    ? '${session.formattedCheckInTime} → ${session.formattedCheckOutTime}'
-                    : '${session.formattedCheckInTime} → Active');
+                    ? '$checkIn24 → $checkOut24'
+                    : '$checkIn24 → Active');
 
             return Padding(
-              padding: EdgeInsets.only(bottom: (idx < record.sessions.length - 1 || hasOt) ? 10 : 0),
+              padding: EdgeInsets.only(bottom: (idx < displaySessions.length - 1 || hasOt) ? 10 : 0),
               child: Row(
                 children: [
                   // Type badge
@@ -742,7 +741,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                   Expanded(
                     child: Text(
                       record.checkOutTime.isNotEmpty
-                          ? '$otStartTimeStr → ${record.formattedCheckOutTime}'
+                          ? '$otStartTimeStr → ${TimeFormatter.formatTo24HourTime(record.checkOutTime)}'
                           : '$otStartTimeStr → Active',
                       style: const TextStyle(
                         fontSize: 13,
@@ -763,8 +762,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                     ),
                     child: Text(
                       record.checkOutTime.isEmpty
-                          ? 'Active (${record.formattedOvertimeHours(shiftOutTime: shiftOutStr)})'
-                          : record.formattedOvertimeHours(shiftOutTime: shiftOutStr),
+                          ? 'Active (${TimeFormatter.formatMinutesToHHmmss(otMins)})'
+                          : TimeFormatter.formatMinutesToHHmmss(otMins),
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
@@ -972,7 +971,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                   if (rec.effectiveCheckInTime.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(
-                      'Check-in: ${rec.effectiveCheckInTime}',
+                      'Check-in: ${TimeFormatter.formatTo24HourTime(rec.effectiveCheckInTime)}',
                       style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                     ),
                   ],
@@ -3701,24 +3700,30 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         String sessionStatusSubtext;
         if (isFlexibleEmployee) {
           if (hasCheckedIn) {
+            final inTime24 = TimeFormatter.formatTo24HourTime(todayRecord.effectiveCheckInTime);
             if (hasCheckedOut) {
-              sessionStatusSubtext = 'Work completed: ${todayRecord.formattedCheckInTime} – ${todayRecord.formattedCheckOutTime} (${todayRecord.formattedTotalHours})';
+              final outTime24 = TimeFormatter.formatTo24HourTime(todayRecord.checkOutTime);
+              final totalDur24 = TimeFormatter.formatSecondsToHHmmss(todayRecord.totalWorkDurationSeconds);
+              sessionStatusSubtext = 'Work completed: $inTime24 – $outTime24 ($totalDur24)';
             } else {
-              sessionStatusSubtext = 'Checked in at ${todayRecord.formattedCheckInTime} • Target: 9 Working Hours';
+              sessionStatusSubtext = 'Checked in at $inTime24 • Target: 9 Working Hours';
             }
           } else {
             sessionStatusSubtext = 'Flexible Schedule • 9 Working Hours Required';
           }
         } else {
           if (hasCheckedIn) {
+            final inTime24 = TimeFormatter.formatTo24HourTime(todayRecord.effectiveCheckInTime);
             if (hasCheckedOut) {
-              sessionStatusSubtext = 'Shift completed: ${todayRecord.formattedCheckInTime} – ${todayRecord.formattedCheckOutTime}';
+              final outTime24 = TimeFormatter.formatTo24HourTime(todayRecord.checkOutTime);
+              sessionStatusSubtext = 'Shift completed: $inTime24 – $outTime24';
             } else if (isOvertimeActive) {
-              sessionStatusSubtext = 'Checked in at ${todayRecord.formattedCheckInTime} • Overtime Active: ${todayRecord.formattedOvertimeHours(shiftOutTime: shiftOutStr)}';
+              final otFormatted = TimeFormatter.formatMinutesToHHmmss(otMins);
+              sessionStatusSubtext = 'Checked in at $inTime24 • Overtime Active: $otFormatted';
             } else if (isInBuffer) {
-              sessionStatusSubtext = 'Checked in at ${todayRecord.formattedCheckInTime} • Buffer Window (OT starts in ${bufferMinsRemaining}m)';
+              sessionStatusSubtext = 'Checked in at $inTime24 • Buffer Window (OT starts in ${bufferMinsRemaining}m)';
             } else {
-              sessionStatusSubtext = 'Checked in at ${todayRecord.formattedCheckInTime}${officialOutTimeStr.isNotEmpty ? " • Expected Check-out: $officialOutTimeStr" : ""}';
+              sessionStatusSubtext = 'Checked in at $inTime24${officialOutTimeStr.isNotEmpty ? " • Expected Check-out: $officialOutTimeStr" : ""}';
             }
           } else {
             sessionStatusSubtext = officialOutTimeStr.isNotEmpty
@@ -3881,7 +3886,9 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                       icon: Icons.login,
                       iconColor: const Color(0xFF2E7D32),
                       label: 'Check In',
-                      value: hasCheckedIn ? todayRecord.formattedCheckInTime : '--:--',
+                      value: hasCheckedIn
+                          ? TimeFormatter.formatTo24HourTime(todayRecord.effectiveCheckInTime)
+                          : '--:--:--',
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -3890,28 +3897,33 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                       icon: Icons.logout,
                       iconColor: const Color(0xFFC62828),
                       label: 'Check Out',
-                      value: hasCheckedOut ? todayRecord.formattedCheckOutTime : '--:--',
+                      value: hasCheckedOut
+                          ? TimeFormatter.formatTo24HourTime(todayRecord.checkOutTime)
+                          : '--:--:--',
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Builder(
                       builder: (context) {
-                        final hasActiveSession = todayRecord != null && todayRecord.sessions.any((s) => s.isActive);
-                        final showLiveClock = hasCheckedIn && !hasCheckedOut && hasActiveSession;
-                        final activeSession = todayRecord?.sessions.where((s) => s.isActive).firstOrNull;
+                        final displaySessions = todayRecord?.effectiveSessions ?? const [];
+                        final showLiveClock = hasCheckedIn && !hasCheckedOut;
+                        final activeSession = displaySessions.where((s) => s.isActive).firstOrNull;
                         final clockInTime = (activeSession != null && activeSession.checkInTime.isNotEmpty)
                             ? activeSession.checkInTime
                             : (todayRecord?.effectiveCheckInTime ?? '');
+                        final totalWorkSecs = todayRecord != null
+                            ? todayRecord.totalWorkDurationSeconds
+                            : 0;
                         return _buildCompactStatChip(
                           icon: showLiveClock ? Icons.timer_outlined : Icons.timelapse,
                           iconColor: showLiveClock ? const Color(0xFF9CC70A) : AppColors.active,
                           label: showLiveClock ? 'Live Clock' : 'Work Hrs',
                           value: showLiveClock
                               ? _getLiveClockDisplay(clockInTime)
-                              : (todayRecord != null && (todayRecord.totalHours > 0 || todayRecord.sessions.isNotEmpty)
-                                  ? todayRecord.formattedTotalHours
-                                  : '--'),
+                              : (todayRecord != null && (todayRecord.totalHours > 0 || displaySessions.isNotEmpty || todayRecord.checkOutTime.isNotEmpty)
+                                  ? TimeFormatter.formatSecondsToHHmmss(totalWorkSecs)
+                                  : '--:--:--'),
                         );
                       },
                     ),

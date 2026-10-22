@@ -2307,6 +2307,17 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       similarityScore: similarityScore,
       notes: notes,
       markedAt: DateTime.now().toIso8601String(),
+      sessions: [
+        AttendanceSession(
+          id: 'session_${DateTime.now().millisecondsSinceEpoch}_1',
+          type: 'office',
+          checkInTime: time,
+          checkOutTime: '',
+          checkInVerificationStatus: verificationStatus,
+          checkInSimilarityScore: similarityScore,
+          createdAt: DateTime.now().toIso8601String(),
+        ),
+      ],
     );
     _localMemoryCache['${employeeId}_$date'] = rec;
     _localMemoryCache['${employeeId}_$normDate'] = rec;
@@ -2380,6 +2391,29 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         durationMinutes: sessMins,
         durationHours: sessHours,
       );
+    } else if (updatedSessions.isEmpty && record.effectiveCheckInTime.isNotEmpty) {
+      final inMin = _parseMinutes(record.effectiveCheckInTime);
+      final outMin = _parseMinutes(checkOutTime);
+      int sessMins = 0;
+      double sessHours = 0.0;
+      if (inMin != null && outMin != null) {
+        int diff = outMin - inMin;
+        if (diff < 0) {
+          diff += 1440;
+        }
+        sessMins = diff;
+        sessHours = double.parse((sessMins / 60.0).toStringAsFixed(2));
+      }
+      updatedSessions.add(AttendanceSession(
+        id: 'session_1',
+        type: 'office',
+        checkInTime: record.effectiveCheckInTime,
+        checkOutTime: checkOutTime,
+        checkOutVerificationStatus: verificationStatus,
+        checkOutSimilarityScore: similarityScore,
+        durationMinutes: sessMins,
+        durationHours: sessHours,
+      ));
     }
 
     double hours = 0.0;
