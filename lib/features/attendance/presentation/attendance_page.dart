@@ -411,6 +411,22 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Location Services Unavailable Warning Banner (Active Session)
+            ValueListenableBuilder<bool>(
+              valueListenable: AttendanceLocationService.instance.isLocationUnavailableNotifier,
+              builder: (context, isUnavailable, _) {
+                final todayRec = todayAttendanceAsync.valueOrNull;
+                final isSessionActive = todayRec != null && todayRec.effectiveCheckInTime.isNotEmpty && todayRec.checkOutTime.isEmpty;
+                if (!isUnavailable || !isSessionActive) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: _buildLocationUnavailableWarningBanner(currentEmp.id),
+                );
+              },
+            ),
+
             // Today's Status Banner Card
             _buildTodayBannerCard(currentEmp, todayAttendanceAsync),
 
@@ -3439,6 +3455,145 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
               ],
             );
           },
+        );
+      },
+    );
+  }
+
+  // --- LOCATION SERVICES UNAVAILABLE WARNING BANNER ---
+  Widget _buildLocationUnavailableWarningBanner(int employeeId) {
+    return ValueListenableBuilder<String?>(
+      valueListenable: AttendanceLocationService.instance.interruptionStartTimeNotifier,
+      builder: (context, interruptionStart, _) {
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFBEB),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFF59E0B), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFD97706).withValues(alpha: 0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFFCD34D)),
+                    ),
+                    child: const Icon(
+                      Icons.location_off_rounded,
+                      color: Color(0xFFD97706),
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Location Services Unavailable',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF92400E),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'GPS/Location services became unavailable during your active shift. Office geofence cannot be verified. Please turn on Location services in device settings.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF78350F),
+                            height: 1.4,
+                          ),
+                        ),
+                        if (interruptionStart != null && interruptionStart.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFDE68A).withValues(alpha: 0.6),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.access_time_rounded, size: 12, color: Color(0xFF92400E)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Interruption started at: $interruptionStart',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF92400E),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF92400E),
+                      side: const BorderSide(color: Color(0xFFD97706)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    label: const Text(
+                      'Revalidate Location',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () async {
+                      await AttendanceLocationService.instance.revalidateLocationNow(
+                        ref: ref,
+                        employeeId: employeeId,
+                      );
+                      if (!context.mounted) return;
+                      if (AttendanceLocationService.instance.isLocationUnavailable) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Location services are still unavailable. Please enable GPS in device settings.'),
+                            backgroundColor: Color(0xFFD97706),
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Location restored and verified successfully!'),
+                            backgroundColor: Color(0xFF15803D),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
         );
       },
     );

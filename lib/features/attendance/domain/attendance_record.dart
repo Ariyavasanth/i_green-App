@@ -30,6 +30,7 @@ class AttendanceRecord {
     this.notes = '',
     this.markedAt = '',
     this.sessions = const [],
+    this.locationInterruptions = const [],
   });
 
   final int id;
@@ -54,6 +55,7 @@ class AttendanceRecord {
   final String notes;
   final String markedAt;
   final List<AttendanceSession> sessions;
+  final List<Map<String, dynamic>> locationInterruptions;
 
   String get effectiveCheckInTime => checkInTime.isNotEmpty ? checkInTime : time;
   String get formattedCheckInTime => TimeFormatter.formatToLocal12HourTime(effectiveCheckInTime);
@@ -373,6 +375,7 @@ class AttendanceRecord {
     String? notes,
     String? markedAt,
     List<AttendanceSession>? sessions,
+    List<Map<String, dynamic>>? locationInterruptions,
   }) {
     return AttendanceRecord(
       id: id ?? this.id,
@@ -397,6 +400,7 @@ class AttendanceRecord {
       notes: notes ?? this.notes,
       markedAt: markedAt ?? this.markedAt,
       sessions: sessions ?? this.sessions,
+      locationInterruptions: locationInterruptions ?? this.locationInterruptions,
     );
   }
 
@@ -423,6 +427,7 @@ class AttendanceRecord {
         'notes': notes,
         'marked_at': markedAt,
         if (sessions.isNotEmpty) 'sessions': sessions.map((s) => s.toMap()).toList(),
+        if (locationInterruptions.isNotEmpty) 'location_interruptions': locationInterruptions,
       };
 
   factory AttendanceRecord.fromMap(Map<String, dynamic> map) {
@@ -471,6 +476,12 @@ class AttendanceRecord {
       notes: map['notes'] as String? ?? '',
       markedAt: map['marked_at'] as String? ?? '',
       sessions: parsedSessions,
+      locationInterruptions: (map['location_interruptions'] is List)
+          ? (map['location_interruptions'] as List)
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+          : const [],
     );
   }
 }

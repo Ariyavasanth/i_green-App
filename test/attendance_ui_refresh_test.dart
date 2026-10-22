@@ -428,6 +428,15 @@ class MockAttendanceRepository implements AttendanceRepository {
 
   @override
   Future<void> recalculateAttendanceForDate(int employeeId, String date) async {}
+
+  @override
+  Future<void> recordLocationInterruption({
+    required int employeeId,
+    required String date,
+    required String startTime,
+    String? endTime,
+    String reason = 'Location services unavailable',
+  }) async {}
 }
 
 void main() {

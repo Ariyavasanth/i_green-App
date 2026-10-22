@@ -3087,6 +3087,80 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
   }
 
   @override
+  Future<void> recordLocationInterruption({
+    required int employeeId,
+    required String date,
+    required String startTime,
+    String? endTime,
+    String reason = 'Location services unavailable',
+  }) async {
+    try {
+      final normDate = _normalizeDateKey(date);
+      final existingRecord = await getAttendanceRecordForDate(employeeId, date);
+      final emp = await _getEmployeeById(employeeId);
+      final empCode = emp?.employeeId.trim().toUpperCase() ?? existingRecord?.employeeCode.trim().toUpperCase() ?? '';
+      final employeeName = emp?.fullName ?? existingRecord?.employeeName ?? 'Employee $employeeId';
+
+      final interruptionEntry = <String, dynamic>{
+        'start_time': startTime,
+        if (endTime != null && endTime.trim().isNotEmpty) 'end_time': endTime.trim(),
+        'reason': reason,
+        'recorded_at': DateTime.now().toIso8601String(),
+      };
+
+      if (existingRecord != null) {
+        final List<Map<String, dynamic>> updatedInterruptions = List<Map<String, dynamic>>.from(existingRecord.locationInterruptions);
+        final matchIdx = updatedInterruptions.indexWhere((it) => it['start_time'] == startTime);
+        if (matchIdx != -1) {
+          if (endTime != null && endTime.trim().isNotEmpty) {
+            updatedInterruptions[matchIdx] = {
+              ...updatedInterruptions[matchIdx],
+              'end_time': endTime.trim(),
+              'reason': reason,
+              'recovered_at': DateTime.now().toIso8601String(),
+            };
+          }
+        } else {
+          updatedInterruptions.add(interruptionEntry);
+        }
+
+        final updatedRec = existingRecord.copyWith(
+          locationInterruptions: updatedInterruptions,
+        );
+
+        final docKeys = <String>{
+          '${employeeId}_${normDate.replaceAll('-', '')}',
+          '${employeeId}_$normDate',
+          '${employeeId}_$date',
+          if (empCode.isNotEmpty) ...[
+            '${empCode}_${normDate.replaceAll('-', '')}',
+            '${empCode}_$normDate',
+            '${empCode}_$date',
+          ],
+        };
+
+        final toSaveMap = updatedRec.toMap();
+        for (final k in docKeys) {
+          await _recordsRef.doc(k).set(toSaveMap, SetOptions(merge: true));
+          _localMemoryCache[k] = updatedRec;
+        }
+      }
+
+      await logAttendanceAttempt(
+        employeeId: employeeId,
+        employeeName: employeeName,
+        date: date,
+        time: endTime != null && endTime.trim().isNotEmpty ? endTime.trim() : startTime,
+        verificationStatus: (endTime != null && endTime.trim().isNotEmpty) ? 'Location Recovered' : 'Location Interrupted',
+        similarityScore: 1.0,
+        message: (endTime != null && endTime.trim().isNotEmpty)
+            ? 'Location services restored at $endTime (interrupted: $startTime - $endTime)'
+            : 'Location services became unavailable at $startTime ($reason)',
+      );
+    } catch (_) {}
+  }
+
+  @override
   Future<void> clearAllAttendanceRecords() async {
     _localMemoryCache.clear();
     try {

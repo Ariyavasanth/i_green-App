@@ -137,4 +137,11 @@ abstract class AttendanceRepository {
     required double currentLongitude,
     String? exitTime,
   });
+  Future<void> recordLocationInterruption({
+    required int employeeId,
+    required String date,
+    required String startTime,
+    String? endTime,
+    String reason = 'Location services unavailable',
+  });
 }
