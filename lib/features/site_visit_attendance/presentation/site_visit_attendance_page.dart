@@ -1,9 +1,7 @@
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -287,21 +285,16 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
 
     setState(() => _saving = true);
     try {
-      final cameraStatus = await Permission.camera.request();
-      if (!cameraStatus.isGranted) {
-        throw Exception('Camera permission is required to capture a site visit photo.');
-      }
-
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) {
-        throw Exception('No camera is available on this device.');
-      }
-
-      final pickedPath = await Navigator.of(context).push<String>(
-        MaterialPageRoute(builder: (_) => SiteVisitCameraPage(camera: cameras.first)),
+      final pickedPath = await Navigator.of(context, rootNavigator: true).push<String>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => const SiteVisitCameraPage(
+            title: 'Capture Photo',
+          ),
+        ),
       );
       if (pickedPath == null || pickedPath.isEmpty) {
-        throw Exception('Camera was closed without taking a photo.');
+        return;
       }
 
       final position = await _getCurrentLocationWithPermissionPrompt();

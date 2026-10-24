@@ -347,13 +347,31 @@ class _OnDutyCameraPageState extends State<OnDutyCameraPage> {
       );
     }
 
-    final mediaSize = MediaQuery.of(context).size;
-    final scale = 1 / (_controller!.value.aspectRatio * mediaSize.aspectRatio);
+    final size = MediaQuery.sizeOf(context);
+    final previewSize = _controller!.value.previewSize;
+    final double previewAspectRatio;
+    if (previewSize != null && previewSize.width > 0) {
+      previewAspectRatio = previewSize.height / previewSize.width;
+    } else {
+      final ratio = _controller!.value.aspectRatio;
+      previewAspectRatio = ratio > 1.0 ? 1.0 / ratio : (ratio > 0 ? ratio : 0.75);
+    }
 
-    return Transform.scale(
-      scale: scale < 1.0 ? 1 / scale : scale,
-      child: Center(
-        child: CameraPreview(_controller!),
+    return ClipRect(
+      child: OverflowBox(
+        alignment: Alignment.center,
+        minWidth: size.width,
+        minHeight: size.height,
+        maxWidth: size.width,
+        maxHeight: size.height,
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: size.width,
+            height: size.width / previewAspectRatio,
+            child: CameraPreview(_controller!),
+          ),
+        ),
       ),
     );
   }
