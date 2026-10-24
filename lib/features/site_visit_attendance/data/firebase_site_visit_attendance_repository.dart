@@ -157,8 +157,8 @@ class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceReposi
     required double latitude,
     required double longitude,
   }) async {
+    Uint8List? bytes;
     try {
-      Uint8List? bytes;
       if (localImagePath.startsWith('data:image')) {
         final base64Str = localImagePath.split(',').last;
         bytes = base64Decode(base64Str);
@@ -213,6 +213,26 @@ class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceReposi
       final remoteUrl = await uploadTask.ref.getDownloadURL();
       return SiteVisitPhotoAsset(url: remoteUrl, publicId: storagePath);
     } catch (_) {
+      // If Firebase Storage upload fails (permissions, offline, or CORS), fallback to base64
+      // so the captured photo can be rendered on any device/platform rather than saving an unreachable local path.
+      if (bytes != null && bytes.isNotEmpty) {
+        return SiteVisitPhotoAsset(
+          url: 'data:image/jpeg;base64,${base64Encode(bytes)}',
+          publicId: '',
+        );
+      }
+      if (!kIsWeb && localImagePath.isNotEmpty) {
+        try {
+          final file = File(localImagePath);
+          if (file.existsSync()) {
+            final fBytes = file.readAsBytesSync();
+            return SiteVisitPhotoAsset(
+              url: 'data:image/jpeg;base64,${base64Encode(fBytes)}',
+              publicId: '',
+            );
+          }
+        } catch (_) {}
+      }
       return SiteVisitPhotoAsset(url: localImagePath, publicId: '');
     }
   }

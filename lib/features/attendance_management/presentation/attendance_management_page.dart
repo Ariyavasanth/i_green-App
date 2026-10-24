@@ -3431,12 +3431,19 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
   }
 
   void _openFullImagePreview(String photoUrl, String siteName) {
+    final size = MediaQuery.of(context).size;
+    final isMobile = size.width < 600;
+    final dialogWidth = isMobile ? (size.width * 0.92).clamp(280.0, 500.0) : 500.0;
+    final imgWidth = dialogWidth - 32;
+    final imgHeight = (imgWidth * 0.75).clamp(200.0, 360.0);
+
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 24, vertical: 24),
         child: Container(
-          width: 500,
+          width: dialogWidth,
           padding: const EdgeInsets.all(16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -3457,7 +3464,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
               const SizedBox(height: 12),
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: _buildSiteVisitImageWidget(photoUrl, width: 450, height: 350),
+                child: _buildSiteVisitImageWidget(photoUrl, width: imgWidth, height: imgHeight),
               ),
             ],
           ),
@@ -3473,16 +3480,16 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     List<OnDutyAssignment> dayOD = const [],
   ]) {
     final size = MediaQuery.of(context).size;
-    final isMobile = size.width < 600;
+    final isMobile = size.width < 768;
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+        insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 16, vertical: 24),
+        titlePadding: EdgeInsets.fromLTRB(isMobile ? 16 : 20, 18, isMobile ? 16 : 20, 12),
+        contentPadding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 20, vertical: 8),
+        actionsPadding: EdgeInsets.fromLTRB(isMobile ? 16 : 20, 8, isMobile ? 16 : 20, 16),
         title: Row(
           children: [
             Container(
@@ -3506,7 +3513,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
         ),
         content: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: isMobile ? size.width * 0.92 : 520,
+            maxWidth: isMobile ? size.width * 0.95 : 520,
             maxHeight: size.height * 0.75,
           ),
           child: SingleChildScrollView(
@@ -3761,7 +3768,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                                         const SizedBox(width: 4),
                                         Expanded(
                                           child: Text(
-                                            v.address.isNotEmpty ? v.address : 'View location on Google Maps (${v.latitude.toStringAsFixed(4)}, ${v.longitude.toStringAsFixed(4)})',
+                                            v.address.isNotEmpty ? v.address : 'View location on Google Maps',
                                             style: const TextStyle(
                                               fontSize: 11,
                                               color: Color(0xFF2563EB),

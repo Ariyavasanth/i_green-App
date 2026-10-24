@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -25,15 +26,44 @@ class SmartNetworkImage extends StatelessWidget {
 
     if (path.startsWith('data:')) {
       try {
-        final data = Uri.parse(path).data;
-        if (data != null) {
-          return Image.memory(
-            data.contentAsBytes(),
-            fit: fit,
-            filterQuality: FilterQuality.high,
-            errorBuilder: (_, __, ___) => errorBuilder(context),
-          );
-        }
+        final commaIdx = path.indexOf(',');
+        final base64Str = commaIdx != -1 ? path.substring(commaIdx + 1) : path;
+        final bytes = base64Decode(base64Str.trim());
+        return Image.memory(
+          bytes,
+          fit: fit,
+          filterQuality: FilterQuality.high,
+          errorBuilder: (_, _, _) => errorBuilder(context),
+        );
+      } catch (_) {
+        try {
+          final data = Uri.parse(path).data;
+          if (data != null) {
+            return Image.memory(
+              data.contentAsBytes(),
+              fit: fit,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (_, _, _) => errorBuilder(context),
+            );
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (!path.startsWith('http://') &&
+        !path.startsWith('https://') &&
+        !path.startsWith('blob:') &&
+        !path.startsWith('assets/') &&
+        !path.startsWith('/data/')) {
+      try {
+        final cleanData = path.contains(',') ? path.split(',').last : path;
+        final bytes = base64Decode(cleanData.trim());
+        return Image.memory(
+          bytes,
+          fit: fit,
+          filterQuality: FilterQuality.high,
+          errorBuilder: (_, _, _) => errorBuilder(context),
+        );
       } catch (_) {}
     }
 
@@ -51,7 +81,7 @@ class SmartNetworkImage extends StatelessWidget {
         path,
         fit: fit,
         filterQuality: FilterQuality.high,
-        errorBuilder: (_, __, ___) => errorBuilder(context),
+        errorBuilder: (_, _, _) => errorBuilder(context),
       );
     }
 
@@ -63,7 +93,7 @@ class SmartNetworkImage extends StatelessWidget {
             file,
             fit: fit,
             filterQuality: FilterQuality.high,
-            errorBuilder: (_, __, ___) => errorBuilder(context),
+            errorBuilder: (_, _, _) => errorBuilder(context),
           );
         }
       } catch (_) {}
