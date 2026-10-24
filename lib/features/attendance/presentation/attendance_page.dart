@@ -3677,7 +3677,10 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         final hasApprovedPermission = todayApprovedPermission != null;
         final hasPendingPermission = todayPendingPermission != null;
 
-        if (hasCheckedIn && (todayRecord.status.toLowerCase() == 'late' || todayRecord.status.toLowerCase() == 'absent') && hasApprovedPermission) {
+        final needsRecalculation = (hasCheckedIn && (todayRecord.status.toLowerCase() == 'late' || todayRecord.status.toLowerCase() == 'absent') && hasApprovedPermission) ||
+            (hasCheckedIn && !hasCheckedOut && todayRecord.status.toLowerCase() == 'insufficient hours');
+
+        if (needsRecalculation) {
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
             await ref.read(attendanceRepositoryProvider).recalculateAttendanceForDate(employee.id, todayStr);
@@ -3949,6 +3952,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         st == 'on duty' ||
         st == 'od';
 
+    final bool hasCheckedOut = record.checkOutTime.trim().isNotEmpty;
+
     if (isCurrentlyOnDuty) {
       color = const Color(0xFF0284C7);
       displayLabel = 'On Duty';
@@ -3958,6 +3963,15 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     } else if (isInBuffer) {
       color = const Color(0xFFB45309);
       displayLabel = 'Present (Buffer)';
+    } else if (!hasCheckedOut) {
+      // Employee is currently at work and has not checked out for the day
+      if (st == 'late') {
+        color = const Color(0xFFE65100);
+        displayLabel = 'Late';
+      } else {
+        color = const Color(0xFF2E7D32);
+        displayLabel = 'Present';
+      }
     } else if (st == 'present' || st == 'completed') {
       color = const Color(0xFF2E7D32);
     } else if (st == 'late' || st == 'insufficient hours' || st == 'insufficient') {
