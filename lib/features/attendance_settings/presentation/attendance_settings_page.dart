@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../attendance/domain/attendance_settings.dart';
@@ -158,37 +157,16 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.symmetric(
+            horizontal: MediaQuery.of(context).size.width < 600 ? 12 : 20,
+            vertical: 16,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  if (context.canPop())
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: IconButton(
-                        icon: const Icon(Icons.arrow_back),
-                        tooltip: 'Back to Attendance Management',
-                        onPressed: () => context.pop(),
-                      ),
-                    ),
-                  const Icon(Icons.schedule_outlined, size: 24, color: AppColors.active),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Attendance Settings',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.all(MediaQuery.of(context).size.width < 600 ? 14 : 20),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(10),
@@ -211,10 +189,14 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
                         const SizedBox(height: 20),
 
                         // Section 1: Workplace Locations (Office, Factory, Warehouse, etc.)
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 12,
+                          runSpacing: 8,
                           children: [
                             const Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(Icons.location_city, color: AppColors.active, size: 20),
                                 SizedBox(width: 8),
@@ -341,12 +323,14 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
                           children: [
                             Icon(Icons.pin_drop_outlined, color: AppColors.active, size: 20),
                             SizedBox(width: 8),
-                            Text(
-                              'Global / Default Office Fallback Settings',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
+                            Expanded(
+                              child: Text(
+                                'Global / Default Office Fallback Settings',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
                               ),
                             ),
                           ],
@@ -388,7 +372,10 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
                         ),
                         const SizedBox(height: 24),
 
-                        Row(
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
@@ -400,8 +387,8 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
                               icon: const Icon(Icons.save_outlined, size: 18),
                               label: Text(_saving ? 'Saving...' : 'Save Settings'),
                             ),
-                            const SizedBox(width: 12),
-                            const Expanded(
+                            const SizedBox(
+                              width: 320,
                               child: Text(
                                 'Each employee still uses their own Check-In Time from the employee profile.',
                                 style: TextStyle(

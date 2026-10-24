@@ -401,6 +401,7 @@ class _TopBar extends ConsumerWidget {
     if (cleanLoc.startsWith('/payroll/generate')) return 'Generate Payroll';
     if (cleanLoc.startsWith('/payroll/details')) return 'Payroll Details';
     if (cleanLoc.startsWith('/payroll/payslip')) return 'Payslip Detail';
+    if (cleanLoc == '/attendance-settings') return 'Attendance Settings';
     for (final dest in AppShell.destinations) {
       if (dest.path == cleanLoc || (dest.path != '/home' && cleanLoc.startsWith(dest.path))) {
         return dest.label;

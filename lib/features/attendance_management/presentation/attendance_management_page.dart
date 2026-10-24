@@ -1436,9 +1436,11 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
             const SizedBox(height: 16),
             _buildSiteVisitSectionHeader(),
             const SizedBox(height: 12),
-            if (_viewMode == AttendanceViewMode.matrix)
-              _buildSiteVisitMatrixView(filteredVisits, allEmployees, allOnDuty)
-            else
+            if (_viewMode == AttendanceViewMode.matrix) ...[
+              _buildSiteVisitLegend(),
+              const SizedBox(height: 12),
+              _buildSiteVisitMatrixView(filteredVisits, allEmployees, allOnDuty),
+            ] else
               _buildSiteVisitTable(filteredVisits),
           ],
         );
@@ -2609,6 +2611,58 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     );
   }
 
+  Widget _buildSiteVisitLegend() {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        const Text(
+          'Legend:',
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: const Color(0xFF9CC70A)),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.location_on, size: 12, color: Color(0xFF414A51)),
+              SizedBox(width: 3),
+              Text(
+                'Regular Site Visit',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE0F2FE),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Color(0xFF0369A1).withValues(alpha: 0.5)),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.location_on, size: 12, color: Color(0xFF0369A1)),
+              SizedBox(width: 3),
+              Text(
+                'On-Duty (OD) Active',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0369A1)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   // --- Filtering Helpers ---
 
   List<AttendanceRecord> _filterStaticRecords(List<AttendanceRecord> records, List<Employee> employees) {
@@ -3092,8 +3146,16 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                         );
                       }
 
-                      final hasPhoto = dayVisits.any((v) => v.photoUrl.isNotEmpty);
-                      final firstPhoto = dayVisits.firstWhere((v) => v.photoUrl.isNotEmpty, orElse: () => dayVisits.first).photoUrl;
+                      final isOnOD = dayOD.isNotEmpty;
+                      final badgeBgColor = isOnOD
+                          ? const Color(0xFFE0F2FE)
+                          : const Color(0xFF9CC70A).withValues(alpha: 0.15);
+                      final badgeBorderColor = isOnOD
+                          ? const Color(0xFF0369A1).withValues(alpha: 0.5)
+                          : const Color(0xFF9CC70A);
+                      final badgeContentColor = isOnOD
+                          ? const Color(0xFF0369A1)
+                          : const Color(0xFF414A51);
 
                       return DataCell(
                         SizedBox(
@@ -3104,37 +3166,25 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                                  color: badgeBgColor,
                                   borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: const Color(0xFF9CC70A)),
+                                  border: Border.all(color: badgeBorderColor),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    if (dayOD.isNotEmpty) ...[
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF0369A1),
-                                          borderRadius: BorderRadius.circular(3),
-                                        ),
-                                        child: const Text('OD', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
-                                      ),
-                                      const SizedBox(width: 3),
-                                    ],
-                                    if (hasPhoto) ...[
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(3),
-                                        child: _buildSiteVisitImageWidget(firstPhoto, width: 15, height: 15),
-                                      ),
-                                      const SizedBox(width: 3),
-                                    ],
+                                    Icon(
+                                      Icons.location_on,
+                                      size: 13,
+                                      color: badgeContentColor,
+                                    ),
+                                    const SizedBox(width: 2),
                                     Text(
-                                      '${dayVisits.length} site(s)',
-                                      style: const TextStyle(
+                                      '${dayVisits.length} ${dayVisits.length == 1 ? 'site' : 'sites'}',
+                                      style: TextStyle(
                                         fontSize: 10,
                                         fontWeight: FontWeight.bold,
-                                        color: Color(0xFF414A51),
+                                        color: badgeContentColor,
                                       ),
                                     ),
                                   ],
