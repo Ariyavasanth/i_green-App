@@ -811,135 +811,134 @@ class _TopBar extends ConsumerWidget {
                 icon: const Icon(Icons.notifications_none),
               ),
             ],
-            if (MediaQuery.sizeOf(context).width >= 520) ...[
-              const SizedBox(width: 4),
-              Consumer(
-                builder: (context, ref, _) {
-                  final emp = ref.watch(currentEmployeeProvider);
-                  final name = emp?.fullName.isNotEmpty == true
-                      ? emp!.fullName
-                      : (emp?.firstName.isNotEmpty == true ? emp!.firstName : (emp?.employeeId.isNotEmpty == true ? emp!.employeeId : 'User'));
-                  final role = emp?.designation.isNotEmpty == true
-                      ? emp!.designation
-                      : (emp?.userType.isNotEmpty == true ? emp!.userType : 'Administrator');
-                  final email = emp?.emailAddress ?? '';
-                  final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'U';
-                  final photoUrl = emp?.profileImageUrl.trim() ?? '';
+            const SizedBox(width: 4),
+            Consumer(
+              builder: (context, ref, _) {
+                final emp = ref.watch(currentEmployeeProvider);
+                final name = emp?.fullName.isNotEmpty == true
+                    ? emp!.fullName
+                    : (emp?.firstName.isNotEmpty == true ? emp!.firstName : (emp?.employeeId.isNotEmpty == true ? emp!.employeeId : 'User'));
+                final role = emp?.designation.isNotEmpty == true
+                    ? emp!.designation
+                    : (emp?.userType.isNotEmpty == true ? emp!.userType : 'Administrator');
+                final email = emp?.emailAddress ?? '';
+                final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'U';
+                final photoUrl = emp?.profileImageUrl.trim() ?? '';
 
-                  Widget avatarWidget;
-                  if (photoUrl.isNotEmpty) {
-                    if (photoUrl.startsWith('data:')) {
-                      try {
-                        final commaIdx = photoUrl.indexOf(',');
-                        final bytes = base64Decode(commaIdx != -1 ? photoUrl.substring(commaIdx + 1) : photoUrl);
-                        avatarWidget = CircleAvatar(
-                          radius: 16,
-                          backgroundColor: AppColors.active,
-                          backgroundImage: MemoryImage(bytes),
-                        );
-                      } catch (_) {
-                        avatarWidget = CircleAvatar(
-                          radius: 16,
-                          backgroundColor: AppColors.active,
-                          child: Text(initial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        );
-                      }
-                    } else {
+                Widget avatarWidget;
+                if (photoUrl.isNotEmpty) {
+                  if (photoUrl.startsWith('data:')) {
+                    try {
+                      final commaIdx = photoUrl.indexOf(',');
+                      final bytes = base64Decode(commaIdx != -1 ? photoUrl.substring(commaIdx + 1) : photoUrl);
                       avatarWidget = CircleAvatar(
                         radius: 16,
                         backgroundColor: AppColors.active,
-                        backgroundImage: NetworkImage(photoUrl),
+                        backgroundImage: MemoryImage(bytes),
+                      );
+                    } catch (_) {
+                      avatarWidget = CircleAvatar(
+                        radius: 16,
+                        backgroundColor: AppColors.active,
+                        child: Text(initial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                       );
                     }
                   } else {
                     avatarWidget = CircleAvatar(
                       radius: 16,
                       backgroundColor: AppColors.active,
-                      child: Text(initial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      backgroundImage: NetworkImage(photoUrl),
                     );
                   }
+                } else {
+                  avatarWidget = CircleAvatar(
+                    radius: 16,
+                    backgroundColor: AppColors.active,
+                    child: Text(initial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  );
+                }
 
-                  return PopupMenuButton<String>(
-                    tooltip: 'Profile & Account',
-                    offset: const Offset(0, 42),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: avatarWidget,
-                    ),
-                    onSelected: (value) async {
-                      if (value == 'profile') {
-                        context.go('/my-profile');
-                      } else if (value == 'logout') {
-                        ref.read(currentUserEmailProvider.notifier).state = null;
-                        await ref.read(authSessionStorageProvider).writeUserEmail(null);
-                        await ref.read(authenticationRepositoryProvider).signOut();
-                        ref.invalidate(employeesProvider);
-                        ref.invalidate(allEmployeesProvider);
-                        ref.invalidate(currentEmployeeProvider);
-                        if (context.mounted) context.go('/login');
-                      }
-                    },
-                    itemBuilder: (ctx) => [
-                      PopupMenuItem<String>(
-                        enabled: false,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
+                return PopupMenuButton<String>(
+                  tooltip: 'Profile & Account',
+                  offset: const Offset(0, 42),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: compact ? 4 : 8),
+                    child: avatarWidget,
+                  ),
+                  onSelected: (value) async {
+                    if (value == 'profile') {
+                      context.go('/my-profile');
+                    } else if (value == 'logout') {
+                      ref.read(currentUserEmailProvider.notifier).state = null;
+                      await ref.read(authSessionStorageProvider).writeUserEmail(null);
+                      await ref.read(authenticationRepositoryProvider).signOut();
+                      ref.invalidate(employeesProvider);
+                      ref.invalidate(allEmployeesProvider);
+                      ref.invalidate(currentEmployeeProvider);
+                      if (context.mounted) context.go('/login');
+                    }
+                  },
+                  itemBuilder: (ctx) => [
+                    PopupMenuItem<String>(
+                      enabled: false,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: Color(0xFF1E293B),
+                            ),
+                          ),
+                          if (role.isNotEmpty)
                             Text(
-                              name,
+                              role,
                               style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                color: Color(0xFF1E293B),
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
                               ),
                             ),
-                            if (role.isNotEmpty)
-                              Text(
-                                role,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF64748B),
-                                ),
+                          if (email.isNotEmpty)
+                            Text(
+                              email,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF94A3B8),
                               ),
-                            if (email.isNotEmpty)
-                              Text(
-                                email,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFF94A3B8),
-                                ),
-                              ),
-                          ],
-                        ),
+                            ),
+                        ],
                       ),
-                      const PopupMenuDivider(),
-                      const PopupMenuItem<String>(
-                        value: 'profile',
-                        child: Row(
-                          children: [
-                            Icon(Icons.person_outline, size: 18, color: Color(0xFF1E293B)),
-                            SizedBox(width: 8),
-                            Text('My Profile', style: TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.w500)),
-                          ],
-                        ),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem<String>(
+                      value: 'profile',
+                      child: Row(
+                        children: [
+                          Icon(Icons.person_outline, size: 18, color: Color(0xFF1E293B)),
+                          SizedBox(width: 8),
+                          Text('My Profile', style: TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.w500)),
+                        ],
                       ),
-                      const PopupMenuItem<String>(
-                        value: 'logout',
-                        child: Row(
-                          children: [
-                            Icon(Icons.logout, size: 18, color: Color(0xFFE53935)),
-                            SizedBox(width: 8),
-                            Text('Logout', style: TextStyle(color: Color(0xFFE53935), fontWeight: FontWeight.w500)),
-                          ],
-                        ),
+                    ),
+                    const PopupMenuItem<String>(
+                      value: 'logout',
+                      child: Row(
+                        children: [
+                          Icon(Icons.logout, size: 18, color: Color(0xFFE53935)),
+                          SizedBox(width: 8),
+                          Text('Logout', style: TextStyle(color: Color(0xFFE53935), fontWeight: FontWeight.w500)),
+                        ],
                       ),
-                    ],
-                  );
-                },
-              ),
-            ],
+                    ),
+                  ],
+                );
+              },
+            ),
+            SizedBox(width: compact ? 4 : 12),
           ],
         ),
       ),

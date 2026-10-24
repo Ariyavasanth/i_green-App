@@ -582,29 +582,6 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF9CC70A).withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.location_on_outlined, size: 20, color: Color(0xFF414A51)),
-              ),
-              const SizedBox(width: 10),
-              const Text(
-                'Site Visit Attendance',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E293B),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
           _buildTodayOverviewCard(currentEmp, todayVisitsAsync),
           const SizedBox(height: 20),
           AnimatedSwitcher(
