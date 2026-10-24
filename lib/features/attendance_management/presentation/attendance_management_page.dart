@@ -2983,11 +2983,11 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
               final allEmpVisits = dateMap.values.expand((list) => list).toList();
               final firstVisit = allEmpVisits.isNotEmpty ? allEmpVisits.first : null;
+              final odMatch = odAssignments.where((od) => od.employeeName.trim().toLowerCase() == empName.trim().toLowerCase()).firstOrNull;
               final emp = firstVisit != null
                   ? (empMapById[firstVisit.employeeId] ?? empMapByName[empName.trim().toLowerCase()])
-                  : empMapByName[empName.trim().toLowerCase()];
-              final visitWithPhoto = allEmpVisits.where((v) => v.photoUrl.isNotEmpty).firstOrNull;
-              final empPhotoUrl = visitWithPhoto?.photoUrl ?? '';
+                  : (empMapByName[empName.trim().toLowerCase()] ?? (odMatch != null ? empMapById[odMatch.employeeId] : null));
+              final empPhotoUrl = emp?.profileImageUrl.trim() ?? '';
 
               return DataRow(
                 cells: [
