@@ -3945,7 +3945,14 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     String displayLabel = record.status;
     final st = record.status.trim().toLowerCase();
 
-    if (isOvertimeActive) {
+    final bool isCurrentlyOnDuty = record.sessions.any((s) => s.isActive && s.isOd) ||
+        st == 'on duty' ||
+        st == 'od';
+
+    if (isCurrentlyOnDuty) {
+      color = const Color(0xFF0284C7);
+      displayLabel = 'On Duty';
+    } else if (isOvertimeActive) {
       color = const Color(0xFF15803D);
       displayLabel = 'Present • OT Active';
     } else if (isInBuffer) {

@@ -1887,17 +1887,13 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
     final AttendanceRecord updatedRecord;
     if (existingRecord != null) {
-      final preservedStatus = (existingRecord.status.isNotEmpty && existingRecord.status.toLowerCase() != 'absent')
-          ? existingRecord.status
-          : status;
-
       updatedRecord = existingRecord.copyWith(
         employeeCode: employeeCode.isNotEmpty ? employeeCode : existingRecord.employeeCode,
         employeeName: employeeName.isNotEmpty ? employeeName : existingRecord.employeeName,
         time: existingRecord.time.isNotEmpty ? existingRecord.time : time,
         checkInTime: existingRecord.checkInTime.isNotEmpty ? existingRecord.checkInTime : time,
         checkOutTime: '', // Active OD session, keep blank
-        status: preservedStatus,
+        status: 'On Duty',
         verificationStatus: existingRecord.verificationStatus.isNotEmpty
             ? existingRecord.verificationStatus
             : odVerStatus,
@@ -1921,7 +1917,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         time: time,
         checkInTime: time,
         checkOutTime: '',
-        status: status,
+        status: 'On Duty',
         verificationStatus: odVerStatus,
         similarityScore: 1.0,
         checkInVerificationStatus: odVerStatus,
@@ -2181,6 +2177,10 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
               : 'Worked ${totalDailyHours.toStringAsFixed(1)} hrs (Insufficient hours, $unauthorizedMins mins unauthorized)';
         }
       }
+    }
+
+    if (!isCheckoutFromOd && (finalStatus == 'On Duty' || finalStatus == 'Insufficient hours')) {
+      finalStatus = (existingRecord.status.toLowerCase() == 'late') ? 'Late' : 'Present';
     }
 
     final updatedRecord = existingRecord.copyWith(
@@ -2945,9 +2945,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       }
 
       if (_isOdRecord(record) && record.checkOutTime.trim().isEmpty) {
-        final preservedStatus = (record.status.toLowerCase() == 'late') ? 'Late' : (record.status.isNotEmpty ? record.status : 'Present');
+        final activeOdStatus = 'On Duty';
         final updatedRec = record.copyWith(
-          status: preservedStatus,
+          status: activeOdStatus,
           notes: record.notes.isNotEmpty ? record.notes : 'On Duty Active',
         );
         await saveToAllKeys(updatedRec);
