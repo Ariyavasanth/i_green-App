@@ -288,8 +288,9 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
       final pickedPath = await Navigator.of(context, rootNavigator: true).push<String>(
         MaterialPageRoute(
           fullscreenDialog: true,
-          builder: (_) => const SiteVisitCameraPage(
-            title: 'Capture Photo',
+          builder: (_) => SiteVisitCameraPage(
+            title: 'Site Visit Photo',
+            subtitle: siteName.isNotEmpty ? siteName : 'Live site attendance photo',
           ),
         ),
       );

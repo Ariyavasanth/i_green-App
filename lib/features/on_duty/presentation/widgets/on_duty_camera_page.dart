@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
@@ -35,15 +36,17 @@ class _OnDutyCameraPageState extends State<OnDutyCameraPage> {
 
   Future<void> _initCamera() async {
     try {
-      final status = await Permission.camera.request();
-      if (status.isDenied || status.isPermanentlyDenied) {
-        if (mounted) {
-          setState(() {
-            _errorMessage = 'Camera permission was denied. Please allow camera access in device Settings to capture live reached proof.';
-            _isInitializing = false;
-          });
+      if (!kIsWeb) {
+        final status = await Permission.camera.request();
+        if (status.isDenied || status.isPermanentlyDenied) {
+          if (mounted) {
+            setState(() {
+              _errorMessage = 'Camera permission was denied. Please allow camera access in device Settings to capture live photo.';
+              _isInitializing = false;
+            });
+          }
+          return;
         }
-        return;
       }
 
       _cameras = await availableCameras();
@@ -321,16 +324,49 @@ class _OnDutyCameraPageState extends State<OnDutyCameraPage> {
                 style: const TextStyle(color: Colors.white70, fontSize: 14),
               ),
               const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: _isCapturing ? null : _capturePhoto,
-                icon: const Icon(Icons.camera_alt_rounded),
-                label: const Text('Open System Live Camera'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF9CC70A),
-                  foregroundColor: const Color(0xFF414A51),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.center,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _isCapturing ? null : _capturePhoto,
+                    icon: const Icon(Icons.camera_alt_rounded),
+                    label: const Text('Open System Live Camera'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF9CC70A),
+                      foregroundColor: const Color(0xFF414A51),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _isCapturing
+                        ? null
+                        : () async {
+                            final picker = ImagePicker();
+                            final image = await picker.pickImage(
+                              source: ImageSource.gallery,
+                              imageQuality: 75,
+                              maxWidth: 1000,
+                              maxHeight: 1000,
+                            );
+                            if (image != null) {
+                              final bytes = await image.readAsBytes();
+                              final ext = image.name.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
+                              final base64Image = 'data:image/$ext;base64,${base64Encode(bytes)}';
+                              if (mounted) Navigator.of(context).pop(base64Image);
+                            }
+                          },
+                    icon: const Icon(Icons.photo_library_rounded, color: Colors.white),
+                    label: const Text('Choose Photo', style: TextStyle(color: Colors.white)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.white38),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
