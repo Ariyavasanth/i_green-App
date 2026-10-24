@@ -196,20 +196,49 @@ class AttendanceLocationService {
     return checkGeofenceAndAutoCheckOut(ref: ref, employeeId: employeeId);
   }
 
+  int? _monitoredEmployeeId;
+
   /// Starts a periodic foreground boundary monitor (e.g. checks every 30 seconds).
+  /// Safe to call multiple times; if already monitoring for this employee, it preserves the existing timer.
   void startPeriodicGeofenceMonitoring({
     required WidgetRef ref,
     required int employeeId,
     Duration interval = const Duration(seconds: 30),
   }) {
+    if (_monitoredEmployeeId == employeeId && _pollingTimer != null && _pollingTimer!.isActive) {
+      return; // Already actively monitoring this employee
+    }
     stopPeriodicGeofenceMonitoring();
+    _monitoredEmployeeId = employeeId;
     _pollingTimer = Timer.periodic(interval, (_) async {
       final todayRec = ref.read(todayAttendanceRecordProvider(employeeId)).valueOrNull;
       if (todayRec != null && todayRec.effectiveCheckInTime.isNotEmpty && todayRec.checkOutTime.isEmpty) {
-        final bool isOdActive = todayRec.sessions.any((s) => s.isActive && s.isOd);
-        if (!isOdActive) {
-          await checkGeofenceAndAutoCheckOut(ref: ref, employeeId: employeeId);
-        }
+        final activeSession = todayRec.sessions.where((s) => s.isActive).firstOrNull;
+
+        // 1. Exemption: Active Time Clocking (Lunch, Break, Meeting, etc.)
+        final bool isTimeClockingActive = activeSession != null &&
+            (activeSession.isLunch ||
+             activeSession.isTeaBreak ||
+             activeSession.isMeetingOrOther ||
+             activeSession.type.toLowerCase().contains('lunch') ||
+             activeSession.type.toLowerCase().contains('break') ||
+             activeSession.type.toLowerCase().contains('meeting') ||
+             activeSession.type.toLowerCase().contains('task'));
+        if (isTimeClockingActive) return;
+
+        // 2. Exemption: Active OD session
+        final bool isOdActive = activeSession != null && activeSession.isOd;
+        if (isOdActive) return;
+
+        // 3. Exemption: Started from Home
+        final bool isStartedFromHome = activeSession != null &&
+            (activeSession.checkInMethod.toLowerCase().contains('home') ||
+             activeSession.checkInVerificationStatus.toLowerCase().contains('home') ||
+             activeSession.notes.toLowerCase().contains('starts from home'));
+        if (isStartedFromHome) return;
+
+        // 4. Regular Office Session -> check geofence boundary & auto check-out if outside radius
+        await checkGeofenceAndAutoCheckOut(ref: ref, employeeId: employeeId);
       }
     });
   }
@@ -218,5 +247,6 @@ class AttendanceLocationService {
   void stopPeriodicGeofenceMonitoring() {
     _pollingTimer?.cancel();
     _pollingTimer = null;
+    _monitoredEmployeeId = null;
   }
 }

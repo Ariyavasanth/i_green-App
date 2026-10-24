@@ -794,21 +794,57 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         return false;
       }
 
-      // Check active sessions
+      // If no check-in marked for today, do nothing
+      if (existingRecord.effectiveCheckInTime.trim().isEmpty) {
+        return false;
+      }
+
+      // 1. Check current active session
       final List<AttendanceSession> sessions = existingRecord.sessions;
       final activeSession = sessions.where((s) => s.isActive).firstOrNull;
 
-      // If active session is OD or OD-related, DO NOT auto-checkout
-      if ((activeSession != null && activeSession.isOd) || _isOdRecord(existingRecord)) {
+      // 2. EXEMPTION: Active Time Clocking (Lunch Break, Tea Break, Meeting, etc.)
+      final bool isClockingSessionActive = activeSession != null &&
+          (activeSession.isLunch ||
+           activeSession.isTeaBreak ||
+           activeSession.isMeetingOrOther ||
+           _isExplicitClockingType(activeSession.type));
+      if (isClockingSessionActive) {
+        return false; // Active Time Clocking -> Do NOT auto check-out!
+      }
+
+      // Also check Firestore collection `time_clockings` for any active ClockEntry
+      final bool hasActiveClockEntry = await _hasActiveTimeClocking(employeeId);
+      if (hasActiveClockEntry) {
+        return false; // Active Clock Entry -> Do NOT auto check-out!
+      }
+
+      // 3. EXEMPTION: Active OD Session or Assignment
+      if (activeSession != null && activeSession.isOd) {
+        return false; // Active OD session -> Do NOT auto check-out!
+      }
+
+      // Exemption: OD or attendance session started from Home
+      if (activeSession != null &&
+          (activeSession.checkInMethod.toLowerCase().contains('home') ||
+           activeSession.checkInVerificationStatus.toLowerCase().contains('home') ||
+           activeSession.notes.toLowerCase().contains('starts from home'))) {
+        return false; // Started from Home -> Do NOT auto check-out!
+      }
+
+      // Check ongoing On-Duty assignment in Firestore
+      final bool hasActiveOd = await _hasActiveOdAssignment(employeeId);
+      if (hasActiveOd) {
+        return false; // Active OD assignment -> Do NOT auto check-out!
+      }
+
+      // 4. Verify that this is an office session (either active session isOffice or legacy check-in)
+      final bool isOfficeSession = activeSession == null || activeSession.isOffice;
+      if (!isOfficeSession) {
         return false;
       }
 
-      // If no active session and no check-in, do nothing
-      if (activeSession == null && existingRecord.checkInTime.trim().isEmpty) {
-        return false;
-      }
-
-      // Verify geofence: If still inside geofence, do nothing
+      // 5. Verify geofence: If still inside geofence, do nothing
       final isInside = await verifyLocationWithinGeofence(
         employeeId: employeeId,
         latitude: currentLatitude,
@@ -818,7 +854,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         return false; // Still inside office -> Do NOT auto-checkout
       }
 
-      // Employee has exited the geofence -> Trigger Auto Check-Out!
+      // 6. Employee has crossed the office radius with NO Time Clocking and NO OD -> Auto Check-Out!
       final time = exitTime ?? DateFormat('hh:mm:ss a').format(now);
       final employee = await _getEmployeeById(employeeId);
       final employeeName = employee?.name ?? existingRecord.employeeName;
@@ -875,6 +911,68 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     } catch (_) {
       return false;
     }
+  }
+
+  bool _isExplicitClockingType(String type) {
+    final t = type.trim().toLowerCase();
+    return t.contains('lunch') ||
+        t.contains('tea') ||
+        t.contains('coffee') ||
+        t.contains('break') ||
+        t.contains('meeting') ||
+        t.contains('task') ||
+        t.contains('clocking');
+  }
+
+  Future<bool> _hasActiveTimeClocking(dynamic employeeId) async {
+    try {
+      final snap = await _firestore.collection('time_clockings').get();
+      final empStr = employeeId.toString().trim();
+      final empDigits = empStr.replaceAll(RegExp(r'\D'), '');
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final docEmpId = (data['employee_id'] ?? '').toString().trim();
+        final docDigits = docEmpId.replaceAll(RegExp(r'\D'), '');
+        final matches = (docEmpId.toLowerCase() == empStr.toLowerCase()) ||
+            (empDigits.isNotEmpty && docDigits == empDigits);
+        if (matches) {
+          final endTime = data['end_time'];
+          if (endTime == null || endTime.toString().trim().isEmpty) {
+            return true;
+          }
+        }
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<bool> _hasActiveOdAssignment(dynamic employeeId) async {
+    try {
+      final snap = await _firestore.collection('on_duty_assignments').get();
+      final empStr = employeeId.toString().trim();
+      final empDigits = empStr.replaceAll(RegExp(r'\D'), '');
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final docEmpId = (data['employee_id'] ?? '').toString().trim();
+        final docDigits = docEmpId.replaceAll(RegExp(r'\D'), '');
+        final matches = (docEmpId.toLowerCase() == empStr.toLowerCase()) ||
+            (empDigits.isNotEmpty && docDigits == empDigits);
+        if (matches) {
+          final status = (data['status'] ?? '').toString().toUpperCase();
+          final isOngoing = status == 'ASSIGNED' ||
+              status == 'IN_PROGRESS' ||
+              status == 'ACTIVE' ||
+              status == 'TRAVELING_TO_DESTINATION' ||
+              status == 'REACHED_DESTINATION' ||
+              status == 'WORK_COMPLETED' ||
+              status == 'RETURNING_TO_OFFICE';
+          if (isOngoing) {
+            return true;
+          }
+        }
+      }
+    } catch (_) {}
+    return false;
   }
 
   @override

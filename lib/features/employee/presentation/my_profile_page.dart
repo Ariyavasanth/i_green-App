@@ -13,6 +13,7 @@ import '../domain/employee.dart';
 import '../providers/employee_providers.dart';
 import 'dialogs/profile_photo_cropper_dialog.dart';
 import 'dialogs/profile_photo_viewer_dialog.dart';
+import '../../attendance/services/attendance_location_service.dart';
 
 class MyProfilePage extends ConsumerStatefulWidget {
   const MyProfilePage({super.key});
@@ -226,6 +227,7 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
     ref.read(currentUserEmailProvider.notifier).state = null;
     await ref.read(authSessionStorageProvider).writeUserEmail(null);
     await ref.read(authenticationRepositoryProvider).signOut();
+    AttendanceLocationService.instance.stopPeriodicGeofenceMonitoring();
     ref.invalidate(employeesProvider);
     ref.invalidate(allEmployeesProvider);
     ref.invalidate(currentEmployeeProvider);

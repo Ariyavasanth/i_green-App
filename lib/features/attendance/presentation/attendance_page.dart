@@ -157,7 +157,6 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
   void dispose() {
     _liveClockTimer?.cancel();
     _reasonController.dispose();
-    AttendanceLocationService.instance.stopPeriodicGeofenceMonitoring();
     super.dispose();
   }
 

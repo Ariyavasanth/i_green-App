@@ -15,6 +15,7 @@ import '../../authentication/providers/authentication_providers.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../../loan/providers/loan_providers.dart';
 import '../../permission/providers/permission_providers.dart';
+import '../../attendance/services/attendance_location_service.dart';
 
 final sidebarStateStorageProvider = Provider<SidebarStateStorage>(
   (_) => createSidebarStateStorage(),
@@ -534,6 +535,17 @@ class _TopBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final currentEmp = ref.watch(currentEmployeeProvider);
+    if (currentEmp != null && currentEmp.id > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        AttendanceLocationService.instance.startPeriodicGeofenceMonitoring(
+          ref: ref,
+          employeeId: currentEmp.id,
+          interval: const Duration(seconds: 30),
+        );
+      });
+    }
+
     String headingText;
     final isAttendanceManagement = currentLocation.startsWith('/attendance-management');
 
@@ -871,6 +883,7 @@ class _TopBar extends ConsumerWidget {
                     if (value == 'profile') {
                       context.go('/my-profile');
                     } else if (value == 'logout') {
+                      AttendanceLocationService.instance.stopPeriodicGeofenceMonitoring();
                       ref.read(currentUserEmailProvider.notifier).state = null;
                       await ref.read(authSessionStorageProvider).writeUserEmail(null);
                       await ref.read(authenticationRepositoryProvider).signOut();
