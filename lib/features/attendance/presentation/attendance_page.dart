@@ -5092,11 +5092,19 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
       setState(() {
         _isFetchingLocation = false;
         _withinAllowedRadius = withinRadius;
-        _locationMessage = withinRadius
-            ? null
-            : isSite
-                ? 'You are not at your site location. Please go to your site location.'
-                : 'You are not at $locationDisplayName. Please go to the assigned workplace location.';
+        if (withinRadius) {
+          _locationMessage = null;
+        } else {
+          final distanceStr = distance >= 1000
+              ? '${(distance / 1000).toStringAsFixed(1)} km'
+              : '${distance.round()} m';
+          final accuracyStr = position.accuracy > 0
+              ? ' • Accuracy: ±${position.accuracy.round()}m'
+              : '';
+          _locationMessage = isSite
+              ? 'You are not at your site location ($distanceStr away, allowed: ${targetRadius}m$accuracyStr). Please go to your site location.'
+              : 'You are not at $locationDisplayName ($distanceStr away, allowed: ${targetRadius}m$accuracyStr). Please go to the assigned workplace location.';
+        }
       });
     } catch (e) {
       if (!mounted) return;
@@ -5113,6 +5121,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
     required bool done,
     required IconData icon,
     bool isLoading = false,
+    VoidCallback? onRetry,
   }) {
     final color = isLoading
         ? AppColors.primary
@@ -5145,6 +5154,17 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
               ),
             ),
           ),
+          if (onRetry != null) ...[
+            const SizedBox(width: 4),
+            InkWell(
+              onTap: onRetry,
+              borderRadius: BorderRadius.circular(12),
+              child: const Padding(
+                padding: EdgeInsets.all(4.0),
+                child: Icon(Icons.refresh, size: 18, color: AppColors.primary),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -5292,6 +5312,9 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
                       done: _withinAllowedRadius == true,
                       icon: Icons.location_on_outlined,
                       isLoading: _isFetchingLocation,
+                      onRetry: (!_isFetchingLocation && _withinAllowedRadius == false)
+                          ? _refreshLocationGate
+                          : null,
                     ),
                     _checkItem(
                       label: 'GPS verification only',
