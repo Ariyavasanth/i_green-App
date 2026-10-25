@@ -225,68 +225,124 @@ class _WorkplaceLocationDialogState extends State<WorkplaceLocationDialog> {
     _sessionToken ??= '${DateTime.now().millisecondsSinceEpoch}';
     setState(() => _isSearching = true);
 
-    try {
-      final uri = Uri.parse('https://places.googleapis.com/v1/places:autocomplete');
-      final Map<String, dynamic> payload = {
-        'input': query,
-        'includedRegionCodes': ['in'],
-        'sessionToken': _sessionToken,
-        'locationBias': {
-          'circle': {
-            'center': {'latitude': _currentLat, 'longitude': _currentLng},
-            'radius': 50000.0,
-          }
-        },
-      };
+    final List<Map<String, dynamic>> results = [];
 
-      final response = await http.post(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': _googleMapsApiKey,
-        },
-        body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 5));
+    // 1. Google Places API (New) Autocomplete
+    if (_googleMapsApiKey.isNotEmpty) {
+      try {
+        final uri = Uri.parse('https://places.googleapis.com/v1/places:autocomplete');
+        final Map<String, dynamic> payload = {
+          'input': query,
+          'includedRegionCodes': ['in'],
+          'sessionToken': _sessionToken,
+        };
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final suggestions = data['suggestions'] as List<dynamic>? ?? [];
-        final List<Map<String, dynamic>> results = [];
+        if (_currentLat != 0 && _currentLng != 0) {
+          payload['locationBias'] = {
+            'circle': {
+              'center': {'latitude': _currentLat, 'longitude': _currentLng},
+              'radius': 50000.0,
+            }
+          };
+        }
 
-        for (final item in suggestions) {
-          final pred = item['placePrediction'];
-          if (pred != null) {
-            final placeId = (pred['placeId'] ?? '').toString();
-            final fullText = (pred['text']?['text'] ?? '').toString();
-            final mainText = (pred['structuredFormat']?['mainText']?['text'] ?? fullText).toString();
-            final secondaryText = (pred['structuredFormat']?['secondaryText']?['text'] ?? '').toString();
+        final response = await http.post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': _googleMapsApiKey,
+          },
+          body: jsonEncode(payload),
+        ).timeout(const Duration(seconds: 4));
 
-            if (placeId.isNotEmpty) {
-              results.add({
-                'place_id': placeId,
-                'name': mainText,
-                'address': secondaryText.isNotEmpty ? secondaryText : fullText,
-              });
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final suggestions = data['suggestions'] as List<dynamic>? ?? [];
+
+          for (final item in suggestions) {
+            final pred = item['placePrediction'];
+            if (pred != null) {
+              final placeId = (pred['placeId'] ?? '').toString();
+              final fullText = (pred['text']?['text'] ?? '').toString();
+              final mainText = (pred['structuredFormat']?['mainText']?['text'] ??
+                      (fullText.contains(',') ? fullText.split(',').first.trim() : fullText))
+                  .toString();
+              final secondaryText = (pred['structuredFormat']?['secondaryText']?['text'] ??
+                      (fullText.contains(',') ? fullText.substring(fullText.indexOf(',') + 1).trim() : fullText))
+                  .toString();
+
+              if (placeId.isNotEmpty) {
+                results.add({
+                  'place_id': placeId,
+                  'name': mainText.isNotEmpty ? mainText : fullText,
+                  'address': secondaryText.isNotEmpty ? secondaryText : fullText,
+                  'lat': null,
+                  'lng': null,
+                });
+              }
             }
           }
         }
-
-        if (mounted) {
-          setState(() {
-            _placeSuggestions = results;
-            _isSearching = false;
-          });
-        }
-      } else {
-        if (mounted) setState(() => _isSearching = false);
+      } catch (e) {
+        debugPrint('[Google Places Search] Error: $e');
       }
-    } catch (_) {
-      if (mounted) setState(() => _isSearching = false);
+    }
+
+    // 2. Fallback Autocomplete (identical to OD module) in case Google Places is blocked by browser CORS
+    if (results.isEmpty) {
+      final encoded = Uri.encodeComponent(query);
+      try {
+        final photonUrl = Uri.parse('https://photon.komoot.io/api/?q=$encoded&limit=8');
+        final photonResp = await http.get(photonUrl).timeout(const Duration(seconds: 3));
+        if (photonResp.statusCode == 200) {
+          final Map<String, dynamic> photonData = jsonDecode(photonResp.body);
+          final features = photonData['features'] as List<dynamic>? ?? [];
+          for (final feat in features) {
+            final props = feat['properties'] as Map<String, dynamic>? ?? {};
+            final geom = feat['geometry'] as Map<String, dynamic>? ?? {};
+            final coords = geom['coordinates'] as List<dynamic>? ?? [];
+
+            if (coords.length >= 2) {
+              final lng = double.tryParse(coords[0].toString());
+              final lat = double.tryParse(coords[1].toString());
+              final String name = (props['name'] ?? props['street'] ?? props['district'] ?? props['city'] ?? query).toString();
+
+              final List<String> addrComponents = [];
+              if (props['street'] != null && props['street'] != name) addrComponents.add(props['street'].toString());
+              if (props['district'] != null && props['district'] != name) addrComponents.add(props['district'].toString());
+              if (props['city'] != null && props['city'] != name) addrComponents.add(props['city'].toString());
+              if (props['state'] != null) addrComponents.add(props['state'].toString());
+
+              final String secondary = addrComponents.isNotEmpty ? addrComponents.join(', ') : 'Location';
+
+              if (lat != null && lng != null && name.isNotEmpty) {
+                final bool isDup = results.any((r) => r['name'].toString().toLowerCase() == name.toLowerCase());
+                if (!isDup) {
+                  results.add({
+                    'place_id': null,
+                    'name': name,
+                    'address': secondary,
+                    'lat': lat,
+                    'lng': lng,
+                  });
+                }
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (mounted) {
+      setState(() {
+        _placeSuggestions = results;
+        _isSearching = false;
+      });
     }
   }
 
   Future<void> _selectPlaceSuggestion(Map<String, dynamic> item) async {
-    final placeId = item['place_id'] as String;
+    final placeId = item['place_id'] as String?;
     final placeName = item['name'] as String;
     setState(() {
       _isSearching = true;
@@ -294,42 +350,49 @@ class _WorkplaceLocationDialogState extends State<WorkplaceLocationDialog> {
       _searchController.text = placeName;
     });
 
-    try {
-      final detailsUri = Uri.parse(
-        'https://places.googleapis.com/v1/places/$placeId?sessionToken=$_sessionToken',
-      );
-      final resp = await http.get(
-        detailsUri,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': _googleMapsApiKey,
-          'X-Goog-FieldMask': 'id,displayName,location,formattedAddress',
-        },
-      ).timeout(const Duration(seconds: 5));
+    double? lat = item['lat'] as double?;
+    double? lng = item['lng'] as double?;
 
-      if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body);
-        final location = data['location'];
-        final lat = double.tryParse(location?['latitude']?.toString() ?? '');
-        final lng = double.tryParse(location?['longitude']?.toString() ?? '');
+    if (placeId != null && placeId.isNotEmpty && _googleMapsApiKey.isNotEmpty) {
+      try {
+        final detailsUri = Uri.parse(
+          'https://places.googleapis.com/v1/places/$placeId?sessionToken=$_sessionToken',
+        );
+        final resp = await http.get(
+          detailsUri,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': _googleMapsApiKey,
+            'X-Goog-FieldMask': 'id,displayName,location,formattedAddress',
+          },
+        ).timeout(const Duration(seconds: 5));
 
-        if (lat != null && lng != null && mounted) {
-          setState(() {
-            _currentLat = lat;
-            _currentLng = lng;
-            _latController.text = lat.toStringAsFixed(6);
-            _lngController.text = lng.toStringAsFixed(6);
-            if (_nameController.text.trim().isEmpty) {
-              _nameController.text = placeName;
-            }
-            _zoomLevel = 16.0;
-            _sessionToken = null;
-          });
+        if (resp.statusCode == 200) {
+          final data = jsonDecode(resp.body);
+          final location = data['location'];
+          lat = double.tryParse(location?['latitude']?.toString() ?? '');
+          lng = double.tryParse(location?['longitude']?.toString() ?? '');
         }
+      } catch (e) {
+        debugPrint('[Google Place Details] Error: $e');
       }
-    } catch (_) {
-    } finally {
-      if (mounted) setState(() => _isSearching = false);
+    }
+
+    if (lat != null && lng != null && mounted) {
+      setState(() {
+        _currentLat = lat!;
+        _currentLng = lng!;
+        _latController.text = lat.toStringAsFixed(6);
+        _lngController.text = lng.toStringAsFixed(6);
+        if (_nameController.text.trim().isEmpty) {
+          _nameController.text = placeName;
+        }
+        _zoomLevel = 16.0;
+        _sessionToken = null;
+        _isSearching = false;
+      });
+    } else if (mounted) {
+      setState(() => _isSearching = false);
     }
   }
 
@@ -410,7 +473,7 @@ class _WorkplaceLocationDialogState extends State<WorkplaceLocationDialog> {
                         Expanded(
                           child: Padding(
                             padding: const EdgeInsets.all(18),
-                            child: _buildMapSection(),
+                            child: _buildMapSection(isWide: true),
                           ),
                         ),
                       ],
@@ -423,8 +486,8 @@ class _WorkplaceLocationDialogState extends State<WorkplaceLocationDialog> {
                           _buildFormFields(),
                           const SizedBox(height: 20),
                           SizedBox(
-                            height: 380,
-                            child: _buildMapSection(),
+                            height: 420,
+                            child: _buildMapSection(isWide: false),
                           ),
                         ],
                       ),
@@ -435,6 +498,53 @@ class _WorkplaceLocationDialogState extends State<WorkplaceLocationDialog> {
             // Bottom Action Buttons
             _buildFooterActions(isEditing),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchTextField() {
+    return TextField(
+      controller: _searchController,
+      onChanged: _onSearchQueryChanged,
+      style: const TextStyle(fontSize: 13, color: AppColors.active),
+      decoration: InputDecoration(
+        hintText: 'Search an address or place',
+        hintStyle: const TextStyle(fontSize: 12.5, color: Color(0xFF94A3B8)),
+        prefixIcon: const Icon(Icons.search, size: 19, color: Color(0xFF64748B)),
+        suffixIcon: _isSearching
+            ? const Padding(
+                padding: EdgeInsets.all(11),
+                child: SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                ),
+              )
+            : (_searchController.text.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear, size: 16, color: Color(0xFF94A3B8)),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _placeSuggestions = []);
+                    },
+                    padding: EdgeInsets.zero,
+                  )
+                : null),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
       ),
     );
@@ -711,251 +821,271 @@ class _WorkplaceLocationDialogState extends State<WorkplaceLocationDialog> {
     );
   }
 
-  Widget _buildMapSection() {
+  Widget _buildMapSection({required bool isWide}) {
     final radiusMeters = int.tryParse(_radiusController.text.trim()) ?? 500;
     final workplaceName = _nameController.text.trim().isNotEmpty ? _nameController.text.trim() : 'testing';
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Stack(
+      clipBehavior: Clip.none,
       children: [
-        // Search and Action Bar: "Search an address or place", "Locate me", "Reset"
-        Stack(
-          clipBehavior: Clip.none,
+        // Layer 1: Map Canvas and Bottom Status Banner
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                // Search Input
-                Expanded(
-                  child: SizedBox(
-                    height: 40,
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: _onSearchQueryChanged,
-                      style: const TextStyle(fontSize: 13, color: AppColors.active),
-                      decoration: InputDecoration(
-                        hintText: 'Search an address or place',
-                        hintStyle: const TextStyle(fontSize: 12.5, color: Color(0xFF94A3B8)),
-                        prefixIcon: const Icon(Icons.search, size: 19, color: Color(0xFF64748B)),
-                        suffixIcon: _isSearching
-                            ? const Padding(
-                                padding: EdgeInsets.all(10),
-                                child: SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-                                ),
-                              )
-                            : (_searchController.text.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(Icons.clear, size: 16, color: Color(0xFF94A3B8)),
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      setState(() => _placeSuggestions = []);
-                                    },
-                                    padding: EdgeInsets.zero,
-                                  )
-                                : null),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-
-                // Locate me Button
-                OutlinedButton.icon(
-                  onPressed: _useCurrentLocation,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    side: const BorderSide(color: AppColors.primary),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    minimumSize: const Size(0, 40),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: const Icon(Icons.my_location, size: 16),
-                  label: const Text('Locate me', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                ),
-                const SizedBox(width: 8),
-
-                // Reset Button
-                OutlinedButton.icon(
-                  onPressed: _resetCoordinates,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF475569),
-                    side: const BorderSide(color: Color(0xFFCBD5E1)),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    minimumSize: const Size(0, 40),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: const Icon(Icons.refresh_rounded, size: 16),
-                  label: const Text('Reset', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                ),
-              ],
-            ),
-
-            // Autocomplete Suggestions Dropdown
-            if (_placeSuggestions.isNotEmpty)
-              Positioned(
-                top: 44,
-                left: 0,
-                right: 170,
-                child: Material(
-                  elevation: 8,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    constraints: const BoxConstraints(maxHeight: 220),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFCBD5E1)),
-                    ),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      padding: EdgeInsets.zero,
-                      itemCount: _placeSuggestions.length,
-                      separatorBuilder: (ctx, i) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                      itemBuilder: (ctx, idx) {
-                        final item = _placeSuggestions[idx];
-                        return ListTile(
-                          dense: true,
-                          leading: const Icon(Icons.location_on, size: 18, color: Color(0xFFEA4335)),
-                          title: Text(
-                            item['name'] ?? '',
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.active),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            item['address'] ?? '',
-                            style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          onTap: () => _selectPlaceSuggestion(item),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 12),
-
-        // Interactive Map Canvas with Geofence & Controls
-        Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              decoration: BoxDecoration(
+            const SizedBox(height: 52), // Clearance for search bar row
+            Expanded(
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFCBD5E1)),
-              ),
-              child: Stack(
-                children: [
-                  // Real Google Map Tile Renderer
-                  Positioned.fill(
-                    child: _WorkplaceInteractiveMap(
-                      lat: _currentLat,
-                      lng: _currentLng,
-                      zoom: _zoomLevel,
-                      radiusMeters: radiusMeters,
-                      workplaceName: workplaceName,
-                      userGpsLat: _userGpsLat,
-                      userGpsLng: _userGpsLng,
-                      onCoordinatesSelected: _onMapTapped,
-                      onZoomChanged: (newZoom) => setState(() => _zoomLevel = newZoom),
-                    ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFCBD5E1)),
                   ),
-
-                  // Floating Zoom Controls (+ / -) in bottom-right corner
-                  Positioned(
-                    right: 12,
-                    bottom: 12,
-                    child: Material(
-                      elevation: 4,
-                      borderRadius: BorderRadius.circular(6),
-                      color: Colors.white,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          InkWell(
-                            onTap: () => setState(() => _zoomLevel = (_zoomLevel + 1.0).clamp(3.0, 19.0)),
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              child: Icon(Icons.add, size: 18, color: AppColors.active),
-                            ),
-                          ),
-                          const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
-                          InkWell(
-                            onTap: () => setState(() => _zoomLevel = (_zoomLevel - 1.0).clamp(3.0, 19.0)),
-                            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(6)),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              child: Icon(Icons.remove, size: 18, color: AppColors.active),
-                            ),
-                          ),
-                        ],
+                  child: Stack(
+                    children: [
+                      // Real Google Map Tile Renderer
+                      Positioned.fill(
+                        child: _WorkplaceInteractiveMap(
+                          lat: _currentLat,
+                          lng: _currentLng,
+                          zoom: _zoomLevel,
+                          radiusMeters: radiusMeters,
+                          workplaceName: workplaceName,
+                          userGpsLat: _userGpsLat,
+                          userGpsLng: _userGpsLng,
+                          onCoordinatesSelected: _onMapTapped,
+                          onZoomChanged: (newZoom) => setState(() => _zoomLevel = newZoom),
+                        ),
                       ),
+
+                      // Floating Controls in bottom-right corner of Map
+                      Positioned(
+                        right: 12,
+                        bottom: 12,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Current location button inside the map near zoom controls on mobile
+                            if (!isWide) ...[
+                              Material(
+                                elevation: 4,
+                                shape: const CircleBorder(),
+                                color: Colors.white,
+                                child: InkWell(
+                                  onTap: _fetchingCurrentLocation ? null : _useCurrentLocation,
+                                  customBorder: const CircleBorder(),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(9),
+                                    child: _fetchingCurrentLocation
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                                          )
+                                        : const Icon(Icons.my_location, size: 18, color: AppColors.primary),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+
+                            // Zoom Controls (+ / -)
+                            Material(
+                              elevation: 4,
+                              borderRadius: BorderRadius.circular(6),
+                              color: Colors.white,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  InkWell(
+                                    onTap: () => setState(() => _zoomLevel = (_zoomLevel + 1.0).clamp(3.0, 19.0)),
+                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                      child: Icon(Icons.add, size: 18, color: AppColors.active),
+                                    ),
+                                  ),
+                                  const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
+                                  InkWell(
+                                    onTap: () => setState(() => _zoomLevel = (_zoomLevel - 1.0).clamp(3.0, 19.0)),
+                                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(6)),
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                      child: Icon(Icons.remove, size: 18, color: AppColors.active),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Bottom Status Banner: "Office location selected"
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'Office location selected',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF15803D),
+                          ),
+                        ),
+                        SizedBox(height: 1),
+                        Text(
+                          'Drag the pin or click the map to adjust coordinates.',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-          ),
+          ],
         ),
-        const SizedBox(height: 10),
 
-        // Bottom Status Banner: "Office location selected"
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF0FDF4),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFBBF7D0)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'Office location selected',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF15803D),
+        // Layer 2: Top Search Bar and Action Buttons
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: isWide
+              ? Row(
+                  children: [
+                    // Search Input (Desktop)
+                    Expanded(
+                      child: SizedBox(
+                        height: 42,
+                        child: _buildSearchTextField(),
                       ),
                     ),
-                    SizedBox(height: 1),
-                    Text(
-                      'Drag the pin or click the map to adjust coordinates.',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                    const SizedBox(width: 8),
+
+                    // Locate me Button (Desktop)
+                    OutlinedButton.icon(
+                      onPressed: _useCurrentLocation,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        minimumSize: const Size(0, 42),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.my_location, size: 16),
+                      label: const Text('Locate me', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Reset Button (Desktop)
+                    OutlinedButton.icon(
+                      onPressed: _resetCoordinates,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF475569),
+                        side: const BorderSide(color: Color(0xFFCBD5E1)),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        minimumSize: const Size(0, 42),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.refresh_rounded, size: 16),
+                      label: const Text('Reset', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    // Full-width Search Input (Mobile)
+                    Expanded(
+                      child: SizedBox(
+                        height: 42,
+                        child: _buildSearchTextField(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Refresh Button directly beside search bar (Mobile)
+                    OutlinedButton(
+                      onPressed: _resetCoordinates,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF475569),
+                        side: const BorderSide(color: Color(0xFFCBD5E1)),
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(42, 42),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: const Icon(Icons.refresh_rounded, size: 20),
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
         ),
+
+        // Layer 3: Autocomplete Suggestions Dropdown (Floats ON TOP of Map)
+        if (_placeSuggestions.isNotEmpty)
+          Positioned(
+            top: 48,
+            left: 0,
+            right: isWide ? 175 : 0,
+            child: Material(
+              elevation: 12,
+              shadowColor: Colors.black45,
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.white,
+              child: Container(
+                constraints: const BoxConstraints(maxHeight: 260),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  itemCount: _placeSuggestions.length,
+                  separatorBuilder: (ctx, i) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  itemBuilder: (ctx, idx) {
+                    final item = _placeSuggestions[idx];
+                    return ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.location_on, size: 18, color: Color(0xFFEA4335)),
+                      title: Text(
+                        item['name'] ?? '',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.active),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        item['address'] ?? '',
+                        style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: () => _selectPlaceSuggestion(item),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
