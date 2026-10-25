@@ -374,7 +374,7 @@ void main() {
       );
     });
 
-    test('6. Rejecting cross-organization reporting', () async {
+    test('6. Allowing cross-organization reporting', () async {
       // Manager in Org A
       await repository.addEmployee(
         _createEmployee(
@@ -387,29 +387,20 @@ void main() {
         ),
       );
 
-      // Employee in Org B trying to report to Org A Manager
-      expect(
-        () => repository.addEmployee(
-          _createEmployee(
-            id: 2,
-            employeeId: 'EMP-002',
-            firstName: 'Org B',
-            lastName: 'Employee',
-            organizationName: 'Beta Corp',
-            status: 'Active',
-            reportingManagerId: 'EMP-001',
-          ),
-        ),
-        throwsA(
-          isA<ArgumentError>().having(
-            (e) => e.message,
-            'message',
-            contains(
-              'manager belongs to "Acme Corp", but employee belongs to "Beta Corp"',
-            ),
-          ),
+      // Employee in Org B reporting to Org A Manager succeeds
+      final emp = await repository.addEmployee(
+        _createEmployee(
+          id: 2,
+          employeeId: 'EMP-002',
+          firstName: 'Org B',
+          lastName: 'Employee',
+          organizationName: 'Beta Corp',
+          status: 'Active',
+          reportingManagerId: 'EMP-001',
         ),
       );
+
+      expect(emp.reportingManagerId, 'EMP-001');
     });
 
     test('7. Handling missing or deleted manager ID', () async {
@@ -571,5 +562,129 @@ void main() {
         expect(fetched.reportingManager, isEmpty);
       },
     );
+  });
+
+  group('Phase 4 — Sequential Employee ID (Option A: EMP-0001, EMP-0002, ...)', () {
+    late FirebaseEmployeeRepository repository;
+
+    setUp(() {
+      repository = FirebaseEmployeeRepository(isInMemory: true);
+    });
+
+    test('1. Generates sequential IDs starting at EMP-0001', () async {
+      final nextId1 = await repository.getNextEmployeeId();
+      expect(nextId1, 'EMP-0001');
+
+      final emp1 = await repository.addEmployee(
+        _createEmployee(
+          id: 0,
+          employeeId: '',
+          firstName: 'First',
+          lastName: 'Emp',
+        ),
+      );
+      expect(emp1.employeeId, 'EMP-0001');
+      expect(emp1.id, 1);
+
+      final nextId2 = await repository.getNextEmployeeId();
+      expect(nextId2, 'EMP-0002');
+
+      final emp2 = await repository.addEmployee(
+        _createEmployee(
+          id: 0,
+          employeeId: '',
+          firstName: 'Second',
+          lastName: 'Emp',
+        ),
+      );
+      expect(emp2.employeeId, 'EMP-0002');
+      expect(emp2.id, 2);
+
+      final nextId3 = await repository.getNextEmployeeId();
+      expect(nextId3, 'EMP-0003');
+    });
+
+    test('2. Converting candidate or replacing CAN- ID uses sequential EMP ID', () async {
+      await repository.addEmployee(
+        _createEmployee(
+          id: 1,
+          employeeId: 'EMP-0001',
+          firstName: 'Existing',
+          emailAddress: 'existing@example.com',
+        ),
+      );
+
+      final candidateEmp = _createEmployee(
+        id: 0,
+        employeeId: 'CAN-0001',
+        firstName: 'Candidate',
+        emailAddress: 'candidate@example.com',
+      );
+
+      final converted = await repository.convertCandidateToEmployee(
+        linkId: 'lnk_test',
+        employeeData: candidateEmp,
+      );
+
+      expect(converted.employeeId, 'EMP-0002');
+      expect(converted.id, 2);
+    });
+
+    test('3. Timestamp outliers (e.g. EMP-8392104) do not corrupt the sequence', () async {
+      await repository.addEmployee(
+        _createEmployee(
+          id: 1,
+          employeeId: 'EMP-0001',
+          firstName: 'User One',
+        ),
+      );
+
+      // Add an irregular legacy timestamp record directly in memory
+      await repository.updateEmployee(
+        _createEmployee(
+          id: 8392104,
+          employeeId: 'EMP-8392104',
+          firstName: 'Legacy Timestamp',
+        ),
+      );
+
+      // The next ID should still be EMP-0002, not EMP-8392105!
+      final nextId = await repository.getNextEmployeeId();
+      expect(nextId, 'EMP-0002');
+
+      final emp2 = await repository.addEmployee(
+        _createEmployee(
+          id: 0,
+          employeeId: '',
+          firstName: 'User Two',
+        ),
+      );
+      expect(emp2.employeeId, 'EMP-0002');
+    });
+
+    test('4. Employees are sorted in ascending sequential numerical order', () async {
+      await repository.addEmployee(
+        _createEmployee(id: 3, employeeId: 'EMP-0003', firstName: 'Three'),
+      );
+      await repository.addEmployee(
+        _createEmployee(id: 1, employeeId: 'EMP-0001', firstName: 'One'),
+      );
+      await repository.addEmployee(
+        _createEmployee(id: 2, employeeId: 'EMP-0002', firstName: 'Two'),
+      );
+
+      final list = await repository.getEmployees();
+      expect(list.map((e) => e.employeeId).toList(), [
+        'EMP-0001',
+        'EMP-0002',
+        'EMP-0003',
+      ]);
+    });
+
+    test('5. Dummy employee Rahul Sharma is not automatically injected', () async {
+      final list = await repository.getAllEmployees();
+      expect(list.any((e) => e.emailAddress == 'rahul.sharma@igreen.com'), isFalse);
+      expect(list.any((e) => e.employeeId == 'EMP-1001'), isFalse);
+    });
   });
 }

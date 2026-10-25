@@ -143,7 +143,7 @@ class _LoginFormWidgetState extends ConsumerState<LoginFormWidget> {
                 validator: _emailValidator,
                 style: const TextStyle(color: Colors.white, fontSize: 14),
                 decoration: _inputDecoration(
-                  hint: 'you@example.com or EMP-9222',
+                  hint: 'you@example.com or EMP-0001',
                   prefixIcon: Icons.person_outline,
                 ),
               ),

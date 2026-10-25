@@ -418,12 +418,7 @@ class _CandidateConversionDialogState
                             if (candidateDbId.isNotEmpty &&
                                 emp.id.toString() == candidateDbId)
                               return false;
-                            if (_selectedOrg != null &&
-                                _selectedOrg!.isNotEmpty &&
-                                emp.organizationName.isNotEmpty &&
-                                emp.organizationName != _selectedOrg) {
-                              return false;
-                            }
+                            // Cross-organization manager assignment allowed if manager has active access
                             return true;
                           }).toList();
 
@@ -670,13 +665,19 @@ class _CandidateConversionDialogState
       final repo = ref.read(employeeRepositoryProvider);
 
       // Fetch base employee candidate or construct
+      final linkEmpId = widget.link.employeeId.trim();
+      final isExistingEmpSeq = linkEmpId.startsWith('EMP-') &&
+          !linkEmpId.startsWith('CAN-') &&
+          (int.tryParse(linkEmpId.replaceAll(RegExp(r'\D'), '')) ?? 0) < 10000;
+      final assignedEmpId = isExistingEmpSeq
+          ? linkEmpId
+          : await repo.getNextEmployeeId();
+
       final baseEmp =
           widget.candidateEmployee ??
           Employee(
             id: 0,
-            employeeId: widget.link.employeeId.isNotEmpty
-                ? widget.link.employeeId
-                : 'EMP-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+            employeeId: assignedEmpId,
             firstName: widget.link.employeeName.isNotEmpty
                 ? widget.link.employeeName
                 : 'Candidate',
@@ -712,10 +713,17 @@ class _CandidateConversionDialogState
         status: 'Active',
       );
 
-      if (baseEmp.id != 0) {
-        await repo.updateEmployee(updatedEmployee);
+      var targetEmployee = updatedEmployee;
+      if (targetEmployee.employeeId.isEmpty ||
+          targetEmployee.employeeId.startsWith('CAN-') ||
+          !targetEmployee.employeeId.startsWith('EMP-')) {
+        targetEmployee = targetEmployee.copyWith(employeeId: assignedEmpId);
+      }
+
+      if (baseEmp.id != 0 && baseEmp.employeeId.startsWith('EMP-')) {
+        await repo.updateEmployee(targetEmployee);
       } else {
-        await repo.addEmployee(updatedEmployee);
+        await repo.addEmployee(targetEmployee);
       }
 
       // Update link status

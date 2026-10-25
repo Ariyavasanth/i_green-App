@@ -42,7 +42,7 @@ final currentEmployeeProvider = Provider<Employee?>((ref) {
       }).toList();
       if (matches.isNotEmpty) return matches.first;
 
-      if (target == 'admin' || target == 'superadmin' || target == 'super admin' || target == 'admin@company.com' || target == 'emp-001') {
+      if (target == 'admin' || target == 'superadmin' || target == 'super admin' || target == 'admin@company.com' || target == 'emp-001' || target == 'emp-0001') {
         final adminMatch = list.where((e) => e.isSuperAdmin).firstOrNull;
         if (adminMatch != null) return adminMatch;
         return FirebaseEmployeeRepository.superAdminMotherAccount;
@@ -51,7 +51,7 @@ final currentEmployeeProvider = Provider<Employee?>((ref) {
       return null;
     },
     orElse: () {
-      if (target == 'admin' || target == 'superadmin' || target == 'super admin' || target == 'admin@company.com' || target == 'emp-001') {
+      if (target == 'admin' || target == 'superadmin' || target == 'super admin' || target == 'admin@company.com' || target == 'emp-001' || target == 'emp-0001') {
         return FirebaseEmployeeRepository.superAdminMotherAccount;
       }
       return null;
@@ -101,6 +101,10 @@ final employeesProvider = FutureProvider<List<Employee>>((ref) async {
   final uniqueEmployees = <Employee>[];
   final seenKeys = <String>{};
   for (final emp in employees) {
+    if (emp.emailAddress.toLowerCase() == 'rahul.sharma@igreen.com' ||
+        emp.employeeId == 'EMP-1001') {
+      continue;
+    }
     final key = emp.employeeId.trim().isNotEmpty
         ? emp.employeeId.trim().toUpperCase()
         : '${emp.id}_${emp.emailAddress.trim().toLowerCase()}';
@@ -110,6 +114,12 @@ final employeesProvider = FutureProvider<List<Employee>>((ref) async {
       uniqueEmployees.add(emp);
     }
   }
+  uniqueEmployees.sort((a, b) {
+    final numA = int.tryParse(a.employeeId.replaceAll(RegExp(r'[^0-9]'), '')) ?? a.id;
+    final numB = int.tryParse(b.employeeId.replaceAll(RegExp(r'[^0-9]'), '')) ?? b.id;
+    if (numA != numB) return numA.compareTo(numB);
+    return a.employeeId.compareTo(b.employeeId);
+  });
   return uniqueEmployees;
 });
 
@@ -120,6 +130,10 @@ final allEmployeesProvider = FutureProvider<List<Employee>>((ref) async {
   final uniqueEmployees = <Employee>[];
   final seenKeys = <String>{};
   for (final emp in employees) {
+    if (emp.emailAddress.toLowerCase() == 'rahul.sharma@igreen.com' ||
+        emp.employeeId == 'EMP-1001') {
+      continue;
+    }
     final key = emp.employeeId.trim().isNotEmpty
         ? emp.employeeId.trim().toUpperCase()
         : '${emp.id}_${emp.emailAddress.trim().toLowerCase()}';
@@ -129,6 +143,12 @@ final allEmployeesProvider = FutureProvider<List<Employee>>((ref) async {
       uniqueEmployees.add(emp);
     }
   }
+  uniqueEmployees.sort((a, b) {
+    final numA = int.tryParse(a.employeeId.replaceAll(RegExp(r'[^0-9]'), '')) ?? a.id;
+    final numB = int.tryParse(b.employeeId.replaceAll(RegExp(r'[^0-9]'), '')) ?? b.id;
+    if (numA != numB) return numA.compareTo(numB);
+    return a.employeeId.compareTo(b.employeeId);
+  });
   return uniqueEmployees;
 });
 

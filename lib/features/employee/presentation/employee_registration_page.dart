@@ -4845,14 +4845,7 @@ class _EmployeeRegistrationPageState
                       if (currentId != 0 && e.id == currentId) {
                         return false;
                       }
-                      // Organization isolation
-                      if (_organizationName.isNotEmpty &&
-                          e.organizationName.isNotEmpty) {
-                        if (e.organizationName.trim().toLowerCase() !=
-                            _organizationName.trim().toLowerCase()) {
-                          return false;
-                        }
-                      }
+                      // Cross-organization manager assignment allowed if manager has active access
                       return true;
                     }).toList();
 

@@ -181,19 +181,22 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     return map;
   }
 
-  /// Returns the integer employee ID, always preferring the stored 'id' field from Firestore.
-  /// Falls back to parsing the numeric suffix from the Firestore document key.
-  /// No employee-specific names or codes are hardcoded here.
+  /// Returns the integer employee ID, prioritizing legitimate sequence numbers (< 100000).
+  /// Derives from the numeric portion of the Firestore document key or employee_id.
+  /// Eliminates uneven timestamp numbers and arbitrary hash fallbacks.
   static int resolveEmployeeIntegerId(String docKey, [int? currentId]) {
-    // Always prefer explicitly stored id
-    if (currentId != null && currentId > 0) return currentId;
-    // Derive from the numeric portion of the doc key (e.g. EMP-002 → 2)
+    // Derive from the numeric portion of the doc key (e.g. EMP-0002 → 2)
     final digits = docKey.trim().replaceAll(RegExp(r'\D'), '');
     final num = int.tryParse(digits) ?? 0;
+    if (num > 0 && num < 100000) return num;
+
+    // Use currentId only if it is a legitimate sequence number, not a timestamp
+    if (currentId != null && currentId > 0 && currentId < 100000) return currentId;
+
     if (num > 0) return num;
-    // Final fallback: non-zero hash of the doc key string
-    final hash = docKey.trim().hashCode.abs();
-    return hash > 0 ? hash : 1;
+    if (currentId != null && currentId > 0) return currentId;
+
+    return 1;
   }
 
   // Helper: Map Firestore document data to Employee object
@@ -204,8 +207,25 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     final resolvedId = resolveEmployeeIntegerId(docId, currentId);
     mutableMap['id'] = resolvedId;
 
-    // Self-healing: persist id back to Firestore if it was missing or zero
-    if (docId.isNotEmpty && (currentId == null || currentId == 0)) {
+    // Normalize employeeId to Option A format if empty or not prefixed with EMP-
+    String rawEmpId = (mutableMap['employee_id'] as String? ?? '').trim();
+    if (rawEmpId.isEmpty) {
+      rawEmpId = docId.trim();
+    }
+    if (rawEmpId.isEmpty || !rawEmpId.toUpperCase().startsWith('EMP-')) {
+      if (resolvedId > 0 && resolvedId < 10000) {
+        rawEmpId = 'EMP-${resolvedId.toString().padLeft(4, '0')}';
+        if (docId.isNotEmpty) {
+          _employeesRef.doc(docId).set({
+            'employee_id': rawEmpId,
+          }, SetOptions(merge: true)).ignore();
+        }
+      }
+    }
+    mutableMap['employee_id'] = rawEmpId;
+
+    // Self-healing: persist id back to Firestore if it was missing, zero, or contaminated with a timestamp
+    if (docId.isNotEmpty && (currentId == null || currentId == 0 || currentId >= 100000)) {
       _employeesRef.doc(docId).set({
         'id': resolvedId,
       }, SetOptions(merge: true)).ignore();
@@ -238,9 +258,13 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     final lower = target.toLowerCase();
     if (lower == 'admin' || lower == 'super admin' || lower == 'superadmin') {
-      return _employeesRef.doc('EMP-001').snapshots().map((doc) {
+      return _employeesRef.doc('EMP-0001').snapshots().asyncMap((doc) async {
         if (doc.exists && doc.data() != null) {
           return _employeeFromFirestore(doc.data()!, doc.id);
+        }
+        final legacyDoc = await _employeesRef.doc('EMP-001').get();
+        if (legacyDoc.exists && legacyDoc.data() != null) {
+          return _employeeFromFirestore(legacyDoc.data()!, legacyDoc.id);
         }
         return _superAdminMotherAccount;
       });
@@ -295,6 +319,13 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       }
     }
 
+    result.sort((a, b) {
+      final numA = int.tryParse(a.employeeId.replaceAll(RegExp(r'[^0-9]'), '')) ?? a.id;
+      final numB = int.tryParse(b.employeeId.replaceAll(RegExp(r'[^0-9]'), '')) ?? b.id;
+      if (numA != numB) return numA.compareTo(numB);
+      return a.employeeId.compareTo(b.employeeId);
+    });
+
     return result;
   }
 
@@ -341,21 +372,30 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     final empId = employee.employeeId.trim();
 
     // 1. Prevent self-reporting
-    if (empId.isNotEmpty && managerId.toLowerCase() == empId.toLowerCase()) {
+    final mgrDigits = managerId.replaceAll(RegExp(r'\D'), '');
+    final empDigits = empId.replaceAll(RegExp(r'\D'), '');
+    final isSameCode = (empId.isNotEmpty && managerId.toLowerCase() == empId.toLowerCase()) ||
+        (mgrDigits.isNotEmpty && empDigits.isNotEmpty && int.tryParse(mgrDigits) == int.tryParse(empDigits));
+
+    if (isSameCode) {
       throw ArgumentError('An employee cannot report to themselves.');
     }
-    if (employee.id != 0 && managerId == employee.id.toString()) {
+    if (employee.id != 0 && (managerId == employee.id.toString() || (mgrDigits.isNotEmpty && employee.id == int.tryParse(mgrDigits)))) {
       throw ArgumentError('An employee cannot report to themselves.');
     }
 
     // 2. Fetch manager from repository
     final all = await getAllEmployees();
     final manager = all.where((e) {
+      final mIdLower = managerId.toLowerCase();
+      final eDigits = e.employeeId.replaceAll(RegExp(r'\D'), '');
+      final matchDigits = mgrDigits.isNotEmpty && eDigits.isNotEmpty && (int.tryParse(mgrDigits) == int.tryParse(eDigits));
+
       return (e.employeeId.isNotEmpty &&
-              e.employeeId.trim().toLowerCase() == managerId.toLowerCase()) ||
-          (e.id != 0 && e.id.toString() == managerId) ||
+              (e.employeeId.trim().toLowerCase() == mIdLower || matchDigits)) ||
+          (e.id != 0 && (e.id.toString() == managerId || (mgrDigits.isNotEmpty && e.id == int.tryParse(mgrDigits)))) ||
           (e.emailAddress.isNotEmpty &&
-              e.emailAddress.trim().toLowerCase() == managerId.toLowerCase());
+              e.emailAddress.trim().toLowerCase() == mIdLower);
     }).firstOrNull;
 
     if (manager == null) {
@@ -381,14 +421,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       );
     }
 
-    // 3. Prevent cross-organization reporting
-    final empOrg = employee.organizationName.trim().toLowerCase();
-    final mgrOrg = manager.organizationName.trim().toLowerCase();
-    if (empOrg.isNotEmpty && mgrOrg.isNotEmpty && empOrg != mgrOrg) {
-      throw ArgumentError(
-        'Cannot assign reporting manager "${manager.fullName}": manager belongs to "${manager.organizationName}", but employee belongs to "${employee.organizationName}".',
-      );
-    }
+    // 3. Cross-organization reporting is allowed if manager has active status / access
 
     // 4. Validate active status
     final mgrStatus = manager.status.trim().toLowerCase();
@@ -450,11 +483,16 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     await _validateReportingManager(employee, isUpdate: false);
     var emp = employee;
     final empIdUpper = emp.employeeId.trim().toUpperCase();
+    final digits = empIdUpper.replaceAll(RegExp(r'\D'), '');
+    final numVal = int.tryParse(digits) ?? 0;
+    final isTimestampId = numVal >= 10000;
+
     if (empIdUpper.isEmpty ||
         empIdUpper.startsWith('CAN-') ||
         empIdUpper.startsWith('PENDING_') ||
         empIdUpper.startsWith('REG-') ||
-        !empIdUpper.startsWith('EMP-')) {
+        !empIdUpper.startsWith('EMP-') ||
+        isTimestampId) {
       final newEmpId = await _generateNextEmployeeId();
       emp = emp.copyWith(employeeId: newEmpId);
     }
@@ -721,14 +759,14 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
   static const Employee _superAdminMotherAccount = Employee(
     id: 1,
-    employeeId: 'EMP-001',
+    employeeId: 'EMP-0001',
     firstName: 'Super',
     lastName: 'Admin',
     emailAddress: 'admin@company.com',
     phoneNumber: '+91 9876543210',
     gender: 'Male',
     dob: '1990-01-01',
-    organizationName: 'Primary Organization',
+    organizationName: 'IGREEN TECHNOLOGIES',
     department: 'Management',
     designation: 'Super Administrator',
     employmentType: 'Full-time',
@@ -739,130 +777,20 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     accessPermissions: Employee.allSidebarPermissions,
   );
 
-  /// Dummy employee populated with comprehensive dummy data for Employee Management,
-  /// credentials, full access permissions, and attendance testing.
-  static final Employee dummyEmployee = Employee(
-    id: 1001,
-    employeeId: 'EMP-1001',
-    firstName: 'Rahul',
-    lastName: 'Sharma',
-    emailAddress: 'rahul.sharma@igreen.com',
-    phoneNumber: '+91 9876543210',
-    personalMobile: '+91 9876543210',
-    gender: 'Male',
-    dob: '15-06-1995',
-    bloodGroup: 'O+',
-    organizationName: 'I-Green Technology',
-    businessUnit: 'Engineering',
-    department: 'Execution',
-    designation: 'Site Engineer',
-    employmentType: 'Full Time',
-    joiningDate: '01-01-2024',
-    userType: 'EMPLOYEE',
-    status: 'Active',
-    temporaryPassword: 'Password@123',
-    accessPermissions: Employee.allSidebarPermissions,
-    // Attendance & Schedule
-    workScheduleType: 'Fixed Schedule',
-    inTime: '09:00 AM',
-    outTime: '06:00 PM',
-    requiredWorkingHours: 9.0,
-    weeklyOffDay: 'Sunday',
-    leaveType: 'As Needed',
-    leaveAllocationFrequency: 'Monthly',
-    allowedLeaves: 3.0,
-    monthlyLeaveAllowance: 3.0,
-    monthlyPermissionLimitHours: 3.0,
-    dailyPermissionLimitHours: 1.0,
-    effectiveDate: '01-01-2024',
-    requiresLeaveApproval: true,
-    siteLatitude: 13.0827,
-    siteLongitude: 80.2707,
-    siteAllowedRadiusMeters: 500,
-    siteRequireGpsVerification: false,
-    isStaticEmployee: true,
-    isDynamicEmployee: false,
-    reportingManager: 'Super Admin',
-    reportingManagerId: 'EMP-001',
-    // Address
-    street: '123, Green Tech Park, Mount Road',
-    city: 'Chennai',
-    state: 'Tamil Nadu',
-    postalCode: '600002',
-    country: 'India',
-    permanentAddress: '123, Green Tech Park, Mount Road, Chennai',
-    permanentState: 'Tamil Nadu',
-    permanentCity: 'Chennai',
-    permanentDistrict: 'Chennai',
-    permanentPincode: '600002',
-    presentAddress: '123, Green Tech Park, Mount Road, Chennai',
-    presentState: 'Tamil Nadu',
-    presentCity: 'Chennai',
-    presentDistrict: 'Chennai',
-    presentPincode: '600002',
-    sameAsPermanent: true,
-    // Salary & Statutory
-    salaryType: 'Monthly',
-    salaryBasic: 35000.0,
-    salaryHra: 15000.0,
-    salarySpecialAllowance: 10000.0,
-    salaryTotalCtc: 60000.0,
-    salaryPf: 1800.0,
-    salaryEsi: 0.0,
-    pfNumber: 'MH/BAN/12345/678',
-    pfUan: '100987654321',
-    esiNumber: '31001234560001001',
-    panNumber: 'ABCDE1234F',
-    aadhaarNumber: '567812349012',
-    // Bank Details
-    bankAccountHolder: 'Rahul Sharma',
-    bankName: 'HDFC Bank',
-    bankAccountNumber: '50100234567890',
-    bankIfsc: 'HDFC0001234',
-    bankBranch: 'Mount Road',
-    bankAccountType: 'Savings',
-    // Education & Experience JSON
-    educationDegree: 'B.Tech Civil Engineering',
-    educationInstitution: 'Anna University',
-    educationYear: '2017',
-    educationGrade: 'First Class with Distinction',
-    educationListJson: jsonEncode([
-      {
-        'id': '1',
-        'degree_name': 'B.Tech Civil Engineering',
-        'institute_name': 'Anna University',
-        'result': '8.5 CGPA',
-        'passing_year': '2017',
-        'certificate_name': 'Degree Certificate',
-      }
-    ]),
-    experienceCompany: 'BuildCon Infrastructure',
-    experienceRole: 'Junior Site Engineer',
-    experienceYears: '3 Years',
-    experienceListJson: jsonEncode([
-      {
-        'id': '1',
-        'company_name': 'BuildCon Infrastructure',
-        'position': 'Junior Site Engineer',
-        'address': 'Chennai',
-        'working_duration': '3 Years',
-      }
-    ]),
-    // Family & Emergency
-    fatherName: 'Suresh Sharma',
-    motherName: 'Meena Sharma',
-    emergencyName: 'Suresh Sharma',
-    emergencyMobile: '+91 9876543211',
-    maritalStatus: 'Unmarried',
-  );
-
   @override
   Future<List<Employee>> getAllEmployees() async {
     if (isInMemory) {
-      if (!_memoryEmployees.any((e) => e.employeeId == 'EMP-1001')) {
-        _memoryEmployees.add(dummyEmployee);
-      }
-      return List.unmodifiable(_memoryEmployees);
+      _memoryEmployees.removeWhere((e) =>
+          e.employeeId == 'EMP-1001' ||
+          e.emailAddress.toLowerCase() == 'rahul.sharma@igreen.com');
+      final list = List<Employee>.from(_memoryEmployees);
+      list.sort((a, b) {
+        final numA = int.tryParse(a.employeeId.replaceAll(RegExp(r'[^0-9]'), '')) ?? a.id;
+        final numB = int.tryParse(b.employeeId.replaceAll(RegExp(r'[^0-9]'), '')) ?? b.id;
+        if (numA != numB) return numA.compareTo(numB);
+        return a.employeeId.compareTo(b.employeeId);
+      });
+      return List.unmodifiable(list);
     }
     final result = <Employee>[];
     final seenKeys = <String>{};
@@ -870,6 +798,15 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     try {
       final snapshot = await _safeGetQuery(_employeesRef);
       for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final email = ((data['email_address'] ?? data['emailAddress']) as String? ?? '').toLowerCase();
+        final docCode = ((data['employee_id'] ?? data['employeeId']) as String? ?? doc.id);
+        // Clean out legacy Rahul Sharma dummy employee if found in Firestore
+        if (email == 'rahul.sharma@igreen.com' || docCode == 'EMP-1001') {
+          doc.reference.delete().ignore();
+          continue;
+        }
+
         final emp = _employeeFromFirestore(doc.data(), doc.id);
         final key = doc.id.isNotEmpty
             ? doc.id
@@ -879,45 +816,32 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         }
       }
 
-      // Ensure at least one Super Admin account exists in Firestore
+      // Ensure at least one Super Admin account exists in Firestore if database is completely empty
       final hasSuperAdmin = result.any((e) => e.isSuperAdmin);
       if (!hasSuperAdmin && result.isEmpty) {
         final data = _employeeToFirestore(_superAdminMotherAccount);
         data['created_at'] = FieldValue.serverTimestamp();
-        await _employeesRef.doc('EMP-001').set(data, SetOptions(merge: true));
+        await _employeesRef.doc('EMP-0001').set(data, SetOptions(merge: true));
         result.insert(0, _superAdminMotherAccount);
       }
 
-      // Ensure the dummy employee exists in Firestore and memory
-      final hasDummyEmployee = result.any(
-        (e) =>
-            e.employeeId == 'EMP-1001' ||
-            e.emailAddress == 'rahul.sharma@igreen.com' ||
-            e.id == 1001,
-      );
-      if (!hasDummyEmployee) {
-        final data = _employeeToFirestore(dummyEmployee);
-        data['created_at'] = FieldValue.serverTimestamp();
-        data['id'] = 1001;
-        await _employeesRef.doc('EMP-1001').set(data, SetOptions(merge: true));
-        result.add(dummyEmployee);
-      }
+      // Sort all employees sequentially by ID number (Option A: EMP-0001, EMP-0002, ...)
+      result.sort((a, b) {
+        final numA = int.tryParse(a.employeeId.replaceAll(RegExp(r'[^0-9]'), '')) ?? a.id;
+        final numB = int.tryParse(b.employeeId.replaceAll(RegExp(r'[^0-9]'), '')) ?? b.id;
+        if (numA != numB) return numA.compareTo(numB);
+        return a.employeeId.compareTo(b.employeeId);
+      });
 
       _memoryEmployees.clear();
       _memoryEmployees.addAll(result);
     } catch (e) {
       debugPrint('Firebase getAllEmployees error: $e');
       if (result.isEmpty && _memoryEmployees.isNotEmpty) {
-        if (!_memoryEmployees.any((e) => e.employeeId == 'EMP-1001')) {
-          _memoryEmployees.add(dummyEmployee);
-        }
         return List.unmodifiable(_memoryEmployees);
       }
       if (result.isEmpty) {
         result.add(_superAdminMotherAccount);
-        result.add(dummyEmployee);
-      } else if (!result.any((e) => e.employeeId == 'EMP-1001')) {
-        result.add(dummyEmployee);
       }
     }
 
@@ -1098,6 +1022,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     required String linkStatus,
     String? candidateId,
   }) async {
+    if (isInMemory) return;
     try {
       final batch = _firestore.batch();
       if (linkId.isNotEmpty) {
@@ -1583,8 +1508,12 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     required String linkId,
     required Employee employeeData,
   }) async {
-    String empId = employeeData.employeeId;
-    if (!empId.startsWith('EMP-')) {
+    String empId = employeeData.employeeId.trim();
+    final digits = empId.replaceAll(RegExp(r'\D'), '');
+    final numVal = int.tryParse(digits) ?? 0;
+    final isValidSeqId = empId.toUpperCase().startsWith('EMP-') && numVal > 0 && numVal < 10000;
+
+    if (!isValidSeqId) {
       final all = await getAllEmployees();
       final existing = all
           .where(
@@ -1602,6 +1531,8 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       } else {
         empId = await _generateNextEmployeeId();
       }
+    } else {
+      empId = 'EMP-${numVal.toString().padLeft(4, '0')}';
     }
 
     final activeEmployee = employeeData.copyWith(
@@ -1644,17 +1575,23 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     }
   }
 
-  /// Generates the next EMP-XXXX employee ID for active employees.
+  /// Generates the next EMP-XXXX employee ID for active employees (Option A: 4-digit sequence, e.g. EMP-0001, EMP-0002).
   Future<String> _generateNextEmployeeId() async {
     if (isInMemory) {
       int maxNum = 0;
       for (final emp in _memoryEmployees) {
-        final code = emp.employeeId;
-        if (!code.toUpperCase().startsWith('EMP-')) continue;
+        if (emp.emailAddress.toLowerCase() == 'rahul.sharma@igreen.com' ||
+            emp.employeeId == 'EMP-1001') {
+          continue;
+        }
+        final code = emp.employeeId.trim().toUpperCase();
+        if (!code.startsWith('EMP')) continue;
         final numPart = code.replaceAll(RegExp(r'[^0-9]'), '');
         if (numPart.isNotEmpty) {
           final val = int.tryParse(numPart) ?? 0;
-          if (val > maxNum) maxNum = val;
+          if (val > 0 && val < 10000 && val > maxNum) {
+            maxNum = val;
+          }
         }
       }
       final nextNum = maxNum + 1;
@@ -1664,12 +1601,21 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     final snapshot = await _safeGetQuery(_employeesRef);
     int maxNum = 0;
     for (final doc in snapshot.docs) {
-      final code = (doc.data()['employee_id'] as String?) ?? doc.id;
-      if (!code.toUpperCase().startsWith('EMP-')) continue;
+      final data = doc.data();
+      final email = ((data['email_address'] ?? data['emailAddress']) as String? ?? '').toLowerCase();
+      final code = ((data['employee_id'] ?? data['employeeId']) as String?) ?? doc.id;
+      if (email == 'rahul.sharma@igreen.com' || code == 'EMP-1001') {
+        continue;
+      }
+      final codeUpper = code.trim().toUpperCase();
+      if (!codeUpper.startsWith('EMP')) continue;
       final numPart = code.replaceAll(RegExp(r'[^0-9]'), '');
       if (numPart.isNotEmpty) {
         final val = int.tryParse(numPart) ?? 0;
-        if (val > maxNum) maxNum = val;
+        // Ignore timestamp numbers or outliers >= 10000 so the sequence is never corrupted
+        if (val > 0 && val < 10000) {
+          if (val > maxNum) maxNum = val;
+        }
       }
     }
     final nextNum = maxNum + 1;
