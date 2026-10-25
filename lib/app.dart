@@ -33,7 +33,7 @@ class _BooksAppState extends ConsumerState<BooksApp> {
   Widget build(BuildContext context) {
     if (!_splashCompleted) {
       return MaterialApp(
-        title: 'Books',
+        title: 'Igreen',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         home: SplashScreen(
@@ -49,7 +49,7 @@ class _BooksAppState extends ConsumerState<BooksApp> {
     }
 
     return MaterialApp.router(
-      title: 'Books',
+      title: 'Igreen',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       routerConfig: ref.watch(appRouterProvider),
