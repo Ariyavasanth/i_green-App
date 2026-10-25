@@ -18,12 +18,19 @@ class _BooksAppState extends ConsumerState<BooksApp> {
   @override
   void initState() {
     super.initState();
-    // If opening directly via a public registration link, skip the non-router splash screen
-    // so GoRouter directly mounts and preserves the registration form URL.
+    // If opening directly via a specific route/deep link URL on web, skip the
+    // non-router splash screen so GoRouter directly mounts and preserves the target URL.
     try {
       final uri = Uri.base;
       final full = uri.toString();
-      if (full.contains('/employee/register')) {
+      final fragment = uri.fragment.trim();
+      final path = uri.path.trim();
+
+      final hasDirectRoute = full.contains('/employee/register') ||
+          (fragment.isNotEmpty && fragment != '/' && !fragment.startsWith('/?')) ||
+          (path.isNotEmpty && path != '/' && !path.startsWith('/?'));
+
+      if (hasDirectRoute) {
         _splashCompleted = true;
       }
     } catch (_) {}
@@ -36,14 +43,17 @@ class _BooksAppState extends ConsumerState<BooksApp> {
         title: 'Igreen',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
-        home: SplashScreen(
-          onFinish: () {
-            if (mounted) {
-              setState(() {
-                _splashCompleted = true;
-              });
-            }
-          },
+        onGenerateRoute: (settings) => MaterialPageRoute(
+          settings: settings,
+          builder: (_) => SplashScreen(
+            onFinish: () {
+              if (mounted) {
+                setState(() {
+                  _splashCompleted = true;
+                });
+              }
+            },
+          ),
         ),
       );
     }

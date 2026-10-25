@@ -1187,6 +1187,53 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
       final isDynamic = (employee?.isDynamicEmployee ?? false) ||
           (employee?.workScheduleType == 'Flexible Schedule');
+
+      // Block check-in at or after scheduled checkout time for fixed schedule employees
+      if (!isDynamic && !isWeeklyOff && employee != null && employee.outTime.trim().isNotEmpty) {
+        final outStr = employee.outTime.trim();
+        final inStr = employee.inTime.trim();
+        final outMins = _parseMinutes(outStr);
+        final inMins = inStr.isNotEmpty ? _parseMinutes(inStr) : null;
+
+        if (outMins != null) {
+          final normDate = _normalizeDateKey(date);
+          DateTime? baseDate;
+          try {
+            final parts = normDate.split('-');
+            if (parts.length == 3) {
+              baseDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+            }
+          } catch (_) {}
+
+          if (baseDate != null) {
+            final isOvernight = inMins != null && outMins <= inMins;
+            final shiftEndDt = isOvernight
+                ? DateTime(baseDate.year, baseDate.month, baseDate.day + 1, outMins ~/ 60, outMins % 60)
+                : DateTime(baseDate.year, baseDate.month, baseDate.day, outMins ~/ 60, outMins % 60);
+
+            if (!now.isBefore(shiftEndDt)) {
+              final blockedMessage =
+                  'Check-in is blocked: Current time is at or after scheduled checkout time ($outStr).';
+              await logAttendanceAttempt(
+                employeeId: employeeId,
+                employeeName: employeeName,
+                date: date,
+                time: time,
+                verificationStatus: 'Shift Ended',
+                similarityScore: score,
+                message: blockedMessage,
+              );
+              return AttendanceVerificationResult(
+                allowed: false,
+                similarityScore: score,
+                verificationStatus: 'Shift Ended',
+                message: blockedMessage,
+                capturedImagePath: '',
+              );
+            }
+          }
+        }
+      }
       String schedIn = scheduledCheckInTime.trim().isNotEmpty
           ? scheduledCheckInTime.trim()
           : (employee?.inTime.trim().isNotEmpty == true

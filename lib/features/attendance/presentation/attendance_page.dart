@@ -5174,6 +5174,25 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
     return emp.inTime.trim();
   }
 
+  bool _isPastScheduledCheckout(Employee emp, DateTime date) {
+    final isDynamic = emp.isDynamicEmployee ||
+        emp.workScheduleType.trim().toLowerCase() == 'flexible schedule';
+    if (isDynamic || emp.outTime.trim().isEmpty) return false;
+
+    final outTimeStr = emp.outTime.trim();
+    final inTimeStr = emp.inTime.trim();
+    final outMins = TimeFormatter.parseTimeToMinutes(outTimeStr);
+    final inMins = inTimeStr.isNotEmpty ? TimeFormatter.parseTimeToMinutes(inTimeStr) : null;
+    if (outMins == null) return false;
+
+    final isOvernight = inMins != null && outMins <= inMins;
+    final shiftEndDt = isOvernight
+        ? DateTime(date.year, date.month, date.day + 1, outMins ~/ 60, outMins % 60)
+        : DateTime(date.year, date.month, date.day, outMins ~/ 60, outMins % 60);
+
+    return !DateTime.now().isBefore(shiftEndDt);
+  }
+
   Future<void> _authenticateAndProceed() async {
     if (_verifying) return;
 
@@ -5188,6 +5207,16 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
           : _formatKey(widget.date);
 
       final emp = widget.currentEmployee;
+
+      // Pre-check: Block check-in at or after scheduled checkout time for fixed schedule employees
+      if (!widget.isCheckOut && _isPastScheduledCheckout(emp, widget.date)) {
+        final msg = 'Check-in is blocked: Current time is at or after scheduled checkout time (${emp.outTime.trim()}).';
+        if (!mounted) return;
+        setState(() => _message = msg);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        return;
+      }
+
       final settings = await widget.attendanceRepository.getAttendanceSettings();
       final bool isSite = emp.isDynamicEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0);
       final bool requireGps = isSite ? emp.siteRequireGpsVerification : settings.requireGpsVerification;
