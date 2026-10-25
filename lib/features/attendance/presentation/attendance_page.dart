@@ -5269,6 +5269,11 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
       if (!mounted) return;
       setState(() => _message = verifyResult.message);
       final actionTitle = widget.isCheckOut ? 'Check Out' : 'Check In';
+      if (widget.isCheckOut) {
+        AttendanceLocationService.instance.stopBackgroundMonitoring();
+      } else {
+        AttendanceLocationService.instance.startBackgroundMonitoring(widget.currentEmployee.id);
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('$actionTitle completed successfully!')),
       );

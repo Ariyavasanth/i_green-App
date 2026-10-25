@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/attendance_record.dart';
 import '../providers/attendance_providers.dart';
+import 'attendance_foreground_handler.dart';
 
 /// Service that checks geofence boundaries and manages auto-checkout when an employee
 /// exits the office premises during an active office attendance session.
@@ -148,6 +151,7 @@ class AttendanceLocationService {
           );
 
           if (didAutoCheckOut) {
+            await stopBackgroundMonitoring();
             ref.invalidate(todayAttendanceRecordProvider(employeeId));
             ref.invalidate(attendanceRecordsProvider(employeeId));
             ref.invalidate(allAttendanceRecordsProvider);
@@ -171,6 +175,7 @@ class AttendanceLocationService {
         );
 
         if (didAutoCheckOut) {
+          await stopBackgroundMonitoring();
           ref.invalidate(todayAttendanceRecordProvider(employeeId));
           ref.invalidate(attendanceRecordsProvider(employeeId));
           ref.invalidate(allAttendanceRecordsProvider);
@@ -197,6 +202,89 @@ class AttendanceLocationService {
   }
 
   int? _monitoredEmployeeId;
+  bool _isForegroundTaskInitialized = false;
+  WidgetRef? _activeRef;
+
+  void _onReceiveTaskData(Object data) {
+    if (data is Map && data['action'] == 'auto_checkout') {
+      final empId = (data['employeeId'] as num?)?.toInt() ?? _monitoredEmployeeId;
+      if (empId != null && empId > 0 && _activeRef != null) {
+        _activeRef!.invalidate(todayAttendanceRecordProvider(empId));
+        _activeRef!.invalidate(attendanceRecordsProvider(empId));
+        _activeRef!.invalidate(allAttendanceRecordsProvider);
+      }
+    }
+  }
+
+  /// Initializes Android Foreground Task configurations once.
+  void initForegroundTask() {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android || _isForegroundTaskInitialized) return;
+    _isForegroundTaskInitialized = true;
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'igreen_attendance_geofence',
+        channelName: 'I-Green Attendance Monitoring',
+        channelDescription: 'Monitors office boundary to automatically complete checkout upon exit.',
+        channelImportance: NotificationChannelImportance.LOW,
+        priority: NotificationPriority.LOW,
+      ),
+      iosNotificationOptions: const IOSNotificationOptions(
+        showNotification: false,
+        playSound: false,
+      ),
+      foregroundTaskOptions: ForegroundTaskOptions(
+        eventAction: ForegroundTaskEventAction.repeat(30000), // 30 seconds
+        autoRunOnBoot: false,
+        autoRunOnMyPackageReplaced: false,
+        allowWakeLock: true,
+        allowWifiLock: false,
+      ),
+    );
+    FlutterForegroundTask.addTaskDataCallback(_onReceiveTaskData);
+  }
+
+  /// Starts the Android Foreground Service for locked-screen geofence tracking.
+  Future<void> startBackgroundMonitoring(int employeeId) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android || employeeId <= 0) return;
+    try {
+      initForegroundTask();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('bg_monitored_employee_id', employeeId);
+
+      // Check Notification Permission on Android 13+
+      final notifPermission = await FlutterForegroundTask.checkNotificationPermission();
+      if (notifPermission != NotificationPermission.granted) {
+        await FlutterForegroundTask.requestNotificationPermission();
+      }
+
+      final isRunning = await FlutterForegroundTask.isRunningService;
+      if (isRunning) {
+        await FlutterForegroundTask.restartService();
+      } else {
+        await FlutterForegroundTask.startService(
+          serviceId: 256,
+          notificationTitle: 'I-Green Attendance Active',
+          notificationText: 'Shift active • Workplace departure monitored',
+          callback: attendanceTaskCallback,
+        );
+      }
+    } catch (e) {
+      debugPrint('startBackgroundMonitoring notice: $e');
+    }
+  }
+
+  /// Stops the Android Foreground Service and clears the monitored employee ID.
+  Future<void> stopBackgroundMonitoring() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('bg_monitored_employee_id');
+      final isRunning = await FlutterForegroundTask.isRunningService;
+      if (isRunning) {
+        await FlutterForegroundTask.stopService();
+      }
+    } catch (_) {}
+  }
 
   /// Starts a periodic foreground boundary monitor (e.g. checks every 30 seconds).
   /// Safe to call multiple times; if already monitoring for this employee, it preserves the existing timer.
@@ -205,12 +293,18 @@ class AttendanceLocationService {
     required int employeeId,
     Duration interval = const Duration(seconds: 30),
   }) {
+    _activeRef = ref;
     if (_monitoredEmployeeId == employeeId && _pollingTimer != null && _pollingTimer!.isActive) {
       return; // Already actively monitoring this employee
     }
     stopPeriodicGeofenceMonitoring();
     _monitoredEmployeeId = employeeId;
+    _activeRef = ref;
+
+    initForegroundTask();
+
     _pollingTimer = Timer.periodic(interval, (_) async {
+      _activeRef = ref;
       final todayRec = ref.read(todayAttendanceRecordProvider(employeeId)).valueOrNull;
       if (todayRec != null && todayRec.effectiveCheckInTime.isNotEmpty && todayRec.checkOutTime.isEmpty) {
         final activeSession = todayRec.sessions.where((s) => s.isActive).firstOrNull;
@@ -224,21 +318,35 @@ class AttendanceLocationService {
              activeSession.type.toLowerCase().contains('break') ||
              activeSession.type.toLowerCase().contains('meeting') ||
              activeSession.type.toLowerCase().contains('task'));
-        if (isTimeClockingActive) return;
+        if (isTimeClockingActive) {
+          unawaited(stopBackgroundMonitoring());
+          return;
+        }
 
         // 2. Exemption: Active OD session
         final bool isOdActive = activeSession != null && activeSession.isOd;
-        if (isOdActive) return;
+        if (isOdActive) {
+          unawaited(stopBackgroundMonitoring());
+          return;
+        }
 
         // 3. Exemption: Started from Home
         final bool isStartedFromHome = activeSession != null &&
             (activeSession.checkInMethod.toLowerCase().contains('home') ||
              activeSession.checkInVerificationStatus.toLowerCase().contains('home') ||
              activeSession.notes.toLowerCase().contains('starts from home'));
-        if (isStartedFromHome) return;
+        if (isStartedFromHome) {
+          unawaited(stopBackgroundMonitoring());
+          return;
+        }
 
-        // 4. Regular Office Session -> check geofence boundary & auto check-out if outside radius
+        // 4. Regular Office Session -> Keep Android background service active for screen locked
+        unawaited(startBackgroundMonitoring(employeeId));
+
+        // 5. Check geofence boundary & auto check-out if outside radius while app is active
         await checkGeofenceAndAutoCheckOut(ref: ref, employeeId: employeeId);
+      } else if (todayRec != null && (todayRec.checkOutTime.isNotEmpty || todayRec.status == 'Checked Out')) {
+        unawaited(stopBackgroundMonitoring());
       }
     });
   }
@@ -248,5 +356,6 @@ class AttendanceLocationService {
     _pollingTimer?.cancel();
     _pollingTimer = null;
     _monitoredEmployeeId = null;
+    unawaited(stopBackgroundMonitoring());
   }
 }
