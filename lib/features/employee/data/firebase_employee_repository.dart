@@ -207,20 +207,14 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     final resolvedId = resolveEmployeeIntegerId(docId, currentId);
     mutableMap['id'] = resolvedId;
 
-    // Normalize employeeId if completely empty or missing
+    // Read employeeId directly from Firestore, falling back to docId if empty
     String rawEmpId = (mutableMap['employee_id'] as String? ?? '').trim();
     if (rawEmpId.isEmpty) {
       rawEmpId = docId.trim();
     }
-    if (rawEmpId.isEmpty) {
-      if (resolvedId > 0 && resolvedId < 100000) {
-        rawEmpId = 'EMP-${resolvedId.toString().padLeft(4, '0')}';
-        if (docId.isNotEmpty) {
-          _employeesRef.doc(docId).set({
-            'employee_id': rawEmpId,
-          }, SetOptions(merge: true)).ignore();
-        }
-      }
+    // Remove spaces around hyphens if present (e.g. "IGT - 0001" -> "IGT-0001")
+    if (rawEmpId.contains(' - ')) {
+      rawEmpId = rawEmpId.replaceAll(' - ', '-');
     }
     mutableMap['employee_id'] = rawEmpId;
 

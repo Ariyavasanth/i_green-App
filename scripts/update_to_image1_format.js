@@ -97,30 +97,30 @@ function safeJsonList(str) {
   }
 }
 
-// 26 employees exactly matching Image 1
+// 26 employees with IGT- prefix (NO SPACES: e.g. IGT-0001)
 const image1Employees = [
-  { empId: 'IGT - 0001', name: 'G S Saravanan', id: 1, firstName: 'G S', lastName: 'Saravanan' },
-  { empId: 'IGT - 0007', name: 'S Anitha', id: 7, firstName: 'S', lastName: 'Anitha' },
-  { empId: 'IGT - 0006', name: 'Ganesh Chandra Das', id: 6, firstName: 'Ganesh', lastName: 'Chandra Das' },
-  { empId: 'IGT - 0010', name: 'K Paramasivam', id: 10, firstName: 'K', lastName: 'Paramasivam' },
-  { empId: 'IGT - 0013', name: 'Sankar Raja', id: 13, firstName: 'Sankar', lastName: 'Raja' },
-  { empId: 'IGT - 0044', name: 'Sivan Arumugam', id: 44, firstName: 'Sivan', lastName: 'Arumugam' },
-  { empId: 'IGT - 0061', name: 'Sri Kaliyaraj B', id: 61, firstName: 'Sri', lastName: 'Kaliyaraj B' },
-  { empId: 'IGT - 0109', name: 'Kannan P', id: 109, firstName: 'Kannan', lastName: 'P' },
-  { empId: 'IGT - 0120', name: 'Balaji P', id: 120, firstName: 'Balaji', lastName: 'P' },
-  { empId: 'IGT - 0121', name: 'Deepak R', id: 121, firstName: 'Deepak', lastName: 'R' },
-  { empId: 'IGT - 0133', name: 'Sivarajan Shanmugam', id: 133, firstName: 'Sivarajan', lastName: 'Shanmugam' },
-  { empId: 'IGT - 0148', name: 'Shibu Das', id: 148, firstName: 'Shibu', lastName: 'Das' },
-  { empId: 'IGT - 0158', name: 'E Manikandan', id: 158, firstName: 'E', lastName: 'Manikandan' },
-  { empId: 'IGT - 0159', name: 'Singara Lakshmanan Palanisamy', id: 159, firstName: 'Singara Lakshmanan', lastName: 'Palanisamy' },
-  { empId: 'IGT - 0172', name: 'M Pandi', id: 172, firstName: 'M', lastName: 'Pandi' },
-  { empId: 'IGT - 0174', name: 'Ramjanam', id: 174, firstName: 'Ramjanam', lastName: '' },
-  { empId: 'IGT - 0175', name: 'Dharmendra Kumar', id: 175, firstName: 'Dharmendra', lastName: 'Kumar' },
-  { empId: 'IGT - 0068', name: 'Mazhar Shekh', id: 68, firstName: 'Mazhar', lastName: 'Shekh' },
-  { empId: 'IGT - 0183', name: 'Paramasivam', id: 183, firstName: 'Paramasivam', lastName: '' },
-  { empId: 'IGT - 0192', name: 'Moti Kumar', id: 192, firstName: 'Moti', lastName: 'Kumar' },
-  { empId: 'IGT - 0205', name: 'Shajan B', id: 205, firstName: 'Shajan', lastName: 'B' },
-  { empId: 'IGT - 0209', name: 'Suresh S', id: 209, firstName: 'Suresh', lastName: 'S' },
+  { empId: 'IGT-0001', name: 'G S Saravanan', id: 1, firstName: 'G S', lastName: 'Saravanan' },
+  { empId: 'IGT-0006', name: 'Ganesh Chandra Das', id: 6, firstName: 'Ganesh', lastName: 'Chandra Das' },
+  { empId: 'IGT-0007', name: 'S Anitha', id: 7, firstName: 'S', lastName: 'Anitha' },
+  { empId: 'IGT-0010', name: 'K Paramasivam', id: 10, firstName: 'K', lastName: 'Paramasivam' },
+  { empId: 'IGT-0013', name: 'Sankar Raja', id: 13, firstName: 'Sankar', lastName: 'Raja' },
+  { empId: 'IGT-0044', name: 'Sivan Arumugam', id: 44, firstName: 'Sivan', lastName: 'Arumugam' },
+  { empId: 'IGT-0061', name: 'Sri Kaliyaraj B', id: 61, firstName: 'Sri', lastName: 'Kaliyaraj B' },
+  { empId: 'IGT-0068', name: 'Mazhar Shekh', id: 68, firstName: 'Mazhar', lastName: 'Shekh' },
+  { empId: 'IGT-0109', name: 'Kannan P', id: 109, firstName: 'Kannan', lastName: 'P' },
+  { empId: 'IGT-0120', name: 'Balaji P', id: 120, firstName: 'Balaji', lastName: 'P' },
+  { empId: 'IGT-0121', name: 'Deepak R', id: 121, firstName: 'Deepak', lastName: 'R' },
+  { empId: 'IGT-0133', name: 'Sivarajan Shanmugam', id: 133, firstName: 'Sivarajan', lastName: 'Shanmugam' },
+  { empId: 'IGT-0148', name: 'Shibu Das', id: 148, firstName: 'Shibu', lastName: 'Das' },
+  { empId: 'IGT-0158', name: 'E Manikandan', id: 158, firstName: 'E', lastName: 'Manikandan' },
+  { empId: 'IGT-0159', name: 'Singara Lakshmanan Palanisamy', id: 159, firstName: 'Singara Lakshmanan', lastName: 'Palanisamy' },
+  { empId: 'IGT-0172', name: 'M Pandi', id: 172, firstName: 'M', lastName: 'Pandi' },
+  { empId: 'IGT-0174', name: 'Ramjanam', id: 174, firstName: 'Ramjanam', lastName: '' },
+  { empId: 'IGT-0175', name: 'Dharmendra Kumar', id: 175, firstName: 'Dharmendra', lastName: 'Kumar' },
+  { empId: 'IGT-0183', name: 'Paramasivam', id: 183, firstName: 'Paramasivam', lastName: '' },
+  { empId: 'IGT-0192', name: 'Moti Kumar', id: 192, firstName: 'Moti', lastName: 'Kumar' },
+  { empId: 'IGT-0205', name: 'Shajan B', id: 205, firstName: 'Shajan', lastName: 'B' },
+  { empId: 'IGT-0209', name: 'Suresh S', id: 209, firstName: 'Suresh', lastName: 'S' },
   { empId: 'IGT-213', name: 'Sejabul Haque', id: 213, firstName: 'Sejabul', lastName: 'Haque' },
   { empId: 'IGT-215', name: 'Hari G', id: 215, firstName: 'Hari', lastName: 'G' },
   { empId: 'IGT-216', name: 'Mainul Haque', id: 216, firstName: 'Mainul', lastName: 'Haque' },
@@ -155,12 +155,13 @@ async function run() {
   }
 
   const processedDocKeys = new Set();
+  const oldKeysToDelete = new Set();
 
-  console.log('\n🚀 Updating all 26 employees in Firestore to Image 1 prefix & format:');
+  console.log('\n🚀 Updating all 26 employees in Firestore to IGT-XXXX format (no spaces):');
 
   for (let i = 0; i < image1Employees.length; i++) {
     const target = image1Employees[i];
-    const targetKey = target.empId;
+    const targetKey = target.empId; // e.g. "IGT-0001"
 
     // Find the existing data
     let existingData = null;
@@ -172,7 +173,16 @@ async function run() {
       oldKey = targetKey;
     }
 
-    // 2. Name-based match across all docs
+    // 2. Match with spaces (e.g. "IGT - 0001")
+    if (!existingData) {
+      const spacedKey = targetKey.replace('-', ' - ');
+      if (docMap[spacedKey]) {
+        existingData = docMap[spacedKey];
+        oldKey = spacedKey;
+      }
+    }
+
+    // 3. Name-based match across all docs
     if (!existingData) {
       const normTarget = normalizeName(target.name);
       for (const [k, d] of Object.entries(docMap)) {
@@ -185,7 +195,7 @@ async function run() {
       }
     }
 
-    // 3. Fallback for Gokul Raj from CAN-0021
+    // 4. Fallback for Gokul Raj from CAN-0021
     if (!existingData && target.name === 'Gokul Raj G' && gokulCandData) {
       existingData = {
         ...gokulCandData,
@@ -208,7 +218,7 @@ async function run() {
         role: 'EMPLOYEE',
         user_type: 'EMPLOYEE',
         temporary_password: '123456',
-        reporting_manager_id: 'IGT - 0001',
+        reporting_manager_id: 'IGT-0001',
         reporting_manager: 'G S Saravanan',
         reporting_manager_title: 'Company Director',
         education_items: safeJsonList(gokulCandData.education_list_json),
@@ -225,55 +235,95 @@ async function run() {
     const updatedDoc = {
       ...existingData,
       id: target.id,
-      employee_id: target.empId,
+      employee_id: target.empId, // Exact "IGT-0001", "IGT-0006", etc.
       first_name: target.firstName,
       last_name: target.lastName,
       user_name: target.firstName.toUpperCase().replace(/[^A-Z0-9]/g, ''),
-      reporting_manager_id: target.id === 1 ? '' : 'IGT - 0001',
+      reporting_manager_id: target.id === 1 ? '' : 'IGT-0001',
       reporting_manager: target.id === 1 ? '' : 'G S Saravanan',
       reporting_manager_title: 'Company Director',
       status: 'Active'
     };
 
-    // Save to Firestore under the new key
+    // Save to Firestore under the new compact key
     await saveDocument('employees', targetKey, updatedDoc);
-    console.log(`✅ [${i + 1}/26] Saved: ${targetKey.padEnd(12)} | id: ${String(target.id).padStart(3, ' ')} | employee_id: "${target.empId}" | ${target.name}`);
+    console.log(`✅ [${i + 1}/26] Saved: ${targetKey.padEnd(10)} | id: ${String(target.id).padStart(3, ' ')} | employee_id: "${target.empId}" | ${target.name}`);
     processedDocKeys.add(targetKey);
 
-    // Delete old doc if different
+    // Track old doc key for deletion if different from targetKey
     if (oldKey && oldKey !== targetKey) {
-      await deleteDocument('employees', oldKey);
-      console.log(`   🗑️ Deleted old document key: ${oldKey}`);
+      oldKeysToDelete.add(oldKey);
     }
   }
 
-  // Clean up any remaining legacy/duplicate keys
+  // Delete all old keys with spaces or legacy EMP keys
+  console.log('\n🧹 Cleaning up old keys with spaces and legacy documents...');
+  for (const oldKey of oldKeysToDelete) {
+    if (!processedDocKeys.has(oldKey)) {
+      try {
+        await deleteDocument('employees', oldKey);
+        console.log(`  🗑️ Deleted old key: ${oldKey}`);
+      } catch (e) {
+        console.warn(`  ⚠️ Failed to delete ${oldKey}:`, e.message);
+      }
+    }
+  }
+
+  // Also clean up all known legacy keys
   const legacyKeysToDelete = [
     'EMP-0001',
+    'EMP-0006',
+    'EMP-0007',
     'EMP-0010',
+    'EMP-0013',
     'EMP-0023',
     'EMP-0024',
     'EMP-0025',
     'EMP-0026',
+    'EMP-0044',
+    'EMP-0061',
+    'EMP-0068',
+    'EMP-0109',
+    'EMP-0120',
     'EMP-1001',
     'EMP-1002',
+    'IGT - 0001',
+    'IGT - 0006',
+    'IGT - 0007',
     'IGT - 0008',
+    'IGT - 0010',
+    'IGT - 0013',
+    'IGT - 0044',
     'IGT - 0056',
-    'IGT - 0140'
+    'IGT - 0061',
+    'IGT - 0068',
+    'IGT - 0109',
+    'IGT - 0120',
+    'IGT - 0121',
+    'IGT - 0133',
+    'IGT - 0140',
+    'IGT - 0148',
+    'IGT - 0158',
+    'IGT - 0159',
+    'IGT - 0172',
+    'IGT - 0174',
+    'IGT - 0175',
+    'IGT - 0183',
+    'IGT - 0192',
+    'IGT - 0205',
+    'IGT - 0209'
   ];
 
-  console.log('\n🧹 Cleaning up legacy & duplicate document keys...');
   for (const k of legacyKeysToDelete) {
     if (!processedDocKeys.has(k)) {
       try {
         await deleteDocument('employees', k);
-        console.log(`  🗑️ Cleaned up: ${k}`);
       } catch (_) {}
     }
   }
 
   // Update attendance records to ensure employee_code & employee_id stay aligned
-  console.log('\n📅 Synchronizing attendance record codes...');
+  console.log('\n📅 Synchronizing attendance record codes to IGT-XXXX...');
   try {
     const attRes = await get('attendance_records');
     const attDocs = attRes.documents || [];
@@ -282,7 +332,6 @@ async function run() {
     for (const doc of attDocs) {
       const f = parseFields(doc.fields);
       const docKey = doc.name.split('/').pop();
-      const empName = (f.employee_name || '').toLowerCase();
 
       // Find matching target
       const match = image1Employees.find(t => normalizeName(t.name) === normalizeName(f.employee_name));
@@ -302,7 +351,7 @@ async function run() {
     console.warn('Attendance sync notice:', e.message);
   }
 
-  console.log('\n🎉 Finished updating Firestore! All 26 employees now have the exact Image 1 prefix and employee_id.');
+  console.log('\n🎉 Finished updating Firestore! All 26 employees now have the exact IGT-XXXX format (no spaces).');
 }
 
 run().catch(err => {

@@ -323,6 +323,12 @@ class AppShell extends ConsumerWidget {
       'Purchase',
     ),
     SidebarDestination('Bills', '/bills', Icons.receipt_outlined, 'Purchase'),
+    SidebarDestination(
+      'Projects',
+      '/projects/dashboard',
+      Icons.rocket_launch_outlined,
+      'Projects',
+    ),
   ];
 
   @override

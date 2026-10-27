@@ -362,6 +362,11 @@ class Employee {
         return true;
       if (normClean == 'payroll' && pClean == 'payroll') return true;
 
+      // Project aliases
+      if ((normClean == 'projects' || normClean == 'project' || normClean == 'projectoperations') &&
+          (pClean == 'projects' || pClean == 'project' || pClean == 'projectoperations'))
+        return true;
+
       return false;
     });
   }
@@ -521,6 +526,7 @@ class Employee {
     'Expenses',
     'Purchase Orders',
     'Bills',
+    'Projects',
   ];
 
   static const Map<String, List<String>> sidebarPermissionsByCategory = {
@@ -567,6 +573,7 @@ class Employee {
       'e-Way Bills',
     ],
     'PURCHASE': ['Vendors', 'Expenses', 'Purchase Orders', 'Bills'],
+    'PROJECTS': ['Projects'],
   };
 
   static const List<String> departmentOptions = [
