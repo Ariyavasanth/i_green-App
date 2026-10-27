@@ -132,6 +132,7 @@ class _OrganizationFormDialogState
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _nameController;
+  late final TextEditingController _prefixController;
   late final TextEditingController _businessTypeController;
   late final TextEditingController _industryTypeController;
   final TextEditingController _newBuController = TextEditingController();
@@ -192,6 +193,9 @@ class _OrganizationFormDialogState
     super.initState();
     final org = widget.organization;
     _nameController = TextEditingController(text: org?.name ?? '');
+    _prefixController = TextEditingController(
+      text: org?.employeePrefix.isNotEmpty == true ? org!.employeePrefix : '',
+    );
     _businessTypeController = TextEditingController(
       text: org?.businessType.isNotEmpty == true
           ? org!.businessType
@@ -291,6 +295,7 @@ class _OrganizationFormDialogState
   @override
   void dispose() {
     _nameController.dispose();
+    _prefixController.dispose();
     _businessTypeController.dispose();
     _industryTypeController.dispose();
     _newBuController.dispose();
@@ -621,6 +626,7 @@ class _OrganizationFormDialogState
       final org = Organization(
         id: orgId,
         name: _nameController.text.trim(),
+        employeePrefix: _prefixController.text.trim().toUpperCase(),
         businessType: _businessTypeController.text.trim(),
         industryType: _industryTypeController.text.trim(),
         businessUnits: _businessUnits.join(', '),
@@ -766,13 +772,31 @@ class _OrganizationFormDialogState
                         'General Information',
                       ),
                       const SizedBox(height: 12),
-                      _buildField(
-                        label: 'Organization Name *',
-                        controller: _nameController,
-                        validator: (v) => v == null || v.trim().isEmpty
-                            ? 'Organization name is required'
-                            : null,
-                        hint: 'e.g. IGreentec Engg. India Pvt. Ltd.',
+                      _buildResponsiveRow(
+                        isSingleColumn: isSingleColumn,
+                        left: _buildField(
+                          label: 'Organization Name *',
+                          controller: _nameController,
+                          validator: (v) => v == null || v.trim().isEmpty
+                              ? 'Organization name is required'
+                              : null,
+                          hint: 'e.g. IGreentec Engg. India Pvt. Ltd.',
+                        ),
+                        right: _buildField(
+                          label: 'Employee ID Prefix *',
+                          controller: _prefixController,
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Employee ID Prefix is required';
+                            }
+                            final clean = v.trim().replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+                            if (clean.length < 2 || clean.length > 8) {
+                              return '2 to 8 letters/numbers (e.g. IGT, EMP)';
+                            }
+                            return null;
+                          },
+                          hint: 'e.g. IGT (for IGT-0001, IGT-0002)',
+                        ),
                       ),
                       const SizedBox(height: 14),
                       _buildResponsiveRow(

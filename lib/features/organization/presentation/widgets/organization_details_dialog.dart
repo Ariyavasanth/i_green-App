@@ -629,6 +629,25 @@ class OrganizationDetailsDialog extends StatelessWidget {
                                   ),
                                 ),
                               ),
+                            if (organization.employeePrefix.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  'Prefix: ${organization.employeePrefix}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF414A51),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ],

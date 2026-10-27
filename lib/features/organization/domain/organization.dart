@@ -209,11 +209,13 @@ class Organization {
     this.directors = const [],
     this.documents = const [],
     this.bankDetails = const [],
+    this.employeePrefix = '',
   });
 
   final int id;
   final String docId;
   final String name;
+  final String employeePrefix; // Dynamic Employee ID prefix e.g. "IGT", "ABC"
   final String status; // 'active', 'inactive'
   final String businessType;
   final String industryType;
@@ -262,11 +264,13 @@ class Organization {
     List<DirectorDetail>? directors,
     List<OrgDocument>? documents,
     List<OrganizationBankDetail>? bankDetails,
+    String? employeePrefix,
   }) {
     return Organization(
       id: id ?? this.id,
       docId: docId ?? this.docId,
       name: name ?? this.name,
+      employeePrefix: employeePrefix ?? this.employeePrefix,
       status: status ?? this.status,
       businessType: businessType ?? this.businessType,
       industryType: industryType ?? this.industryType,
@@ -320,6 +324,7 @@ class Organization {
       'directors': directors.map((d) => d.toMap()).toList(),
       'documents': documents.map((doc) => doc.toMap()).toList(),
       'bank_details': bankDetails.map((b) => b.toMap()).toList(),
+      'employee_prefix': employeePrefix.trim().toUpperCase(),
     };
   }
 
@@ -402,6 +407,7 @@ class Organization {
       directors: directorsList,
       documents: docsList,
       bankDetails: banksList,
+      employeePrefix: (map['employee_prefix'] ?? map['employeePrefix'] ?? '').toString().trim().toUpperCase(),
     );
   }
 }

@@ -398,14 +398,31 @@ class _EmployeeRegistrationPageState
   // Tab 11: Access Permissions
   late Set<String> _selectedPermissions;
 
-  Future<void> _autoGenerateNextEmpId({bool force = false}) async {
+  String _resolvePrefixForOrg(String orgName) {
+    if (orgName.trim().isEmpty) return 'EMP';
+    final orgs = ref.read(organizationsProvider).valueOrNull ?? [];
+    for (final o in orgs) {
+      if (o.name.trim().toLowerCase() == orgName.trim().toLowerCase()) {
+        if (o.employeePrefix.trim().isNotEmpty) {
+          return o.employeePrefix.trim().replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase();
+        }
+      }
+    }
+    return 'EMP';
+  }
+
+  Future<void> _autoGenerateNextEmpId({bool force = false, String? explicitPrefix}) async {
     try {
+      final prefix = explicitPrefix ?? _resolvePrefixForOrg(_organizationName);
+      final searchPrefix = '$prefix-';
+      final current = _employeeCustomIdController.text.trim().toUpperCase();
+
       if (force ||
-          _employeeCustomIdController.text.trim().isEmpty ||
-          !_employeeCustomIdController.text.trim().startsWith('EMP-')) {
+          current.isEmpty ||
+          (!current.startsWith(searchPrefix) && !current.startsWith(prefix))) {
         final nextId = await ref
             .read(employeeRepositoryProvider)
-            .getNextEmployeeId();
+            .getNextEmployeeId(prefix: prefix);
         if (mounted) {
           setState(() {
             _employeeCustomIdController.text = nextId;
@@ -2554,7 +2571,9 @@ class _EmployeeRegistrationPageState
         widget.employee != null ||
         widget.linkId == 'edit' ||
         (_currentEmployee != null &&
-            _currentEmployee!.employeeId.startsWith('EMP-'));
+            _currentEmployee!.employeeId.isNotEmpty &&
+            !_currentEmployee!.employeeId.startsWith('CAN-') &&
+            !_currentEmployee!.employeeId.toLowerCase().startsWith('pending_'));
 
     if (isSubmit) {
       setState(() {
@@ -2630,15 +2649,21 @@ class _EmployeeRegistrationPageState
 
     try {
       final repo = ref.read(employeeRepositoryProvider);
+      final hasExistingEmpId = _currentEmployee != null &&
+          _currentEmployee!.employeeId.isNotEmpty &&
+          !_currentEmployee!.employeeId.startsWith('CAN-') &&
+          !_currentEmployee!.employeeId.toLowerCase().startsWith('pending_');
+      final hasWidgetEmpId = widget.employee != null &&
+          widget.employee!.employeeId.isNotEmpty &&
+          !widget.employee!.employeeId.startsWith('CAN-') &&
+          !widget.employee!.employeeId.toLowerCase().startsWith('pending_');
+
       final resolvedEmployeeId =
           _employeeCustomIdController.text.trim().isNotEmpty
           ? _employeeCustomIdController.text.trim()
-          : ((isSubmit &&
-                    (_currentEmployee?.employeeId.startsWith('EMP-') == true))
+          : ((isSubmit && hasExistingEmpId)
                 ? _currentEmployee!.employeeId
-                : ((isSubmit &&
-                          (widget.employee?.employeeId.startsWith('EMP-') ==
-                              true))
+                : ((isSubmit && hasWidgetEmpId)
                       ? widget.employee!.employeeId
                       : (isSubmit
                             ? ''
@@ -2708,7 +2733,7 @@ class _EmployeeRegistrationPageState
         employmentType: 'Full-Time',
         joiningDate: _joiningDateController.text.trim(),
         status:
-            (isSubmit || isEditMode || resolvedEmployeeId.startsWith('EMP-'))
+            (isSubmit || isEditMode || (resolvedEmployeeId.isNotEmpty && !resolvedEmployeeId.toLowerCase().startsWith('pending_')))
             ? (_status.isEmpty ||
                       _status == 'PENDING' ||
                       _status.toLowerCase() == 'draft'
@@ -2996,9 +3021,11 @@ class _EmployeeRegistrationPageState
             widget.acceptedEmpId != null) {
           final linkIdToConvert =
               _selectedAcceptedLinkId ?? widget.acceptedLinkId ?? widget.linkId;
-          final dataWithExistingId =
-              (_currentEmployee != null &&
-                  _currentEmployee!.employeeId.startsWith('EMP-'))
+          final hasValidSeq = _currentEmployee != null &&
+              _currentEmployee!.employeeId.isNotEmpty &&
+              !_currentEmployee!.employeeId.startsWith('CAN-') &&
+              !_currentEmployee!.employeeId.toLowerCase().startsWith('pending_');
+          final dataWithExistingId = hasValidSeq
               ? employeeData.copyWith(
                   employeeId: _currentEmployee!.employeeId,
                   id: _currentEmployee!.id,
@@ -4712,6 +4739,22 @@ class _EmployeeRegistrationPageState
                               _reportingManagerTitleController.text = '';
                             });
                             _markTabUnsaved('Job & Admin Details');
+
+                            final p = _resolvePrefixForOrg(val);
+                            final currentText = _employeeCustomIdController.text.trim();
+                            final existingDigits = currentText.replaceAll(RegExp(r'\D'), '');
+                            if (existingDigits.isNotEmpty && !currentText.toLowerCase().startsWith('pending_')) {
+                              final numVal = int.tryParse(existingDigits) ?? 0;
+                              if (numVal > 0 && numVal < 100000) {
+                                setState(() {
+                                  _employeeCustomIdController.text = '$p-${numVal.toString().padLeft(4, '0')}';
+                                });
+                              } else {
+                                _autoGenerateNextEmpId(force: true, explicitPrefix: p);
+                              }
+                            } else {
+                              _autoGenerateNextEmpId(force: true, explicitPrefix: p);
+                            }
                           }
                         },
                         placeholder: 'Select Organization',
@@ -11163,9 +11206,9 @@ class _EmployeeRegistrationPageState
                           fontSize: 12,
                           color: Colors.black87,
                         ),
-                        decoration: const InputDecoration(
-                          hintText: 'e.g. EMP-0002 (Leave blank for auto-id)',
-                          hintStyle: TextStyle(
+                        decoration: InputDecoration(
+                          hintText: 'e.g. ${_resolvePrefixForOrg(_organizationName)}-0001 (or set any number)',
+                          hintStyle: const TextStyle(
                             fontSize: 12,
                             color: Colors.black38,
                           ),

@@ -666,12 +666,26 @@ class _CandidateConversionDialogState
 
       // Fetch base employee candidate or construct
       final linkEmpId = widget.link.employeeId.trim();
-      final isExistingEmpSeq = linkEmpId.startsWith('EMP-') &&
+      final isExistingEmpSeq = linkEmpId.isNotEmpty &&
           !linkEmpId.startsWith('CAN-') &&
-          (int.tryParse(linkEmpId.replaceAll(RegExp(r'\D'), '')) ?? 0) < 10000;
+          !linkEmpId.toLowerCase().startsWith('pending_') &&
+          (int.tryParse(linkEmpId.replaceAll(RegExp(r'\D'), '')) ?? 0) < 100000;
+
+      String orgPrefix = 'EMP';
+      if (_selectedOrg != null && _selectedOrg!.isNotEmpty) {
+        final orgs = ref.read(organizationsProvider).valueOrNull ?? [];
+        for (final o in orgs) {
+          if (o.name.trim().toLowerCase() == _selectedOrg!.trim().toLowerCase()) {
+            if (o.employeePrefix.trim().isNotEmpty) {
+              orgPrefix = o.employeePrefix.trim().replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase();
+            }
+          }
+        }
+      }
+
       final assignedEmpId = isExistingEmpSeq
           ? linkEmpId
-          : await repo.getNextEmployeeId();
+          : await repo.getNextEmployeeId(prefix: orgPrefix);
 
       final baseEmp =
           widget.candidateEmployee ??
@@ -716,11 +730,14 @@ class _CandidateConversionDialogState
       var targetEmployee = updatedEmployee;
       if (targetEmployee.employeeId.isEmpty ||
           targetEmployee.employeeId.startsWith('CAN-') ||
-          !targetEmployee.employeeId.startsWith('EMP-')) {
+          targetEmployee.employeeId.toLowerCase().startsWith('pending_')) {
         targetEmployee = targetEmployee.copyWith(employeeId: assignedEmpId);
       }
 
-      if (baseEmp.id != 0 && baseEmp.employeeId.startsWith('EMP-')) {
+      if (baseEmp.id != 0 &&
+          baseEmp.employeeId.isNotEmpty &&
+          !baseEmp.employeeId.startsWith('CAN-') &&
+          !baseEmp.employeeId.toLowerCase().startsWith('pending_')) {
         await repo.updateEmployee(targetEmployee);
       } else {
         await repo.addEmployee(targetEmployee);

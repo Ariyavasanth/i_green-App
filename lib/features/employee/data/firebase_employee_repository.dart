@@ -207,13 +207,13 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     final resolvedId = resolveEmployeeIntegerId(docId, currentId);
     mutableMap['id'] = resolvedId;
 
-    // Normalize employeeId to Option A format if empty or not prefixed with EMP-
+    // Normalize employeeId if completely empty or missing
     String rawEmpId = (mutableMap['employee_id'] as String? ?? '').trim();
     if (rawEmpId.isEmpty) {
       rawEmpId = docId.trim();
     }
-    if (rawEmpId.isEmpty || !rawEmpId.toUpperCase().startsWith('EMP-')) {
-      if (resolvedId > 0 && resolvedId < 10000) {
+    if (rawEmpId.isEmpty) {
+      if (resolvedId > 0 && resolvedId < 100000) {
         rawEmpId = 'EMP-${resolvedId.toString().padLeft(4, '0')}';
         if (docId.isNotEmpty) {
           _employeesRef.doc(docId).set({
@@ -491,7 +491,6 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         empIdUpper.startsWith('CAN-') ||
         empIdUpper.startsWith('PENDING_') ||
         empIdUpper.startsWith('REG-') ||
-        !empIdUpper.startsWith('EMP-') ||
         isTimestampId) {
       final newEmpId = await _generateNextEmployeeId();
       emp = emp.copyWith(employeeId: newEmpId);
@@ -544,8 +543,8 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   }
 
   @override
-  Future<String> getNextEmployeeId() async {
-    return _generateNextEmployeeId();
+  Future<String> getNextEmployeeId({String? prefix}) async {
+    return _generateNextEmployeeId(prefix: prefix);
   }
 
   @override
@@ -1511,7 +1510,11 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     String empId = employeeData.employeeId.trim();
     final digits = empId.replaceAll(RegExp(r'\D'), '');
     final numVal = int.tryParse(digits) ?? 0;
-    final isValidSeqId = empId.toUpperCase().startsWith('EMP-') && numVal > 0 && numVal < 10000;
+    final hasValidPrefix = empId.isNotEmpty &&
+        !empId.toUpperCase().startsWith('CAN-') &&
+        !empId.toLowerCase().startsWith('pending_') &&
+        RegExp(r'^[A-Za-z0-9]{2,10}-\d+$').hasMatch(empId);
+    final isValidSeqId = hasValidPrefix && numVal > 0 && numVal < 100000;
 
     if (!isValidSeqId) {
       final all = await getAllEmployees();
@@ -1526,13 +1529,31 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
           )
           .firstOrNull;
 
-      if (existing != null && existing.employeeId.startsWith('EMP-')) {
+      if (existing != null && existing.employeeId.isNotEmpty && !existing.employeeId.startsWith('CAN-')) {
         empId = existing.employeeId;
       } else {
-        empId = await _generateNextEmployeeId();
+        String orgPrefix = 'EMP';
+        if (employeeData.organizationName.isNotEmpty) {
+          try {
+            final orgSnap = await _firestore
+                .collection('organizations')
+                .where('name', isEqualTo: employeeData.organizationName)
+                .limit(1)
+                .get();
+            if (orgSnap.docs.isNotEmpty) {
+              final p = (orgSnap.docs.first.data()['employee_prefix'] ??
+                      orgSnap.docs.first.data()['employeePrefix'])
+                  ?.toString()
+                  .trim();
+              if (p != null && p.isNotEmpty) orgPrefix = p;
+            }
+          } catch (_) {}
+        }
+        empId = await _generateNextEmployeeId(prefix: orgPrefix);
       }
     } else {
-      empId = 'EMP-${numVal.toString().padLeft(4, '0')}';
+      final prefixPart = empId.contains('-') ? empId.split('-').first.toUpperCase() : 'EMP';
+      empId = '$prefixPart-${numVal.toString().padLeft(4, '0')}';
     }
 
     final activeEmployee = employeeData.copyWith(
@@ -1575,8 +1596,13 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     }
   }
 
-  /// Generates the next EMP-XXXX employee ID for active employees (Option A: 4-digit sequence, e.g. EMP-0001, EMP-0002).
-  Future<String> _generateNextEmployeeId() async {
+  /// Generates the next sequential employee ID for active employees based on the given prefix (default: EMP).
+  Future<String> _generateNextEmployeeId({String? prefix}) async {
+    final cleanPrefix = (prefix != null && prefix.trim().isNotEmpty)
+        ? prefix.trim().replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase()
+        : 'EMP';
+    final searchPrefix = '$cleanPrefix-';
+
     if (isInMemory) {
       int maxNum = 0;
       for (final emp in _memoryEmployees) {
@@ -1585,17 +1611,17 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
           continue;
         }
         final code = emp.employeeId.trim().toUpperCase();
-        if (!code.startsWith('EMP')) continue;
+        if (!code.startsWith(searchPrefix) && !code.startsWith(cleanPrefix)) continue;
         final numPart = code.replaceAll(RegExp(r'[^0-9]'), '');
         if (numPart.isNotEmpty) {
           final val = int.tryParse(numPart) ?? 0;
-          if (val > 0 && val < 10000 && val > maxNum) {
+          if (val > 0 && val < 100000 && val > maxNum) {
             maxNum = val;
           }
         }
       }
       final nextNum = maxNum + 1;
-      return 'EMP-${nextNum.toString().padLeft(4, '0')}';
+      return '$cleanPrefix-${nextNum.toString().padLeft(4, '0')}';
     }
 
     final snapshot = await _safeGetQuery(_employeesRef);
@@ -1608,18 +1634,18 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         continue;
       }
       final codeUpper = code.trim().toUpperCase();
-      if (!codeUpper.startsWith('EMP')) continue;
-      final numPart = code.replaceAll(RegExp(r'[^0-9]'), '');
+      if (!codeUpper.startsWith(searchPrefix) && !codeUpper.startsWith(cleanPrefix)) continue;
+      final numPart = codeUpper.replaceAll(RegExp(r'[^0-9]'), '');
       if (numPart.isNotEmpty) {
         final val = int.tryParse(numPart) ?? 0;
-        // Ignore timestamp numbers or outliers >= 10000 so the sequence is never corrupted
-        if (val > 0 && val < 10000) {
+        // Ignore timestamp numbers or outliers >= 100000 so the sequence is never corrupted
+        if (val > 0 && val < 100000) {
           if (val > maxNum) maxNum = val;
         }
       }
     }
     final nextNum = maxNum + 1;
-    return 'EMP-${nextNum.toString().padLeft(4, '0')}';
+    return '$cleanPrefix-${nextNum.toString().padLeft(4, '0')}';
   }
 
   String _generateRandomCode(int length) {
