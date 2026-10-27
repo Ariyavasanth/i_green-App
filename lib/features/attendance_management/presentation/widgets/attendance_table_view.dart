@@ -433,7 +433,7 @@ class AttendanceTableView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  record.employeeName.isNotEmpty ? record.employeeName : (emp?.fullName ?? 'EMP-${record.employeeId}'),
+                  record.employeeName.isNotEmpty ? record.employeeName : (emp?.fullName ?? (emp?.employeeId.isNotEmpty == true ? emp!.employeeId : 'Employee')),
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                 ),
                 if (record.employeeCode.isNotEmpty || emp?.employeeId.isNotEmpty == true)

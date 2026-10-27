@@ -161,7 +161,7 @@ class AttendanceMatrixView extends StatelessWidget {
                                   Text(
                                     emp.employeeId.isNotEmpty
                                         ? emp.employeeId
-                                        : 'EMP-${emp.id.toString().padLeft(4, '0')}',
+                                        : (emp.id > 0 ? emp.id.toString() : ''),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
@@ -395,7 +395,7 @@ class AttendanceMatrixView extends StatelessWidget {
         : (isNotTracked
             ? '${emp.fullName}\nDate: $dateStr\nStatus: Not Applicable (-)\nTotal Hours: --\nReq Hours: 0.0hr\nShortfall: 0hr'
             : (record != null
-                ? '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : "EMP-${emp.id}"})\nDate: $dateStr\nStatus: ${isActiveSession ? "In Progress" : (statusInfo?.label ?? record.status)}\nIn: ${record.formattedCheckInTime}\nOut: ${record.checkOutTime.isNotEmpty ? record.formattedCheckOutTime : "--:--"}\nOffice: ${record.formattedOfficeHours}\nOD: ${record.formattedOdHours}\nLunch: ${record.formattedLunchHours}\nTea: ${record.formattedTeaBreakHours}\nMeeting/Other: ${record.formattedMeetingOtherHours}\nTotal Hours: $totalHoursStr\nReq Hours: ${reqHours.toStringAsFixed(1)}hr\nShortfall: $shortfallStr'
+                ? '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : emp.id})\nDate: $dateStr\nStatus: ${isActiveSession ? "In Progress" : (statusInfo?.label ?? record.status)}\nIn: ${record.formattedCheckInTime}\nOut: ${record.checkOutTime.isNotEmpty ? record.formattedCheckOutTime : "--:--"}\nOffice: ${record.formattedOfficeHours}\nOD: ${record.formattedOdHours}\nLunch: ${record.formattedLunchHours}\nTea: ${record.formattedTeaBreakHours}\nMeeting/Other: ${record.formattedMeetingOtherHours}\nTotal Hours: $totalHoursStr\nReq Hours: ${reqHours.toStringAsFixed(1)}hr\nShortfall: $shortfallStr'
                 : (statusInfo == AttendanceStatusInfo.absent
                     ? '${emp.fullName}\nDate: $dateStr\nStatus: Absent\nTotal Hours: 0hr\nReq Hours: ${reqHours.toStringAsFixed(1)}hr\nShortfall: ${reqHours.toStringAsFixed(1)}hr'
                     : '${emp.fullName}\nDate: $dateStr\nStatus: ${statusInfo?.label ?? "Not Marked"}')));

@@ -46,7 +46,6 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
     final normalizedSearch = empId.toLowerCase().trim();
     for (final emp in employees) {
       if (emp.employeeId.toLowerCase() == normalizedSearch ||
-          'emp-${emp.id}'.toLowerCase() == normalizedSearch ||
           emp.id.toString() == normalizedSearch) {
         return emp;
       }
@@ -612,9 +611,9 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
             ),
             ...allEmployees.map((emp) {
               return DropdownMenuItem<String?>(
-                value: emp.employeeId.isNotEmpty ? emp.employeeId : 'EMP-${emp.id}',
+                value: emp.employeeId.isNotEmpty ? emp.employeeId : emp.id.toString(),
                 child: Text(
-                  '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : "EMP${emp.id}"})',
+                  '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : emp.id.toString()})',
                   style: const TextStyle(fontSize: 12),
                   overflow: TextOverflow.ellipsis,
                 ),

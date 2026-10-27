@@ -390,9 +390,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
     final displayEmpId = employee?.employeeId.isNotEmpty == true
         ? employee!.employeeId
         : (record.employeeId > 0
-            ? (branding.isTecEngineering
-                ? 'IGT - ${record.employeeId.toString().padLeft(4, '0')}'
-                : 'EMP-${record.employeeId.toString().padLeft(4, '0')}')
+            ? record.employeeId.toString()
             : '-');
 
     final displayDesignation = record.designation.isNotEmpty

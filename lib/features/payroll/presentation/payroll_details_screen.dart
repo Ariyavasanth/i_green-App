@@ -317,7 +317,7 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
 
                     final displayId = matchingEmp != null && matchingEmp.employeeId.isNotEmpty
                         ? matchingEmp.employeeId
-                        : (record.employeeId > 0 ? "EMP-${record.employeeId.toString().padLeft(4, '0')}" : "");
+                        : (record.employeeId > 0 ? record.employeeId.toString() : "");
 
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

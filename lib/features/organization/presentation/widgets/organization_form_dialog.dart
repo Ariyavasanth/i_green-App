@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/organization.dart';
 import '../../providers/organization_providers.dart';
+import '../../../employee/providers/employee_providers.dart';
 import '../../../employee/services/offer_letter_save_stub.dart'
     if (dart.library.html) '../../../employee/services/offer_letter_save_web.dart'
     if (dart.library.io) '../../../employee/services/offer_letter_save_io.dart';
@@ -656,6 +657,8 @@ class _OrganizationFormDialogState
       ref.invalidate(organizationsProvider);
       ref.invalidate(departmentsProvider);
       ref.invalidate(allDesignationsProvider);
+      ref.invalidate(employeesProvider);
+      ref.invalidate(allEmployeesProvider);
 
       if (mounted) {
         Navigator.of(context).pop(true);

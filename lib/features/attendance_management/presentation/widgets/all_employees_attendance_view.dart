@@ -155,6 +155,9 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
           r.employeeCode.trim().toUpperCase() == emp.employeeId.trim().toUpperCase()) {
         return r;
       }
+      final rNum = int.tryParse(r.employeeCode.replaceAll(RegExp(r'\D'), '')) ?? 0;
+      final empNum = int.tryParse(emp.employeeId.replaceAll(RegExp(r'\D'), '')) ?? 0;
+      if (rNum > 0 && empNum > 0 && rNum == empNum) return r;
       if (r.employeeName.trim().isNotEmpty && emp.fullName.trim().isNotEmpty &&
           r.employeeName.trim().toLowerCase() == emp.fullName.trim().toLowerCase()) {
         return r;
@@ -183,7 +186,12 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
     final list = <AttendanceRecord>[];
     for (final r in widget.staticRecords) {
       if (!_isSameMonth(r.date, widget.focusedMonth)) continue;
+      final rNum = int.tryParse(r.employeeCode.replaceAll(RegExp(r'\D'), '')) ?? 0;
+      final empNum = int.tryParse(emp.employeeId.replaceAll(RegExp(r'\D'), '')) ?? 0;
+      final isNumMatch = (rNum > 0 && empNum > 0 && rNum == empNum);
+
       if ((r.employeeId != 0 && r.employeeId == emp.id) ||
+          isNumMatch ||
           (r.employeeCode.isNotEmpty && emp.employeeId.isNotEmpty &&
               r.employeeCode.trim().toUpperCase() == emp.employeeId.trim().toUpperCase()) ||
           (r.employeeName.trim().isNotEmpty && emp.fullName.trim().isNotEmpty &&
@@ -459,7 +467,7 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${emp.employeeId.isNotEmpty ? emp.employeeId : 'EMP-${emp.id}'} • ${emp.department} • ${emp.designation}',
+                          '${emp.employeeId.isNotEmpty ? emp.employeeId : emp.id.toString()} • ${emp.department} • ${emp.designation}',
                           style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                         ),
                         const SizedBox(height: 6),
@@ -1616,7 +1624,7 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              emp.employeeId.isNotEmpty ? emp.employeeId : 'EMP-${emp.id}',
+                              emp.employeeId.isNotEmpty ? emp.employeeId : emp.id.toString(),
                               style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
                             ),
                           ),
@@ -2007,7 +2015,7 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
                           children: [
                             Text(emp.fullName, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A), fontSize: 13)),
                             Text(
-                              '${emp.employeeId.isNotEmpty ? emp.employeeId : 'EMP-${emp.id}'} • ${emp.department}',
+                              '${emp.employeeId.isNotEmpty ? emp.employeeId : emp.id.toString()} • ${emp.department}',
                               style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                             ),
                           ],

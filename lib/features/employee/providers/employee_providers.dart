@@ -42,7 +42,7 @@ final currentEmployeeProvider = Provider<Employee?>((ref) {
       }).toList();
       if (matches.isNotEmpty) return matches.first;
 
-      if (target == 'admin' || target == 'superadmin' || target == 'super admin' || target == 'admin@company.com' || target == 'emp-001' || target == 'emp-0001') {
+      if (target == 'admin' || target == 'superadmin' || target == 'super admin' || target == 'admin@company.com') {
         final adminMatch = list.where((e) => e.isSuperAdmin).firstOrNull;
         if (adminMatch != null) return adminMatch;
         return FirebaseEmployeeRepository.superAdminMotherAccount;
@@ -51,7 +51,7 @@ final currentEmployeeProvider = Provider<Employee?>((ref) {
       return null;
     },
     orElse: () {
-      if (target == 'admin' || target == 'superadmin' || target == 'super admin' || target == 'admin@company.com' || target == 'emp-001' || target == 'emp-0001') {
+      if (target == 'admin' || target == 'superadmin' || target == 'super admin' || target == 'admin@company.com') {
         return FirebaseEmployeeRepository.superAdminMotherAccount;
       }
       return null;
@@ -100,14 +100,34 @@ final employeesProvider = FutureProvider<List<Employee>>((ref) async {
   final employees = await ref.watch(employeeRepositoryProvider).getEmployees();
   final uniqueEmployees = <Employee>[];
   final seenKeys = <String>{};
+
+  final hasDynamicPrefix = <String>{};
+  for (final emp in employees) {
+    if (!emp.employeeId.startsWith('EMP-') && !emp.employeeId.startsWith('CAN-')) {
+      if (emp.emailAddress.trim().isNotEmpty) {
+        hasDynamicPrefix.add(emp.emailAddress.trim().toLowerCase());
+      }
+      if (emp.id > 0) {
+        hasDynamicPrefix.add('id_${emp.id}');
+      }
+    }
+  }
+
   for (final emp in employees) {
     if (emp.emailAddress.toLowerCase() == 'rahul.sharma@igreen.com' ||
         emp.employeeId == 'EMP-1001') {
       continue;
     }
+    final emailKey = emp.emailAddress.trim().toLowerCase();
+    final idKey = 'id_${emp.id}';
+    final isDuplicateEmpDoc = emp.employeeId.startsWith('EMP-') &&
+        ((emailKey.isNotEmpty && hasDynamicPrefix.contains(emailKey)) ||
+         (emp.id > 0 && hasDynamicPrefix.contains(idKey)));
+    if (isDuplicateEmpDoc) continue;
+
     final key = emp.employeeId.trim().isNotEmpty
         ? emp.employeeId.trim().toUpperCase()
-        : '${emp.id}_${emp.emailAddress.trim().toLowerCase()}';
+        : '${emp.id}_$emailKey';
     if (!emp.employeeId.startsWith('CAN-') &&
         emp.status.toLowerCase() != 'draft' &&
         seenKeys.add(key)) {
@@ -129,14 +149,34 @@ final allEmployeesProvider = FutureProvider<List<Employee>>((ref) async {
       .getAllEmployees();
   final uniqueEmployees = <Employee>[];
   final seenKeys = <String>{};
+
+  final hasDynamicPrefix = <String>{};
+  for (final emp in employees) {
+    if (!emp.employeeId.startsWith('EMP-') && !emp.employeeId.startsWith('CAN-')) {
+      if (emp.emailAddress.trim().isNotEmpty) {
+        hasDynamicPrefix.add(emp.emailAddress.trim().toLowerCase());
+      }
+      if (emp.id > 0) {
+        hasDynamicPrefix.add('id_${emp.id}');
+      }
+    }
+  }
+
   for (final emp in employees) {
     if (emp.emailAddress.toLowerCase() == 'rahul.sharma@igreen.com' ||
         emp.employeeId == 'EMP-1001') {
       continue;
     }
+    final emailKey = emp.emailAddress.trim().toLowerCase();
+    final idKey = 'id_${emp.id}';
+    final isDuplicateEmpDoc = emp.employeeId.startsWith('EMP-') &&
+        ((emailKey.isNotEmpty && hasDynamicPrefix.contains(emailKey)) ||
+         (emp.id > 0 && hasDynamicPrefix.contains(idKey)));
+    if (isDuplicateEmpDoc) continue;
+
     final key = emp.employeeId.trim().isNotEmpty
         ? emp.employeeId.trim().toUpperCase()
-        : '${emp.id}_${emp.emailAddress.trim().toLowerCase()}';
+        : '${emp.id}_$emailKey';
     if (!emp.employeeId.startsWith('CAN-') &&
         emp.status.toLowerCase() != 'draft' &&
         seenKeys.add(key)) {

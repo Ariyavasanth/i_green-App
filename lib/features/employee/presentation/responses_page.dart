@@ -1857,7 +1857,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
       if (link.submittedDate.isNotEmpty ||
           link.submittedBy.isNotEmpty ||
           link.employeeId.startsWith('CAN-') ||
-          link.employeeId.startsWith('EMP-')) {
+          (link.employeeId.contains('-') && !link.employeeId.toUpperCase().startsWith('PENDING'))) {
         return CandidateCardStatus.submitted;
       }
     }

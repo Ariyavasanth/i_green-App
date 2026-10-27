@@ -9,6 +9,7 @@ import '../../../on_duty/domain/on_duty_site.dart';
 import '../../../on_duty/providers/on_duty_providers.dart';
 import '../../../on_duty/presentation/assign_on_duty_dialog.dart';
 import '../../../../core/widgets/reverse_geocoded_location_text.dart';
+import '../../../employee/providers/employee_providers.dart';
 
 class OnDutyManagementView extends ConsumerStatefulWidget {
   const OnDutyManagementView({super.key});
@@ -502,9 +503,11 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                             DataColumn(label: Text('Actions')),
                           ],
                           rows: filtered.map((item) {
-                            final empIdStr = item.employeeId > 0
-                                ? 'EMP-${item.employeeId.toString().padLeft(3, '0')}'
-                                : '--';
+                            final allEmps = ref.watch(employeesProvider).value ?? [];
+                            final matchedEmp = allEmps.where((e) => e.id == item.employeeId).firstOrNull;
+                            final empIdStr = (matchedEmp != null && matchedEmp.employeeId.isNotEmpty)
+                                ? matchedEmp.employeeId
+                                : (item.employeeId > 0 ? item.employeeId.toString() : '--');
 
                             return DataRow(
                               cells: [

@@ -342,7 +342,7 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
         : (emp.userType.isNotEmpty ? emp.userType : 'Employee');
     final employeeId = emp.employeeId.isNotEmpty
         ? emp.employeeId
-        : (emp.id != 0 ? 'EMP-${emp.id.toString().padLeft(4, '0')}' : '-');
+        : (emp.id != 0 ? emp.id.toString() : '-');
     final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U';
     final hasPhoto =
         _selectedPhotoBytes != null ||

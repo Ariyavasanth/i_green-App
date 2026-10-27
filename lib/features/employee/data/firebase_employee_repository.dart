@@ -208,7 +208,8 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     mutableMap['id'] = resolvedId;
 
     // Read employeeId directly from Firestore, falling back to docId if empty
-    String rawEmpId = (mutableMap['employee_id'] as String? ?? '').trim();
+    final origStoredEmpId = (mutableMap['employee_id'] as String? ?? '').trim();
+    String rawEmpId = origStoredEmpId;
     if (rawEmpId.isEmpty) {
       rawEmpId = docId.trim();
     }
@@ -216,7 +217,19 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     if (rawEmpId.contains(' - ')) {
       rawEmpId = rawEmpId.replaceAll(' - ', '-');
     }
+    // If docId contains an organization dynamic prefix (e.g. "IGT-0001"), prioritize docId over stale "EMP-"
+    if (docId.trim().isNotEmpty && docId.contains('-')) {
+      final docPrefix = docId.trim().split('-').first.toUpperCase();
+      if (docPrefix != 'EMP' && docPrefix != 'TEMP') {
+        rawEmpId = docId.trim();
+      }
+    }
     mutableMap['employee_id'] = rawEmpId;
+
+    // Self-healing: if the document field in Firestore had stale EMP- or empty, fix it in the DB on read:
+    if (docId.isNotEmpty && origStoredEmpId != rawEmpId && !rawEmpId.startsWith('EMP-')) {
+      _employeesRef.doc(docId).set({'employee_id': rawEmpId}, SetOptions(merge: true)).ignore();
+    }
 
     // Self-healing: persist id back to Firestore if it was missing, zero, or contaminated with a timestamp
     if (docId.isNotEmpty && (currentId == null || currentId == 0 || currentId >= 100000)) {
@@ -252,13 +265,14 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     final lower = target.toLowerCase();
     if (lower == 'admin' || lower == 'super admin' || lower == 'superadmin') {
-      return _employeesRef.doc('EMP-0001').snapshots().asyncMap((doc) async {
-        if (doc.exists && doc.data() != null) {
-          return _employeeFromFirestore(doc.data()!, doc.id);
-        }
-        final legacyDoc = await _employeesRef.doc('EMP-001').get();
-        if (legacyDoc.exists && legacyDoc.data() != null) {
-          return _employeeFromFirestore(legacyDoc.data()!, legacyDoc.id);
+      return _employeesRef.snapshots().asyncMap((snap) async {
+        for (final doc in snap.docs) {
+          final data = doc.data();
+          final userType = (data['user_type'] as String? ?? '').toLowerCase();
+          final isSuper = data['is_super_admin'] == true || userType == 'super admin';
+          if (isSuper) {
+            return _employeeFromFirestore(data, doc.id);
+          }
         }
         return _superAdminMotherAccount;
       });
@@ -486,7 +500,8 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         empIdUpper.startsWith('PENDING_') ||
         empIdUpper.startsWith('REG-') ||
         isTimestampId) {
-      final newEmpId = await _generateNextEmployeeId();
+      final orgPrefix = await _resolveOrgPrefix(emp.organizationName);
+      final newEmpId = await _generateNextEmployeeId(prefix: orgPrefix);
       emp = emp.copyWith(employeeId: newEmpId);
     }
     if (emp.status.isEmpty) {
@@ -576,7 +591,8 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       if (snapshot.docs.isNotEmpty) {
         docId = snapshot.docs.first.id;
       } else {
-        final newEmpId = await _generateNextEmployeeId();
+        final orgPrefix = await _resolveOrgPrefix(emp.organizationName);
+        final newEmpId = await _generateNextEmployeeId(prefix: orgPrefix);
         docId = newEmpId;
         emp = emp.copyWith(employeeId: newEmpId);
       }
@@ -790,6 +806,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     try {
       final snapshot = await _safeGetQuery(_employeesRef);
+      final rawList = <Employee>[];
       for (final doc in snapshot.docs) {
         final data = doc.data();
         final email = ((data['email_address'] ?? data['emailAddress']) as String? ?? '').toLowerCase();
@@ -801,9 +818,38 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         }
 
         final emp = _employeeFromFirestore(doc.data(), doc.id);
-        final key = doc.id.isNotEmpty
-            ? doc.id
-            : (emp.employeeId.isNotEmpty ? emp.employeeId : emp.id.toString());
+        rawList.add(emp);
+      }
+
+      // Identify which employees have a valid organization dynamic prefix (e.g. IGT-)
+      final hasDynamicPrefix = <String>{};
+      for (final emp in rawList) {
+        if (!emp.employeeId.startsWith('EMP-') && !emp.employeeId.startsWith('CAN-')) {
+          if (emp.emailAddress.trim().isNotEmpty) {
+            hasDynamicPrefix.add(emp.emailAddress.trim().toLowerCase());
+          }
+          if (emp.id > 0) {
+            hasDynamicPrefix.add('id_${emp.id}');
+          }
+        }
+      }
+
+      for (final emp in rawList) {
+        final emailKey = emp.emailAddress.trim().toLowerCase();
+        final idKey = 'id_${emp.id}';
+        final isDuplicateEmpDoc = emp.employeeId.startsWith('EMP-') &&
+            ((emailKey.isNotEmpty && hasDynamicPrefix.contains(emailKey)) ||
+             (emp.id > 0 && hasDynamicPrefix.contains(idKey)));
+
+        if (isDuplicateEmpDoc) {
+          // Stale duplicate document created during legacy bug — purge from DB and omit from UI
+          _employeesRef.doc(emp.employeeId).delete().ignore();
+          continue;
+        }
+
+        final key = emp.employeeId.isNotEmpty
+            ? emp.employeeId
+            : (emp.id != 0 ? emp.id.toString() : emailKey);
         if (seenKeys.add(key)) {
           result.add(emp);
         }
@@ -812,10 +858,12 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       // Ensure at least one Super Admin account exists in Firestore if database is completely empty
       final hasSuperAdmin = result.any((e) => e.isSuperAdmin);
       if (!hasSuperAdmin && result.isEmpty) {
-        final data = _employeeToFirestore(_superAdminMotherAccount);
+        final prefix = await _resolveOrgPrefix();
+        final mother = _superAdminMotherAccount.copyWith(employeeId: '$prefix-0001');
+        final data = _employeeToFirestore(mother);
         data['created_at'] = FieldValue.serverTimestamp();
-        await _employeesRef.doc('EMP-0001').set(data, SetOptions(merge: true));
-        result.insert(0, _superAdminMotherAccount);
+        await _employeesRef.doc('$prefix-0001').set(data, SetOptions(merge: true));
+        result.insert(0, mother);
       }
 
       // Sort all employees sequentially by ID number (Option A: EMP-0001, EMP-0002, ...)
@@ -1127,7 +1175,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     String candidateId = employeeData.employeeId;
     if (candidateId.isEmpty ||
         candidateId.startsWith('pending_') ||
-        candidateId.startsWith('EMP-')) {
+        !candidateId.startsWith('CAN-')) {
       candidateId =
           existingCandidateId.isNotEmpty &&
               existingCandidateId.startsWith('CAN-')
@@ -1590,11 +1638,32 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     }
   }
 
-  /// Generates the next sequential employee ID for active employees based on the given prefix (default: EMP).
+  /// Resolves the organization's dynamic employee ID prefix from Firestore (e.g. "IGT", "ABC").
+  Future<String> _resolveOrgPrefix([String? orgName]) async {
+    try {
+      Query<Map<String, dynamic>> query = _firestore.collection('organizations');
+      if (orgName != null && orgName.trim().isNotEmpty) {
+        query = query.where('name', isEqualTo: orgName.trim());
+      }
+      final snap = await query.limit(1).get();
+      if (snap.docs.isNotEmpty) {
+        final p = (snap.docs.first.data()['employee_prefix'] ??
+                snap.docs.first.data()['employeePrefix'])
+            ?.toString()
+            .trim();
+        if (p != null && p.isNotEmpty) {
+          return p.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase();
+        }
+      }
+    } catch (_) {}
+    return 'IGT';
+  }
+
+  /// Generates the next sequential employee ID for active employees based on the given prefix.
   Future<String> _generateNextEmployeeId({String? prefix}) async {
     final cleanPrefix = (prefix != null && prefix.trim().isNotEmpty)
         ? prefix.trim().replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase()
-        : 'EMP';
+        : await _resolveOrgPrefix();
     final searchPrefix = '$cleanPrefix-';
 
     if (isInMemory) {

@@ -31,7 +31,14 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
             ? data['id'] as int
             : (int.tryParse(data['id']?.toString() ?? '') ?? 0);
         if (dataId == employeeId) {
-          // Prefer the stored employee_id field; fallback to doc ID
+          final docId = doc.id.trim().toUpperCase();
+          if (docId.contains('-') && !docId.startsWith('EMP-') && !docId.startsWith('TEMP')) {
+            return docId;
+          }
+          final stored = (data['employee_id'] as String? ?? '').trim().toUpperCase();
+          if (stored.isNotEmpty && !stored.startsWith('EMP-')) {
+            return stored;
+          }
           return (data['employee_id'] ?? doc.id).toString().trim().toUpperCase();
         }
       }

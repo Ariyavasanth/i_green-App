@@ -83,7 +83,13 @@ class AttendanceStatusHelper {
 
     // 1. If an explicit AttendanceRecord exists (ensure it does not belong to another employee code)
     final recEmpCode = record?.employeeCode.trim().toUpperCase() ?? '';
-    final effectiveRecord = (record != null && recEmpCode.isNotEmpty && curEmpCode.isNotEmpty && recEmpCode != curEmpCode)
+    final recNum = int.tryParse(recEmpCode.replaceAll(RegExp(r'\D'), '')) ?? (record?.employeeId ?? 0);
+    final curNum = int.tryParse(curEmpCode.replaceAll(RegExp(r'\D'), '')) ?? employee.id;
+    final isCodeOrIdMatch = (recEmpCode == curEmpCode) ||
+        (recNum > 0 && curNum > 0 && recNum == curNum) ||
+        (record != null && record.employeeId > 0 && record.employeeId == employee.id);
+
+    final effectiveRecord = (record != null && recEmpCode.isNotEmpty && curEmpCode.isNotEmpty && !isCodeOrIdMatch)
         ? null
         : record;
 

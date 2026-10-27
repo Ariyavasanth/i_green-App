@@ -73,7 +73,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
       _startOdFromHome = existing.startOdFromHome;
       _selectedEmployee = Employee.fromMap({
         'id': existing.employeeId,
-        'employee_id': existing.employeeId > 0 ? 'EMP-${existing.employeeId.toString().padLeft(3, '0')}' : '',
+        'employee_id': existing.employeeId > 0 ? existing.employeeId.toString() : '',
         'first_name': existing.employeeName,
         'last_name': '',
       });
@@ -128,7 +128,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
   String _getEmployeeLabel(Employee emp) {
     final name = emp.fullName.trim();
     final empId = emp.employeeId.trim();
-    final fallbackId = empId.isNotEmpty ? empId : (emp.id > 0 ? "EMP-${emp.id}" : "EMP");
+    final fallbackId = empId.isNotEmpty ? empId : (emp.id > 0 ? emp.id.toString() : '');
 
     final currentEmp = ref.read(currentEmployeeProvider);
     if ((currentEmp != null && emp.id == currentEmp.id) || (widget.preSelectedEmployee != null && emp.id == widget.preSelectedEmployee!.id)) {
@@ -1180,7 +1180,9 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
       }
 
       // 2. Check if another task or clocking activity is running
-      final empIdStr = 'EMP-${_selectedEmployee!.id.toString().padLeft(3, '0')}';
+      final empIdStr = _selectedEmployee!.employeeId.isNotEmpty
+          ? _selectedEmployee!.employeeId
+          : (_selectedEmployee!.id > 0 ? _selectedEmployee!.id.toString() : '');
       final taskRepo = ref.read(taskRepositoryProvider);
       final runningTasks = await taskRepo.getTasks(assignedTo: empIdStr, status: 'IN_PROGRESS');
       final activeTask = runningTasks.firstOrNull;

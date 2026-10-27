@@ -46,9 +46,10 @@ class RegistrationLinksDialog extends ConsumerWidget {
               final status = link.linkStatus.trim().toLowerCase();
               final isAcceptedOrConverted =
                   status == 'accepted' || status == 'converted';
-              final isEmpId = link.employeeId.trim().toUpperCase().startsWith(
-                'EMP-',
-              );
+              final rawEmpId = link.employeeId.trim().toUpperCase();
+              final isEmpId = rawEmpId.isNotEmpty &&
+                  !rawEmpId.startsWith('CAN-') &&
+                  !rawEmpId.startsWith('PENDING');
               return !(isAcceptedOrConverted || isEmpId);
             }).toList();
 
