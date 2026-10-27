@@ -44,6 +44,9 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
 
   Timer? _liveClockTimer;
   int? _monitoredEmployeeId;
+  bool _isCheckOutReminderDialogOpen = false;
+  String? _checkOutReminderShownDate;
+  DateTime? _checkOutReminderSnoozedUntil;
 
   @override
   void initState() {
@@ -56,8 +59,70 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     _liveClockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
         setState(() {});
+        _checkScheduledCheckOutReminder();
       }
     });
+  }
+
+  void _checkScheduledCheckOutReminder() {
+    if (_isCheckOutReminderDialogOpen || !mounted) return;
+
+    final currentEmp = ref.read(currentEmployeeProvider);
+    if (currentEmp == null || currentEmp.id <= 0) return;
+
+    final isFlexible = currentEmp.isDynamicEmployee ||
+        currentEmp.workScheduleType.trim().toLowerCase() == 'flexible schedule';
+    if (isFlexible) return;
+
+    final now = DateTime.now();
+    final todayStr = DateFormat('yyyy-MM-dd').format(now);
+
+    if (_checkOutReminderShownDate == todayStr) {
+      if (_checkOutReminderSnoozedUntil == null || now.isBefore(_checkOutReminderSnoozedUntil!)) {
+        return;
+      }
+    }
+
+    final todayRecordAsync = ref.read(todayAttendanceRecordProvider(currentEmp.id));
+    final todayRecord = todayRecordAsync.valueOrNull;
+
+    final hasCheckedIn = todayRecord != null && todayRecord.effectiveCheckInTime.isNotEmpty;
+    final hasCheckedOut = todayRecord != null && todayRecord.checkOutTime.isNotEmpty;
+
+    if (!hasCheckedIn || hasCheckedOut) return;
+
+    final expectedOutTod = _getEmployeeOutTime(currentEmp);
+    if (expectedOutTod == null && todayRecord.scheduledOutTime.isEmpty) return;
+
+    final outTimeStr = expectedOutTod != null
+        ? _formatTimeOfDayLabel(expectedOutTod)
+        : (todayRecord.scheduledOutTime.isNotEmpty ? todayRecord.scheduledOutTime : '07:00 PM');
+    final shiftOutMins = TimeFormatter.parseTimeToMinutes(outTimeStr);
+    if (shiftOutMins == null) return;
+
+    final inTimeStr = currentEmp.inTime.trim().isNotEmpty
+        ? currentEmp.inTime.trim()
+        : todayRecord.effectiveCheckInTime;
+    final inMins = inTimeStr.isNotEmpty ? TimeFormatter.parseTimeToMinutes(inTimeStr) : null;
+    final isOvernight = inMins != null && shiftOutMins <= inMins;
+    final shiftEndDt = isOvernight
+        ? DateTime(now.year, now.month, now.day + 1, shiftOutMins ~/ 60, shiftOutMins % 60)
+        : DateTime(now.year, now.month, now.day, shiftOutMins ~/ 60, shiftOutMins % 60);
+
+    if (!now.isBefore(shiftEndDt)) {
+      _checkOutReminderShownDate = todayStr;
+      _checkOutReminderSnoozedUntil = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_isCheckOutReminderDialogOpen) {
+          _showScheduledCheckOutReminderDialog(
+            today: now,
+            todayRecord: todayRecord,
+            scheduledOutTimeStr: outTimeStr,
+            shiftOutMins: shiftOutMins,
+          );
+        }
+      });
+    }
   }
 
   DateTime? _parseCheckInTimeToDateTime(String timeStr) {
@@ -4696,6 +4761,151 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         ],
       ),
     );
+  }
+
+  Future<void> _showScheduledCheckOutReminderDialog({
+    required DateTime today,
+    required AttendanceRecord? todayRecord,
+    required String scheduledOutTimeStr,
+    required int shiftOutMins,
+  }) async {
+    if (!mounted || _isCheckOutReminderDialogOpen) return;
+    _isCheckOutReminderDialogOpen = true;
+
+    final now = DateTime.now();
+    final nowMins = now.hour * 60 + now.minute;
+    final bufferEndMins = shiftOutMins + 30;
+    final isInBuffer = nowMins <= bufferEndMins;
+    final bufferRemaining = isInBuffer ? (bufferEndMins - nowMins) : 0;
+    final bufferEndTod = TimeOfDay(hour: (bufferEndMins ~/ 60) % 24, minute: bufferEndMins % 60);
+    final bufferEndStr = _formatTimeOfDayLabel(bufferEndTod);
+
+    try {
+      await showDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.alarm_on_rounded, color: Color(0xFF9CC70A), size: 26),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Shift End Reminder',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Your scheduled shift ended at $scheduledOutTimeStr. Please remember to check out for the day.',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF334155),
+                  height: 1.4,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.info_outline, size: 16, color: Color(0xFF414A51)),
+                        const SizedBox(width: 6),
+                        Text(
+                          isInBuffer
+                              ? 'Buffer Period Active (30 mins)'
+                              : 'Overtime Active',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF414A51),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isInBuffer
+                          ? 'You have a 30-minute buffer window until $bufferEndStr ($bufferRemaining min remaining). Overtime calculation starts after the buffer window.'
+                          : 'The 30-minute buffer window ended at $bufferEndStr. Overtime is currently active according to company policy.',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF64748B),
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          actions: [
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF414A51),
+                side: const BorderSide(color: Color(0xFFCBD5E1)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
+              onPressed: () {
+                if (isInBuffer && bufferRemaining > 5) {
+                  _checkOutReminderSnoozedUntil = DateTime.now().add(const Duration(minutes: 10));
+                }
+                Navigator.pop(ctx);
+              },
+              child: Text(
+                isInBuffer && bufferRemaining > 5 ? 'Remind in 10m' : 'Check Out Later',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF9CC70A),
+                foregroundColor: const Color(0xFF414A51),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                elevation: 1,
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _openVerificationDialog(
+                  date: today,
+                  isCheckOut: true,
+                  existingRecord: todayRecord,
+                );
+              },
+              icon: const Icon(Icons.logout, size: 18),
+              label: const Text(
+                'Check Out Now',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      _isCheckOutReminderDialogOpen = false;
+    }
   }
 
   Future<void> _openVerificationDialog({
