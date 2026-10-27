@@ -58,9 +58,7 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
 
   late final TextEditingController _nameController;
   late final TextEditingController _headController;
-  late final TextEditingController _locationController;
   String? _selectedOrganization;
-  String? _selectedWorkLocation;
 
   bool _isSaving = false;
 
@@ -70,10 +68,6 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
     final dept = widget.department;
     _nameController = TextEditingController(text: dept?.departmentName ?? '');
     _headController = TextEditingController(text: dept?.departmentHead ?? '');
-    _locationController = TextEditingController(text: dept?.workLocation ?? '');
-    _selectedWorkLocation = (dept != null && dept.workLocation.isNotEmpty)
-        ? dept.workLocation
-        : null;
     _selectedOrganization = (dept != null && dept.organizationName.isNotEmpty)
         ? dept.organizationName
         : null;
@@ -83,7 +77,6 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
   void dispose() {
     _nameController.dispose();
     _headController.dispose();
-    _locationController.dispose();
     super.dispose();
   }
 
@@ -100,8 +93,7 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
         departmentName: _nameController.text.trim(),
         departmentHead: _headController.text.trim(),
         reportingHierarchy: widget.department?.reportingHierarchy ?? '',
-        workLocation:
-            _selectedWorkLocation?.trim() ?? _locationController.text.trim(),
+        workLocation: widget.department?.workLocation ?? '',
       );
 
       if (widget.department == null) {
@@ -133,8 +125,6 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
   Widget build(BuildContext context) {
     final isEdit = widget.department != null;
     final orgsAsync = ref.watch(organizationsProvider);
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSingleColumn = screenWidth < 540;
 
     return Container(
       constraints: BoxConstraints(
@@ -225,8 +215,6 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
                           : null,
                       hint: 'e.g. Arun Kumar',
                     ),
-                    const SizedBox(height: 16),
-                    _buildLocationDropdown(orgsAsync),
                   ],
                 ),
               ),
@@ -355,113 +343,6 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
           onChanged: (val) {
             setState(() {
               _selectedOrganization = val;
-              if (val != null) {
-                final org = orgs.cast<Organization?>().firstWhere(
-                  (o) => o?.name == val,
-                  orElse: () => null,
-                );
-                if (org != null) {
-                  final orgLocs = org.locations
-                      .split(',')
-                      .map((s) => s.trim())
-                      .where((s) => s.isNotEmpty)
-                      .toList();
-                  if (_selectedWorkLocation != null &&
-                      !orgLocs.contains(_selectedWorkLocation)) {
-                    _selectedWorkLocation = null;
-                    _locationController.clear();
-                  }
-                }
-              }
-            });
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildLocationDropdown(AsyncValue<List<Organization>> orgsAsync) {
-    return orgsAsync.when(
-      loading: () => const SizedBox(
-        height: 42,
-        child: Center(child: LinearProgressIndicator()),
-      ),
-      error: (err, _) => _buildTextField(
-        label: 'Work Location *',
-        controller: _locationController,
-        validator: (v) =>
-            v == null || v.trim().isEmpty ? 'Work Location is required' : null,
-        hint: 'e.g. Chennai Head Office',
-      ),
-      data: (orgs) {
-        List<String> locations = [];
-        if (_selectedOrganization != null &&
-            _selectedOrganization!.isNotEmpty) {
-          final org = orgs.cast<Organization?>().firstWhere(
-            (o) => o?.name == _selectedOrganization,
-            orElse: () => null,
-          );
-          if (org != null && org.locations.isNotEmpty) {
-            locations = org.locations
-                .split(',')
-                .map((s) => s.trim())
-                .where((s) => s.isNotEmpty)
-                .toList();
-          }
-        } else {
-          final allLocs = <String>{};
-          for (final org in orgs) {
-            if (org.locations.isNotEmpty) {
-              allLocs.addAll(
-                org.locations
-                    .split(',')
-                    .map((s) => s.trim())
-                    .where((s) => s.isNotEmpty),
-              );
-            }
-          }
-          locations = allLocs.toList();
-        }
-
-        final locOptions = <String>{
-          if (_selectedWorkLocation != null &&
-              _selectedWorkLocation!.isNotEmpty)
-            _selectedWorkLocation!,
-          if (_locationController.text.trim().isNotEmpty)
-            _locationController.text.trim(),
-          ...locations,
-        }.toList();
-
-        if (locOptions.isEmpty) {
-          return _buildTextField(
-            label: 'Work Location *',
-            controller: _locationController,
-            validator: (v) => v == null || v.trim().isEmpty
-                ? 'Work Location is required'
-                : null,
-            hint: 'e.g. Chennai Head Office',
-          );
-        }
-
-        if (_selectedWorkLocation != null &&
-            !locOptions.contains(_selectedWorkLocation)) {
-          _selectedWorkLocation = null;
-        }
-
-        return AppSearchableDropdown<String>(
-          label: 'Work Location *',
-          value: _selectedWorkLocation,
-          items: locOptions,
-          placeholder: 'Select Work Location',
-          searchHint: 'Search location...',
-          isRequired: true,
-          validator: (v) => v == null || v.trim().isEmpty
-              ? 'Work Location is required'
-              : null,
-          onChanged: (val) {
-            setState(() {
-              _selectedWorkLocation = val;
-              _locationController.text = val ?? '';
             });
           },
         );

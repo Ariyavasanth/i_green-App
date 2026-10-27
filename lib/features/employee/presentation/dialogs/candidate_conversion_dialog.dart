@@ -109,9 +109,14 @@ class _CandidateConversionDialogState
           workLocation: _selectedLocation,
         ),
       ),
+    final desigsAsync = ref.watch(
+      filteredDesignationsProvider(
+        DesignationFilter(
+          organizationName: _selectedOrg.isEmpty ? null : _selectedOrg,
+          departmentName: _selectedDepartment.isEmpty ? null : _selectedDepartment,
+        ),
+      ),
     );
-    final desigsAsync = ref.watch(designationsProvider(_selectedDepartment));
-    final employeesAsync = ref.watch(allEmployeesProvider);
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

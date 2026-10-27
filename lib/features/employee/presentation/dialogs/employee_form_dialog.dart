@@ -813,9 +813,13 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                   child1: Builder(
                     builder: (context) {
                       final currentDept = _deptController.text.trim();
+                      final currentOrg = _orgController.text.trim();
                       final desigsAsync = ref.watch(
-                        designationsProvider(
-                          currentDept.isEmpty ? null : currentDept,
+                        filteredDesignationsProvider(
+                          DesignationFilter(
+                            organizationName: currentOrg.isEmpty ? null : currentOrg,
+                            departmentName: currentDept.isEmpty ? null : currentDept,
+                          ),
                         ),
                       );
                       final desigItems =

@@ -51,10 +51,18 @@ class AttendanceMatrixView extends StatelessWidget {
           : r.date;
 
       if (r.employeeCode.isNotEmpty) {
-        recordMap['${r.employeeCode.trim().toUpperCase()}_$dateKey'] = r;
+        final codeUpper = r.employeeCode.trim().toUpperCase();
+        recordMap['${codeUpper}_$dateKey'] = r;
+        final rNum = int.tryParse(codeUpper.replaceAll(RegExp(r'\D'), '')) ?? 0;
+        if (rNum > 0) {
+          recordMap['num_${rNum}_$dateKey'] = r;
+          recordMap['IGT-${rNum.toString().padLeft(4, '0')}_$dateKey'] = r;
+          recordMap['IGT-${rNum}_$dateKey'] = r;
+        }
       }
       if (r.employeeId != 0) {
         recordMap['${r.employeeId}_$dateKey'] = r;
+        recordMap['num_${r.employeeId}_$dateKey'] = r;
       }
       if (r.employeeName.isNotEmpty) {
         recordMap['${r.employeeName.trim().toLowerCase()}_$dateKey'] = r;
@@ -336,27 +344,37 @@ class AttendanceMatrixView extends StatelessWidget {
     final empCodeUpper = emp.employeeId.trim().toUpperCase();
     final empNameLower = emp.fullName.trim().toLowerCase();
 
-    // 1. Primary match: specific employee code (e.g. 'EMP-0001' vs 'EMP-001')
+    final empNum = int.tryParse(empCodeUpper.replaceAll(RegExp(r'\D'), '')) ?? emp.id;
+
+    // 1. Primary match: specific employee code (e.g. 'IGT-0217' or 'IGT-217')
     AttendanceRecord? record;
     if (empCodeUpper.isNotEmpty) {
       record = recordMap['${empCodeUpper}_$dateStr'];
+    }
+    // Try padded / unpadded variants
+    if (record == null && empNum > 0) {
+      record = recordMap['IGT-${empNum.toString().padLeft(4, '0')}_$dateStr'] ??
+          recordMap['IGT-${empNum}_$dateStr'] ??
+          recordMap['num_${empNum}_$dateStr'];
     }
     // 2. Secondary match: specific full name (isolated from other employee codes)
     if (record == null && empNameLower.isNotEmpty) {
       final cand = recordMap['${empNameLower}_$dateStr'];
       if (cand != null) {
         final cCode = cand.employeeCode.trim().toUpperCase();
-        if (cCode.isEmpty || cCode == empCodeUpper) {
+        final cNum = int.tryParse(cCode.replaceAll(RegExp(r'\D'), '')) ?? cand.employeeId;
+        if (cCode.isEmpty || cCode == empCodeUpper || (cNum > 0 && empNum > 0 && cNum == empNum)) {
           record = cand;
         }
       }
     }
     // 3. Fallback: integer ID (strictly isolated from other employee codes)
     if (record == null && emp.id != 0) {
-      final cand = recordMap['${emp.id}_$dateStr'];
+      final cand = recordMap['${emp.id}_$dateStr'] ?? (empNum > 0 ? recordMap['num_${empNum}_$dateStr'] : null);
       if (cand != null) {
         final cCode = cand.employeeCode.trim().toUpperCase();
-        if (cCode.isEmpty || cCode == empCodeUpper) {
+        final cNum = int.tryParse(cCode.replaceAll(RegExp(r'\D'), '')) ?? cand.employeeId;
+        if (cCode.isEmpty || cCode == empCodeUpper || (cNum > 0 && empNum > 0 && cNum == empNum)) {
           record = cand;
         }
       }

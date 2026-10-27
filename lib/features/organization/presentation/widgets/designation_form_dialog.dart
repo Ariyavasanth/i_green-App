@@ -222,6 +222,7 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
 
       ref.invalidate(allDesignationsProvider);
       ref.invalidate(designationsProvider(_selectedDepartment));
+      ref.invalidate(filteredDesignationsProvider);
       ref.invalidate(organizationBandsProvider);
       ref.invalidate(filteredBandsProvider);
 

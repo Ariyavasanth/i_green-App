@@ -4670,12 +4670,10 @@ class _EmployeeRegistrationPageState
               var desigList = allDesigsList.where((d) {
                 final matchOrg =
                     _organizationName.isEmpty ||
-                    d.organizationName.trim().isEmpty ||
                     d.organizationName.trim().toLowerCase() ==
                         _organizationName.trim().toLowerCase();
                 final matchDept =
                     _department.isEmpty ||
-                    d.departmentName.trim().isEmpty ||
                     d.departmentName.trim().toLowerCase() ==
                         _department.trim().toLowerCase();
                 return matchOrg && matchDept;

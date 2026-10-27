@@ -530,14 +530,14 @@ class _OrganizationStructurePageState
   }
 
   void _openDeptFilterModal(BuildContext context, List<Department> allDepts) {
-    final orgOptions = <String>{
+    final orgs = ref.read(organizationsProvider).valueOrNull ?? [];
+    final orgOptions = <String>[
       'All',
-      ...allDepts.map((d) => d.organizationName).where((s) => s.isNotEmpty),
-    }.toList();
-    final deptOptions = <String>{
-      'All',
-      ...allDepts.map((d) => d.departmentName).where((s) => s.isNotEmpty),
-    }.toList();
+      ...orgs.map((o) => o.name).where((s) => s.isNotEmpty).toSet(),
+    ];
+    if (orgOptions.length == 1) {
+      orgOptions.addAll(allDepts.map((d) => d.organizationName).where((s) => s.isNotEmpty).toSet());
+    }
     final locOptions = <String>{
       'All',
       ...allDepts.map((d) => d.workLocation).where((s) => s.isNotEmpty),
@@ -557,6 +557,17 @@ class _OrganizationStructurePageState
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final filteredDeptsForModal = tempOrg == 'All'
+                ? allDepts
+                : allDepts.where((d) => d.organizationName == tempOrg).toList();
+            final dynamicDeptOptions = <String>[
+              'All',
+              ...filteredDeptsForModal
+                  .map((d) => d.departmentName)
+                  .where((s) => s.isNotEmpty)
+                  .toSet(),
+            ];
+
             return Padding(
               padding: EdgeInsets.fromLTRB(
                 20,
@@ -598,17 +609,27 @@ class _OrganizationStructurePageState
                   const SizedBox(height: 16),
                   AppSearchableDropdown<String>(
                     label: 'Organization',
-                    value: tempOrg,
+                    value: orgOptions.contains(tempOrg) ? tempOrg : 'All',
                     items: orgOptions,
                     onChanged: (val) {
-                      if (val != null) setModalState(() => tempOrg = val);
+                      if (val != null) {
+                        setModalState(() {
+                          tempOrg = val;
+                          if (tempDept != 'All' && tempOrg != 'All') {
+                            final match = allDepts.any((d) =>
+                                d.departmentName == tempDept &&
+                                d.organizationName == tempOrg);
+                            if (!match) tempDept = 'All';
+                          }
+                        });
+                      }
                     },
                   ),
                   const SizedBox(height: 14),
                   AppSearchableDropdown<String>(
                     label: 'Department',
-                    value: tempDept,
-                    items: deptOptions,
+                    value: dynamicDeptOptions.contains(tempDept) ? tempDept : 'All',
+                    items: dynamicDeptOptions,
                     onChanged: (val) {
                       if (val != null) setModalState(() => tempDept = val);
                     },
@@ -1175,10 +1196,17 @@ class _OrganizationStructurePageState
                         data: (depts) {
                           var filteredDepts = depts;
                           if (_selectedDesigOrg != 'All') {
+                            final orgQuery =
+                                _selectedDesigOrg.trim().toLowerCase();
                             filteredDepts = depts
                                 .where(
                                   (d) =>
-                                      d.organizationName == _selectedDesigOrg,
+                                      d.organizationName
+                                          .trim()
+                                          .toLowerCase() ==
+                                      orgQuery ||
+                                      d.organizationId.trim().toLowerCase() ==
+                                          orgQuery,
                                 )
                                 .toList();
                           }
@@ -1240,9 +1268,17 @@ class _OrganizationStructurePageState
                       data: (depts) {
                         var filteredDepts = depts;
                         if (_selectedDesigOrg != 'All') {
+                          final orgQuery =
+                              _selectedDesigOrg.trim().toLowerCase();
                           filteredDepts = depts
                               .where(
-                                (d) => d.organizationName == _selectedDesigOrg,
+                                (d) =>
+                                    d.organizationName
+                                        .trim()
+                                        .toLowerCase() ==
+                                    orgQuery ||
+                                    d.organizationId.trim().toLowerCase() ==
+                                        orgQuery,
                               )
                               .toList();
                         }
@@ -1370,15 +1406,17 @@ class _OrganizationStructurePageState
                 Center(child: Text('Unable to load designations: $err')),
             data: (desigs) {
               final filtered = desigs.where((d) {
-                if (_selectedDesigOrg != 'All' &&
-                    (d.organizationName.isNotEmpty ||
-                        d.organizationId.isNotEmpty) &&
-                    d.organizationName != _selectedDesigOrg &&
-                    d.organizationId != _selectedDesigOrg) {
-                  return false;
+                if (_selectedDesigOrg != 'All') {
+                  final dOrg = d.organizationName.trim();
+                  final dOrgId = d.organizationId.trim();
+                  final matches = (dOrg.isNotEmpty &&
+                          dOrg.toLowerCase() == _selectedDesigOrg.toLowerCase()) ||
+                      (dOrgId.isNotEmpty &&
+                          dOrgId.toLowerCase() == _selectedDesigOrg.toLowerCase());
+                  if (!matches) return false;
                 }
                 if (_selectedDesigDept != 'All' &&
-                    d.departmentName != _selectedDesigDept) {
+                    d.departmentName.trim().toLowerCase() != _selectedDesigDept.trim().toLowerCase()) {
                   return false;
                 }
                 if (searchQuery.trim().isEmpty) return true;
