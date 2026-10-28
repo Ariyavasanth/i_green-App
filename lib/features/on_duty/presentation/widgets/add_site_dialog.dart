@@ -26,7 +26,7 @@ class _AddSiteDialogState extends State<AddSiteDialog> {
   SelectedDestination? _destination;
   int _selectedRadius = 200;
 
-  static const _radiusOptions = [200, 500];
+  static const _radiusOptions = [200, 500, 1000];
 
   @override
   void initState() {
@@ -284,7 +284,7 @@ class _AddSiteDialogState extends State<AddSiteDialog> {
                   children: _radiusOptions.map((r) {
                     final selected = _selectedRadius == r;
                     return ChoiceChip(
-                      label: Text('${r}m'),
+                      label: Text(r >= 1000 ? '${r ~/ 1000} km' : '${r}m'),
                       selected: selected,
                       selectedColor: primaryColor,
                       backgroundColor: Colors.grey.shade200,

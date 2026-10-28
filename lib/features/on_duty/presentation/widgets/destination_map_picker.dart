@@ -137,7 +137,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
   }
   String _mapType = 'roadmap'; // roadmap, satellite, terrain
   double _zoomLevel = 15.0;
-  final List<int> _radiusOptions = [50, 100, 200, 500];
+  final List<int> _radiusOptions = [50, 100, 200, 500, 1000];
 
   late AnimationController _zoomAnimationController;
 
@@ -1593,7 +1593,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
                               ),
                             ),
                             child: Text(
-                              '$r m',
+                              r >= 1000 ? '${r ~/ 1000} km' : '$r m',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
