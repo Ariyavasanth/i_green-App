@@ -4,6 +4,8 @@ import 'auth_session_storage.dart';
 
 AuthSessionStorage createAuthSessionStorageImpl() => _WebAuthSessionStorage();
 
+Future<void> initAuthSessionStorageImpl() async {}
+
 class _WebAuthSessionStorage implements AuthSessionStorage {
   static const _key = 'auth_user_email';
 
