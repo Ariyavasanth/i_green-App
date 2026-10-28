@@ -306,7 +306,11 @@ class AttendanceLocationService {
     _pollingTimer = Timer.periodic(interval, (_) async {
       _activeRef = ref;
       final todayRec = ref.read(todayAttendanceRecordProvider(employeeId)).valueOrNull;
-      if (todayRec != null && todayRec.effectiveCheckInTime.isNotEmpty && todayRec.checkOutTime.isEmpty) {
+      final bool hasActiveSession = todayRec != null &&
+          (todayRec.sessions.any((s) => s.isActive) ||
+           (todayRec.effectiveCheckInTime.isNotEmpty && todayRec.checkOutTime.isEmpty));
+
+      if (todayRec != null && hasActiveSession) {
         final activeSession = todayRec.sessions.where((s) => s.isActive).firstOrNull;
 
         // 1. Exemption: Active Time Clocking (Lunch, Break, Meeting, etc.)
@@ -345,7 +349,7 @@ class AttendanceLocationService {
 
         // 5. Check geofence boundary & auto check-out if outside radius while app is active
         await checkGeofenceAndAutoCheckOut(ref: ref, employeeId: employeeId);
-      } else if (todayRec != null && (todayRec.checkOutTime.isNotEmpty || todayRec.status == 'Checked Out')) {
+      } else if (todayRec != null && !hasActiveSession && (todayRec.checkOutTime.isNotEmpty || todayRec.status == 'Checked Out')) {
         unawaited(stopBackgroundMonitoring());
       }
     });

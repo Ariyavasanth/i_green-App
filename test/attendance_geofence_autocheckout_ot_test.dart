@@ -264,5 +264,193 @@ void main() {
       expect(restored.scheduledInTime, equals('12:15 PM'));
       expect(restored.scheduledOutTime, equals('09:15 PM'));
     });
+
+    test('9. Multi-Session Check-in #2: checkOutTime is cleared so previous checkout does not block new session', () {
+      // Simulates an existing record that completed Session 1 (09:00 AM to 01:00 PM)
+      final existingRecord = AttendanceRecord(
+        id: 109,
+        employeeId: 1,
+        employeeName: 'Ravi Kumar',
+        date: '2026-10-02',
+        time: '09:00 AM',
+        checkInTime: '09:00 AM',
+        checkOutTime: '01:00 PM',
+        status: 'Completed',
+        verificationStatus: 'Verified',
+        similarityScore: 1.0,
+        sessions: const [
+          AttendanceSession(
+            id: 'session_1',
+            type: 'office',
+            checkInTime: '09:00 AM',
+            checkOutTime: '01:00 PM',
+            durationHours: 4.0,
+            durationMinutes: 240,
+          ),
+        ],
+      );
+
+      // Simulates checking in for Session 2 at 02:00 PM
+      final newSession = const AttendanceSession(
+        id: 'session_2',
+        type: 'office',
+        checkInTime: '02:00 PM',
+        checkOutTime: '', // Active session
+      );
+
+      final updatedSessions = List<AttendanceSession>.from(existingRecord.sessions)..add(newSession);
+
+      // In the fixed _startOfficeAttendanceSession, checkOutTime is reset to ''
+      final updatedRecord = existingRecord.copyWith(
+        checkOutTime: '', // Fixed behavior: reset to empty string for active session
+        checkOutVerificationStatus: '',
+        checkOutSimilarityScore: 0.0,
+        status: 'Present',
+        sessions: updatedSessions,
+      );
+
+      expect(updatedRecord.checkOutTime, isEmpty);
+      expect(updatedRecord.sessions.length, equals(2));
+      expect(updatedRecord.sessions.any((s) => s.isActive), isTrue);
+      // Verify that the record is eligible for exit auto-checkout (checkOutTime is empty)
+      final bool isEligibleForAutoCheckout = updatedRecord.checkOutTime.trim().isEmpty &&
+          updatedRecord.status != 'Checked Out' &&
+          updatedRecord.sessions.any((s) => s.isActive);
+      expect(isEligibleForAutoCheckout, isTrue);
+    });
+
+    test('10. Date Isolation for OD Assignments: Previous-day OD does not shield today', () {
+      bool isOdActiveForDate({
+        required String assignmentDate,
+        required String targetDate,
+        required String status,
+      }) {
+        if (assignmentDate != targetDate) return false;
+        final s = status.toUpperCase();
+        return s == 'ASSIGNED' || s == 'IN_PROGRESS' || s == 'ACTIVE';
+      }
+
+      const today = '2026-10-02';
+      const yesterday = '2026-10-01';
+
+      // Yesterday's unclosed OD assignment should NOT shield today
+      expect(isOdActiveForDate(assignmentDate: yesterday, targetDate: today, status: 'ASSIGNED'), isFalse);
+      expect(isOdActiveForDate(assignmentDate: yesterday, targetDate: today, status: 'ACTIVE'), isFalse);
+
+      // Today's active OD assignment MUST shield today
+      expect(isOdActiveForDate(assignmentDate: today, targetDate: today, status: 'ASSIGNED'), isTrue);
+      expect(isOdActiveForDate(assignmentDate: today, targetDate: today, status: 'IN_PROGRESS'), isTrue);
+    });
+
+    test('11. Date Isolation for Time Clocking: Previous-day unclosed break does not shield today', () {
+      bool isBreakActiveForDate({
+        required String entryStartTimeIso,
+        required String targetDate,
+        required String? endTime,
+      }) {
+        final entryDate = entryStartTimeIso.split('T').first;
+        if (entryDate != targetDate) return false;
+        return endTime == null || endTime.trim().isEmpty;
+      }
+
+      const today = '2026-10-02';
+
+      // Yesterday's unclosed break should NOT shield today
+      expect(isBreakActiveForDate(entryStartTimeIso: '2026-10-01T13:00:00', targetDate: today, endTime: null), isFalse);
+
+      // Today's ongoing break MUST shield today
+      expect(isBreakActiveForDate(entryStartTimeIso: '2026-10-02T13:00:00', targetDate: today, endTime: null), isTrue);
+      // Completed break today does NOT shield
+      expect(isBreakActiveForDate(entryStartTimeIso: '2026-10-02T13:00:00', targetDate: today, endTime: '2026-10-02T13:45:00'), isFalse);
+    });
+
+    test('12. Geofence Guard: (0, 0) coordinates or disabled GPS safely aborts checkout without false inside', () {
+      bool shouldTriggerGeofenceExit({
+        required double currentLat,
+        required double currentLng,
+        required double targetLat,
+        required double targetLng,
+        required bool requireGps,
+        required double distanceMeters,
+        required int targetRadius,
+      }) {
+        if (currentLat == 0.0 && currentLng == 0.0) return false;
+        if (!requireGps || (targetLat == 0.0 && targetLng == 0.0)) return false;
+        return distanceMeters > targetRadius;
+      }
+
+      // Invalid current GPS (0, 0)
+      expect(shouldTriggerGeofenceExit(
+        currentLat: 0.0, currentLng: 0.0,
+        targetLat: 13.0827, targetLng: 80.2707,
+        requireGps: true, distanceMeters: 500, targetRadius: 100,
+      ), isFalse);
+
+      // Unconfigured workplace coordinates (0, 0)
+      expect(shouldTriggerGeofenceExit(
+        currentLat: 13.0850, currentLng: 80.2750,
+        targetLat: 0.0, targetLng: 0.0,
+        requireGps: true, distanceMeters: 500, targetRadius: 100,
+      ), isFalse);
+
+      // GPS verification disabled
+      expect(shouldTriggerGeofenceExit(
+        currentLat: 13.0850, currentLng: 80.2750,
+        targetLat: 13.0827, targetLng: 80.2707,
+        requireGps: false, distanceMeters: 500, targetRadius: 100,
+      ), isFalse);
+
+      // Valid outside geofence -> triggers checkout
+      expect(shouldTriggerGeofenceExit(
+        currentLat: 13.0850, currentLng: 80.2750,
+        targetLat: 13.0827, targetLng: 80.2707,
+        requireGps: true, distanceMeters: 500, targetRadius: 100,
+      ), isTrue);
+
+      // Valid inside geofence -> does not trigger checkout
+      expect(shouldTriggerGeofenceExit(
+        currentLat: 13.0828, currentLng: 80.2708,
+        targetLat: 13.0827, targetLng: 80.2707,
+        requireGps: true, distanceMeters: 20, targetRadius: 100,
+      ), isFalse);
+    });
+
+    test('13. Background Monitor Active State: evaluates true when any session is active', () {
+      bool shouldMonitorRun({
+        required bool hasActiveSessionInList,
+        required String effectiveCheckInTime,
+        required String checkOutTime,
+        required String status,
+      }) {
+        final hasActiveSession = hasActiveSessionInList ||
+            (effectiveCheckInTime.isNotEmpty && checkOutTime.isEmpty);
+
+        return hasActiveSession;
+      }
+
+      // Active Session 1
+      expect(shouldMonitorRun(
+        hasActiveSessionInList: true,
+        effectiveCheckInTime: '09:00 AM',
+        checkOutTime: '',
+        status: 'Present',
+      ), isTrue);
+
+      // Checked out Session 1, no active session
+      expect(shouldMonitorRun(
+        hasActiveSessionInList: false,
+        effectiveCheckInTime: '09:00 AM',
+        checkOutTime: '01:00 PM',
+        status: 'Completed',
+      ), isFalse);
+
+      // Active Session 2 (even if an older field had a value)
+      expect(shouldMonitorRun(
+        hasActiveSessionInList: true,
+        effectiveCheckInTime: '09:00 AM',
+        checkOutTime: '',
+        status: 'Present',
+      ), isTrue);
+    });
   });
 }

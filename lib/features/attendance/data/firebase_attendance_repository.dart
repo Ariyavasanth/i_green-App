@@ -752,6 +752,10 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     required double longitude,
   }) async {
     try {
+      if (latitude == 0.0 && longitude == 0.0) {
+        return false;
+      }
+
       final settings = await getAttendanceSettings();
       final loc = await _resolveEffectiveLocation(employeeId: employeeId, globalSettings: settings);
       final requireGps = loc['requireGps'] as bool? ?? false;
@@ -813,14 +817,16 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         return false; // Active Time Clocking -> Do NOT auto check-out!
       }
 
-      // Also check Firestore collection `time_clockings` for any active ClockEntry
-      final bool hasActiveClockEntry = await _hasActiveTimeClocking(employeeId);
+      // Also check Firestore collection `time_clockings` for any active ClockEntry for today
+      final bool hasActiveClockEntry = await _hasActiveTimeClocking(employeeId, date: todayStr);
       if (hasActiveClockEntry) {
+        debugPrint('[AutoCheckOut] Active time clocking (break/task) entry detected for employee $employeeId on $todayStr. Aborting checkout.');
         return false; // Active Clock Entry -> Do NOT auto check-out!
       }
 
       // 3. EXEMPTION: Active OD Session or Assignment
       if (activeSession != null && activeSession.isOd) {
+        debugPrint('[AutoCheckOut] Active session is OD for employee $employeeId. Aborting checkout.');
         return false; // Active OD session -> Do NOT auto check-out!
       }
 
@@ -829,32 +835,57 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           (activeSession.checkInMethod.toLowerCase().contains('home') ||
            activeSession.checkInVerificationStatus.toLowerCase().contains('home') ||
            activeSession.notes.toLowerCase().contains('starts from home'))) {
+        debugPrint('[AutoCheckOut] Session started from home for employee $employeeId. Aborting checkout.');
         return false; // Started from Home -> Do NOT auto check-out!
       }
 
-      // Check ongoing On-Duty assignment in Firestore
-      final bool hasActiveOd = await _hasActiveOdAssignment(employeeId);
+      // Check ongoing On-Duty assignment in Firestore for today
+      final bool hasActiveOd = await _hasActiveOdAssignment(employeeId, date: todayStr);
       if (hasActiveOd) {
+        debugPrint('[AutoCheckOut] Active OD assignment detected for employee $employeeId on $todayStr. Aborting checkout.');
         return false; // Active OD assignment -> Do NOT auto check-out!
       }
 
       // 4. Verify that this is an office session (either active session isOffice or legacy check-in)
       final bool isOfficeSession = activeSession == null || activeSession.isOffice;
       if (!isOfficeSession) {
+        debugPrint('[AutoCheckOut] Not an office session for employee $employeeId. Aborting checkout.');
         return false;
       }
 
-      // 5. Verify geofence: If still inside geofence, do nothing
-      final isInside = await verifyLocationWithinGeofence(
-        employeeId: employeeId,
-        latitude: currentLatitude,
-        longitude: currentLongitude,
+      // 5. Guard against invalid GPS input
+      if (currentLatitude == 0.0 && currentLongitude == 0.0) {
+        debugPrint('[AutoCheckOut] Invalid GPS reading (0.0, 0.0) received for employee $employeeId. Aborting checkout.');
+        return false;
+      }
+
+      // 6. Verify geofence exit against resolved workplace coordinates
+      final settings = await getAttendanceSettings();
+      final loc = await _resolveEffectiveLocation(employeeId: employeeId, globalSettings: settings);
+      final requireGps = loc['requireGps'] as bool? ?? false;
+      final targetLat = loc['targetLat'] as double? ?? 0.0;
+      final targetLng = loc['targetLng'] as double? ?? 0.0;
+      final targetRadius = loc['targetRadius'] as int? ?? 100;
+
+      // If workplace coordinates are unconfigured (0,0) or GPS verification disabled, cannot reliably evaluate exit
+      if (!requireGps || (targetLat == 0.0 && targetLng == 0.0)) {
+        debugPrint('[AutoCheckOut] Cannot evaluate geofence exit: requireGps=$requireGps, coords=($targetLat, $targetLng). Aborting checkout.');
+        return false;
+      }
+
+      final distance = _distanceInMeters(
+        startLatitude: targetLat,
+        startLongitude: targetLng,
+        endLatitude: currentLatitude,
+        endLongitude: currentLongitude,
       );
+
+      final bool isInside = distance <= targetRadius;
       if (isInside) {
         return false; // Still inside office -> Do NOT auto-checkout
       }
 
-      // 6. Employee has crossed the office radius with NO Time Clocking and NO OD -> Auto Check-Out!
+      // 7. Employee has crossed the office radius with NO Time Clocking and NO OD -> Auto Check-Out!
       final time = exitTime ?? DateFormat('hh:mm:ss a').format(now);
       final employee = await _getEmployeeById(employeeId);
       final employeeName = employee?.name ?? existingRecord.employeeName;
@@ -908,7 +939,8 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       }
 
       return result.allowed;
-    } catch (_) {
+    } catch (e, stack) {
+      debugPrint('[AutoCheckOut] Error during geofence exit auto-checkout for employee $employeeId: $e\n$stack');
       return false;
     }
   }
@@ -924,11 +956,17 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         t.contains('clocking');
   }
 
-  Future<bool> _hasActiveTimeClocking(dynamic employeeId) async {
+  Future<bool> _hasActiveTimeClocking(dynamic employeeId, {String? date}) async {
     try {
       final snap = await _firestore.collection('time_clockings').get();
       final empStr = employeeId.toString().trim();
       final empDigits = empStr.replaceAll(RegExp(r'\D'), '');
+      final now = DateTime.now();
+      final todayFormatted = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final targetDate = (date != null && date.trim().isNotEmpty)
+          ? _normalizeDateKey(date.trim())
+          : _normalizeDateKey(todayFormatted);
+
       for (final doc in snap.docs) {
         final data = doc.data();
         final docEmpId = (data['employee_id'] ?? '').toString().trim();
@@ -936,6 +974,14 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         final matches = (docEmpId.toLowerCase() == empStr.toLowerCase()) ||
             (empDigits.isNotEmpty && docDigits == empDigits);
         if (matches) {
+          // Check date: start_time is an ISO8601 string like "2026-10-28T13:00:00"
+          final startTimeRaw = (data['start_time'] ?? '').toString().trim();
+          if (startTimeRaw.isNotEmpty) {
+            final entryDate = startTimeRaw.split('T').first;
+            if (_normalizeDateKey(entryDate) != targetDate) {
+              continue; // Skip clockings from other dates!
+            }
+          }
           final endTime = data['end_time'];
           if (endTime == null || endTime.toString().trim().isEmpty) {
             return true;
@@ -946,13 +992,23 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     return false;
   }
 
-  Future<bool> _hasActiveOdAssignment(dynamic employeeId) async {
+  Future<bool> _hasActiveOdAssignment(dynamic employeeId, {String? date}) async {
     try {
       final snap = await _firestore.collection('on_duty_assignments').get();
       final empStr = employeeId.toString().trim();
       final empDigits = empStr.replaceAll(RegExp(r'\D'), '');
+      final now = DateTime.now();
+      final todayFormatted = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final targetDate = (date != null && date.trim().isNotEmpty)
+          ? _normalizeDateKey(date.trim())
+          : _normalizeDateKey(todayFormatted);
+
       for (final doc in snap.docs) {
         final data = doc.data();
+        final docDate = (data['date'] ?? '').toString().trim();
+        if (docDate.isNotEmpty && _normalizeDateKey(docDate) != targetDate) {
+          continue; // Skip assignments from other dates!
+        }
         final docEmpId = (data['employee_id'] ?? '').toString().trim();
         final docDigits = docEmpId.replaceAll(RegExp(r'\D'), '');
         final matches = (docEmpId.toLowerCase() == empStr.toLowerCase()) ||
@@ -1437,7 +1493,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         employeeName: employeeName.isNotEmpty ? employeeName : existingRecord.employeeName,
         time: existingRecord.time.isNotEmpty ? existingRecord.time : time,
         checkInTime: existingRecord.checkInTime.isNotEmpty ? existingRecord.checkInTime : time,
-        checkOutTime: existingRecord.checkOutTime,
+        checkOutTime: '', // Active office session: reset so previous session checkout does not block this session
+        checkOutVerificationStatus: '',
+        checkOutSimilarityScore: 0.0,
         status: status,
         verificationStatus: existingRecord.verificationStatus.isNotEmpty
             ? existingRecord.verificationStatus

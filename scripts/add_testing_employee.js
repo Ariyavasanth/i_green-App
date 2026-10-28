@@ -64,10 +64,63 @@ function saveDocument(collection, docId, data) {
   });
 }
 
+function getDocument(collection, docId) {
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'firestore.googleapis.com',
+      path: `/v1/projects/${PROJECT_ID}/databases/(default)/documents/${collection}/${encodeURIComponent(docId)}?key=${API_KEY}`,
+      method: 'GET',
+    }, res => {
+      let respData = '';
+      res.on('data', chunk => respData += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(respData);
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve(parsed);
+          } else {
+            reject(new Error(`HTTP ${res.statusCode}: ${JSON.stringify(parsed)}`));
+          }
+        } catch(e) {
+          reject(e);
+        }
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+function parseFields(fields) {
+  if (!fields) return {};
+  const res = {};
+  for (const [k, v] of Object.entries(fields)) {
+    if (v.stringValue !== undefined) res[k] = v.stringValue;
+    else if (v.integerValue !== undefined) res[k] = parseInt(v.integerValue);
+    else if (v.doubleValue !== undefined) res[k] = parseFloat(v.doubleValue);
+    else if (v.booleanValue !== undefined) res[k] = v.booleanValue;
+    else if (v.mapValue !== undefined) res[k] = parseFields(v.mapValue.fields);
+    else res[k] = v;
+  }
+  return res;
+}
+
 async function addTestingEmployee() {
-  console.log('📖 Reading previous testing employee data from can23.json...');
-  const cand = JSON.parse(fs.readFileSync('can23.json', 'utf8'));
-  const empData = JSON.parse(cand.employee_data_json);
+  console.log('📖 Fetching candidate response for CAN-0023 from Firestore...');
+  let empData;
+  try {
+    if (fs.existsSync('can23.json')) {
+      const cand = JSON.parse(fs.readFileSync('can23.json', 'utf8'));
+      empData = JSON.parse(cand.employee_data_json);
+    } else {
+      const canDoc = await getDocument('candidate_responses', 'CAN-0023');
+      const parsed = parseFields(canDoc.fields);
+      empData = JSON.parse(parsed.employee_data_json);
+    }
+  } catch (err) {
+    console.error('Failed to load candidate response:', err);
+    throw err;
+  }
 
   const docId = 'EMP-1002';
   const integerId = 1002;
@@ -85,9 +138,14 @@ async function addTestingEmployee() {
   const educationItems = safeJsonList(empData.education_list_json);
   const experienceItems = safeJsonList(empData.experience_list_json);
   const documentItems = safeJsonList(empData.document_list_json);
+  let accessPerms = safeJsonList(empData.access_permissions);
+  if (!accessPerms.includes('Projects')) {
+    accessPerms.push('Projects');
+  }
 
   const testingEmployeeDoc = {
     ...empData,
+    access_permissions: JSON.stringify(accessPerms),
     id: integerId,
     employee_id: docId,
     status: 'Active',

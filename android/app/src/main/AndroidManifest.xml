@@ -19,7 +19,8 @@
         <service
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:foregroundServiceType="location"
-            android:exported="false" />
+            android:exported="false"
+            android:stopWithTask="false" />
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyAUjhxMMfOFsi6mmwz2mn0ADjfLKnUY4wk"/>

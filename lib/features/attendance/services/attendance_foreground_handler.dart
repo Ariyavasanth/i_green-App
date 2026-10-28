@@ -117,7 +117,12 @@ class AttendanceTaskHandler extends TaskHandler {
       final now = DateTime.now();
       final todayStr = DateFormat('yyyy-MM-dd').format(now);
       final record = await repo.getAttendanceRecordForDate(employeeId, todayStr);
+      final bool hasActiveSession = record != null &&
+          (record.sessions.any((s) => s.isActive) ||
+           (record.effectiveCheckInTime.isNotEmpty && record.checkOutTime.isEmpty));
+
       if (record != null &&
+          !hasActiveSession &&
           (record.checkOutTime.trim().isNotEmpty || record.status == 'Checked Out')) {
         // Employee checked out manually or via other means -> tear down background monitoring
         await prefs.remove('bg_monitored_employee_id');
