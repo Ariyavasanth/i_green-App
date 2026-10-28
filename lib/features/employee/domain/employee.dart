@@ -382,6 +382,8 @@ class Employee {
           pClean == 'humanresource' ||
           pClean == 'organizationmanagement' ||
           pClean == 'organizationstructure' ||
+          pClean == 'hierarchy' ||
+          pClean == 'employeehierarchy' ||
           pClean == 'employeemanagement' ||
           pClean == 'responses' ||
           pClean == 'attendance' ||
@@ -483,6 +485,7 @@ class Employee {
     'Home',
     'Organization Management',
     'Organization Structure',
+    'Hierarchy',
     'Responses',
     'Employee Management',
     'Attendance',
@@ -531,7 +534,11 @@ class Employee {
 
   static const Map<String, List<String>> sidebarPermissionsByCategory = {
     'OVERVIEW': ['Home'],
-    'ORGANIZATION': ['Organization Management', 'Organization Structure'],
+    'ORGANIZATION': [
+      'Organization Management',
+      'Organization Structure',
+      'Hierarchy',
+    ],
     'EMPLOYEE': [
       'Responses',
       'Employee Management',
