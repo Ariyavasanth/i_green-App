@@ -640,7 +640,7 @@ class _EmployeeManagementPageState
 
     final buffer = StringBuffer();
     buffer.writeln(
-      'Employee ID,Employee Name,Organization Name,Email Address,Phone Number,Department,Designation,Joining Date,Status',
+      'Employee ID,Employee Name,Organization Name,Email Address,Phone Number,Department,Designation,Joining Date,Status,Blood Group,Marital Status,Aadhaar No,PAN No,Driving License No,Passport No,Present Address,Permanent Address',
     );
     for (final emp in employees) {
       String orgName = emp.organizationName.trim();
@@ -674,7 +674,7 @@ class _EmployeeManagementPageState
       }
 
       buffer.writeln(
-        '"${emp.employeeId}","${emp.fullName.replaceAll('"', '""')}","${orgName.replaceAll('"', '""')}","${emp.emailAddress}","${emp.phoneNumber}","${emp.department.replaceAll('"', '""')}","${emp.designation.replaceAll('"', '""')}","${emp.joiningDate}","${emp.status}"',
+        '"${emp.employeeId}","${emp.fullName.replaceAll('"', '""')}","${orgName.replaceAll('"', '""')}","${emp.emailAddress}","${emp.phoneNumber}","${emp.department.replaceAll('"', '""')}","${emp.designation.replaceAll('"', '""')}","${emp.joiningDate}","${emp.status}","${emp.bloodGroup}","${emp.maritalStatus}","${emp.aadhaarNumber}","${emp.panNumber}","${emp.drivingLicenseNumber}","${emp.passportNumber}","${emp.presentAddress.replaceAll('"', '""').replaceAll('\n', ' ').replaceAll('\r', '').trim()}","${emp.permanentAddress.replaceAll('"', '""').replaceAll('\n', ' ').replaceAll('\r', '').trim()}"',
       );
     }
 
