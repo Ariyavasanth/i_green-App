@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -2368,98 +2370,103 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
           // Items Table
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: _isMobile ? 550 : 0),
-                child: Table(
-                  border: TableBorder.all(color: const Color(0xFFE2E8F0)),
-                  columnWidths: const {
-                    0: FlexColumnWidth(4),
-                    1: FlexColumnWidth(2),
-                    2: FlexColumnWidth(2),
-                    3: FlexColumnWidth(2),
-                    4: FlexColumnWidth(2),
-                    5: FixedColumnWidth(36),
-                  },
-                  children: [
-                    TableRow(
-                      decoration: const BoxDecoration(color: Color(0xFF414A51)),
-                      children: const [
-                        Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            child: Text('Description',
-                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white))),
-                        Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            child: Text('Unit',
-                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white))),
-                        Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            child: Text('Quantity',
-                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white))),
-                        Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            child: Text('Rate',
-                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white))),
-                        Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            child: Text('Amount (₹)',
-                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white))),
-                        Padding(padding: EdgeInsets.all(8), child: Text('')),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final tableWidth = math.max(constraints.maxWidth, 600.0);
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: tableWidth,
+                    child: Table(
+                      border: TableBorder.all(color: const Color(0xFFE2E8F0)),
+                      columnWidths: const {
+                        0: FlexColumnWidth(4),
+                        1: FlexColumnWidth(2),
+                        2: FlexColumnWidth(2),
+                        3: FlexColumnWidth(2),
+                        4: FlexColumnWidth(2),
+                        5: FixedColumnWidth(36),
+                      },
+                      children: [
+                        TableRow(
+                          decoration: const BoxDecoration(color: Color(0xFF414A51)),
+                          children: const [
+                            Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                child: Text('Description',
+                                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white))),
+                            Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                child: Text('Unit',
+                                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white))),
+                            Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                child: Text('Quantity',
+                                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white))),
+                            Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                child: Text('Rate',
+                                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white))),
+                            Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                child: Text('Amount (₹)',
+                                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white))),
+                            Padding(padding: EdgeInsets.all(8), child: Text('')),
+                          ],
+                        ),
+                        if (_tenderDescriptions.isEmpty)
+                          TableRow(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                                child: Text('No breakdown items added yet.',
+                                    style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500)),
+                              ),
+                              const SizedBox(),
+                              const SizedBox(),
+                              const SizedBox(),
+                              const SizedBox(),
+                              const SizedBox(),
+                            ],
+                          )
+                        else
+                          ..._tenderDescriptions.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final item = entry.value;
+                            return TableRow(
+                              decoration: BoxDecoration(
+                                color: idx.isEven ? Colors.white : const Color(0xFFF8FAFC),
+                              ),
+                              children: [
+                                Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    child: Text(item.description, style: const TextStyle(fontSize: 12))),
+                                Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    child: Text(item.unit, style: const TextStyle(fontSize: 12))),
+                                Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    child: Text(item.quantity.toString(), style: const TextStyle(fontSize: 12))),
+                                Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    child: Text('₹${item.rate.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12))),
+                                Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    child: Text('₹${item.amount.toStringAsFixed(2)}',
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))),
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Colors.redAccent),
+                                  onPressed: () => setState(() => _tenderDescriptions.removeAt(idx)),
+                                ),
+                              ],
+                            );
+                          }),
                       ],
                     ),
-                    if (_tenderDescriptions.isEmpty)
-                      TableRow(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-                            child: Text('No breakdown items added yet.',
-                                style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500)),
-                          ),
-                          const SizedBox(),
-                          const SizedBox(),
-                          const SizedBox(),
-                          const SizedBox(),
-                          const SizedBox(),
-                        ],
-                      )
-                    else
-                      ..._tenderDescriptions.asMap().entries.map((entry) {
-                        final idx = entry.key;
-                        final item = entry.value;
-                        return TableRow(
-                          decoration: BoxDecoration(
-                            color: idx.isEven ? Colors.white : const Color(0xFFF8FAFC),
-                          ),
-                          children: [
-                            Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                child: Text(item.description, style: const TextStyle(fontSize: 12))),
-                            Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                child: Text(item.unit, style: const TextStyle(fontSize: 12))),
-                            Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                child: Text(item.quantity.toString(), style: const TextStyle(fontSize: 12))),
-                            Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                child: Text('₹${item.rate.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12))),
-                            Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                child: Text('₹${item.amount.toStringAsFixed(2)}',
-                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))),
-                            IconButton(
-                              padding: EdgeInsets.zero,
-                              icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Colors.redAccent),
-                              onPressed: () => setState(() => _tenderDescriptions.removeAt(idx)),
-                            ),
-                          ],
-                        );
-                      }),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -3537,96 +3544,101 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
           // Deductions Table
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: _isMobile ? 480 : 0),
-                child: Table(
-                  border: TableBorder.all(color: const Color(0xFFE2E8F0)),
-                  columnWidths: const {
-                    0: FlexColumnWidth(3),
-                    1: FlexColumnWidth(4),
-                    2: FlexColumnWidth(3),
-                    3: FixedColumnWidth(36),
-                  },
-                  children: [
-                    TableRow(
-                      decoration: const BoxDecoration(color: Color(0xFF414A51)),
-                      children: const [
-                        Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            child: Text('Deduction ID',
-                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white))),
-                        Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            child: Text('Deduction Type',
-                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white))),
-                        Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            child: Text('Amount (₹)',
-                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white))),
-                        Padding(padding: EdgeInsets.all(8), child: Text('')),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final tableWidth = math.max(constraints.maxWidth, 500.0);
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: tableWidth,
+                    child: Table(
+                      border: TableBorder.all(color: const Color(0xFFE2E8F0)),
+                      columnWidths: const {
+                        0: FlexColumnWidth(3),
+                        1: FlexColumnWidth(4),
+                        2: FlexColumnWidth(3),
+                        3: FixedColumnWidth(36),
+                      },
+                      children: [
+                        TableRow(
+                          decoration: const BoxDecoration(color: Color(0xFF414A51)),
+                          children: const [
+                            Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                child: Text('Deduction ID',
+                                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white))),
+                            Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                child: Text('Deduction Type',
+                                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white))),
+                            Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                child: Text('Amount (₹)',
+                                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white))),
+                            Padding(padding: EdgeInsets.all(8), child: Text('')),
+                          ],
+                        ),
+                        if (_deductions.isEmpty)
+                          TableRow(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                                child: Text('No deduction entries recorded.',
+                                    style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500)),
+                              ),
+                              const SizedBox(),
+                              const SizedBox(),
+                              const SizedBox(),
+                            ],
+                          )
+                        else ...[
+                          ..._deductions.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final d = entry.value;
+                            return TableRow(
+                              decoration: BoxDecoration(
+                                color: idx.isEven ? Colors.white : const Color(0xFFF8FAFC),
+                              ),
+                              children: [
+                                Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    child: Text(d.deductionId, style: const TextStyle(fontSize: 12))),
+                                Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    child: Text(d.deductionType, style: const TextStyle(fontSize: 12))),
+                                Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    child: Text('₹${d.deductionAmount.toStringAsFixed(2)}',
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))),
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Colors.redAccent),
+                                  onPressed: () => setState(() => _deductions.removeAt(idx)),
+                                ),
+                              ],
+                            );
+                          }),
+                          TableRow(
+                            decoration: const BoxDecoration(color: Color(0xFFF1F5F9)),
+                            children: [
+                              const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  child: Text('Total Deductions',
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF334155)))),
+                              const SizedBox(),
+                              Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  child: Text('₹${totalDeductions.toStringAsFixed(2)}',
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.redAccent))),
+                              const SizedBox(),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
-                    if (_deductions.isEmpty)
-                      TableRow(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-                            child: Text('No deduction entries recorded.',
-                                style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500)),
-                          ),
-                          const SizedBox(),
-                          const SizedBox(),
-                          const SizedBox(),
-                        ],
-                      )
-                    else ...[
-                      ..._deductions.asMap().entries.map((entry) {
-                        final idx = entry.key;
-                        final d = entry.value;
-                        return TableRow(
-                          decoration: BoxDecoration(
-                            color: idx.isEven ? Colors.white : const Color(0xFFF8FAFC),
-                          ),
-                          children: [
-                            Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                child: Text(d.deductionId, style: const TextStyle(fontSize: 12))),
-                            Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                child: Text(d.deductionType, style: const TextStyle(fontSize: 12))),
-                            Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                child: Text('₹${d.deductionAmount.toStringAsFixed(2)}',
-                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))),
-                            IconButton(
-                              padding: EdgeInsets.zero,
-                              icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Colors.redAccent),
-                              onPressed: () => setState(() => _deductions.removeAt(idx)),
-                            ),
-                          ],
-                        );
-                      }),
-                      TableRow(
-                        decoration: const BoxDecoration(color: Color(0xFFF1F5F9)),
-                        children: [
-                          const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              child: Text('Total Deductions',
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF334155)))),
-                          const SizedBox(),
-                          Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              child: Text('₹${totalDeductions.toStringAsFixed(2)}',
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.redAccent))),
-                          const SizedBox(),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
           ),
         ],
