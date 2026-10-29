@@ -12,6 +12,7 @@ import '../../screens/modules/factory_module_screen.dart';
 import '../../features/projects/presentation/screens/project_dashboard_screen.dart';
 import '../../features/projects/presentation/screens/new_project_form_screen.dart';
 import '../../features/projects/presentation/screens/assigned_projects_screen.dart';
+import '../../features/projects/presentation/screens/edit_project_form_screen.dart';
 import '../../features/projects/domain/models/site_project.dart';
 
 import '../../features/app_shell/presentation/app_shell.dart';
@@ -274,7 +275,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, state) {
           final id = state.pathParameters['id'] ?? '';
           final project = state.extra as SiteProject?;
-          return NewProjectFormScreen(project: project, projectId: id);
+          return EditProjectFormScreen(project: project, projectId: id);
         },
       ),
       GoRoute(path: '/module/factory', builder: (_, _) => const FactoryModuleScreen()),

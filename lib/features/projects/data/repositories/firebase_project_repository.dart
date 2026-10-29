@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../domain/models/project_audit_log.dart';
 import '../../domain/models/project_document.dart';
 import '../../domain/models/site_project.dart';
 import '../../domain/repositories/project_repository.dart';
@@ -13,8 +14,12 @@ class FirebaseProjectRepository implements ProjectRepository {
   FirebaseProjectRepository({
     FirebaseFirestore? firestore,
     FirebaseStorage? storage,
+    String? storageBucket,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _storage = storage ?? FirebaseStorage.instance;
+        _storage = storage ??
+            (storageBucket != null && storageBucket.isNotEmpty
+                ? FirebaseStorage.instanceFor(bucket: storageBucket)
+                : FirebaseStorage.instance);
 
   final FirebaseFirestore _firestore;
   final FirebaseStorage _storage;
@@ -24,6 +29,9 @@ class FirebaseProjectRepository implements ProjectRepository {
 
   CollectionReference<Map<String, dynamic>> get _tenderTypesRef =>
       _firestore.collection('tender_types');
+
+  CollectionReference<Map<String, dynamic>> _auditLogsRef(String projectId) =>
+      _projectsRef.doc(projectId).collection('audit_logs');
 
   static const List<String> _defaultTenderTypes = [
     'Open Tender',
@@ -56,32 +64,41 @@ class FirebaseProjectRepository implements ProjectRepository {
       final tenderDocs = List<ProjectDocument>.from(project.tenderSpecDocuments);
       final bqrDocs = List<ProjectDocument>.from(project.bqrDocuments);
       final emdDocs = List<ProjectDocument>.from(project.emdDocuments);
+      final sdDateDocs = List<ProjectDocument>.from(project.sdDateDocuments);
+      final boqDocs = List<ProjectDocument>.from(project.boqDocuments);
+      final projectDetailsDocs = List<ProjectDocument>.from(project.projectDetailsDocuments);
+      final workOrderDocs = List<ProjectDocument>.from(project.workOrderDocuments);
+      final profileDrawingDocs = List<ProjectDocument>.from(project.profileDrawingDocuments);
+      final agreementDocs = List<ProjectDocument>.from(project.agreementDocuments);
+      final supplyMaterialsDocs = List<ProjectDocument>.from(project.supplyMaterialsDocuments);
+      final billingDetailsDocs = List<ProjectDocument>.from(project.billingDetailsDocuments);
+      final emdRetentionDocs = List<ProjectDocument>.from(project.emdRetentionDocuments);
+      final sdRetentionDocs = List<ProjectDocument>.from(project.sdRetentionDocuments);
+      final otherRetentionDocs = List<ProjectDocument>.from(project.otherRetentionDocuments);
 
       if (filesByCategory != null) {
-        if (filesByCategory['tender_spec'] != null) {
-          final uploaded = await _uploadFiles(
-            storageFolderId,
-            'tender_spec',
-            filesByCategory['tender_spec']!,
-          );
-          tenderDocs.addAll(uploaded);
+        Future<void> uploadCategory(String key, List<ProjectDocument> target) async {
+          final files = filesByCategory[key];
+          if (files != null && files.isNotEmpty) {
+            final uploaded = await _uploadFiles(storageFolderId, key, files);
+            target.addAll(uploaded);
+          }
         }
-        if (filesByCategory['bqr'] != null) {
-          final uploaded = await _uploadFiles(
-            storageFolderId,
-            'bqr',
-            filesByCategory['bqr']!,
-          );
-          bqrDocs.addAll(uploaded);
-        }
-        if (filesByCategory['emd'] != null) {
-          final uploaded = await _uploadFiles(
-            storageFolderId,
-            'emd',
-            filesByCategory['emd']!,
-          );
-          emdDocs.addAll(uploaded);
-        }
+
+        await uploadCategory('tender_spec', tenderDocs);
+        await uploadCategory('bqr', bqrDocs);
+        await uploadCategory('emd', emdDocs);
+        await uploadCategory('sd_date', sdDateDocs);
+        await uploadCategory('boq', boqDocs);
+        await uploadCategory('project_details', projectDetailsDocs);
+        await uploadCategory('work_order', workOrderDocs);
+        await uploadCategory('profile_drawing', profileDrawingDocs);
+        await uploadCategory('agreement', agreementDocs);
+        await uploadCategory('supply_materials', supplyMaterialsDocs);
+        await uploadCategory('billing_details', billingDetailsDocs);
+        await uploadCategory('emd_retention', emdRetentionDocs);
+        await uploadCategory('sd_retention', sdRetentionDocs);
+        await uploadCategory('other_retention', otherRetentionDocs);
       }
 
       // 3. Assemble final project
@@ -90,6 +107,17 @@ class FirebaseProjectRepository implements ProjectRepository {
         tenderSpecDocuments: tenderDocs,
         bqrDocuments: bqrDocs,
         emdDocuments: emdDocs,
+        sdDateDocuments: sdDateDocs,
+        boqDocuments: boqDocs,
+        projectDetailsDocuments: projectDetailsDocs,
+        workOrderDocuments: workOrderDocs,
+        profileDrawingDocuments: profileDrawingDocs,
+        agreementDocuments: agreementDocs,
+        supplyMaterialsDocuments: supplyMaterialsDocs,
+        billingDetailsDocuments: billingDetailsDocs,
+        emdRetentionDocuments: emdRetentionDocs,
+        sdRetentionDocuments: sdRetentionDocs,
+        otherRetentionDocuments: otherRetentionDocs,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -127,8 +155,11 @@ class FirebaseProjectRepository implements ProjectRepository {
         }
 
         if (bytes != null) {
-          final cleanFileName = file.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-          storagePath = 'project module/$projectId/${DateTime.now().millisecondsSinceEpoch}_$cleanFileName';
+          final cleanFileName =
+              file.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+          final timestamp = DateTime.now().millisecondsSinceEpoch;
+          storagePath =
+              'site_projects/$projectId/$category/${timestamp}_$cleanFileName';
           final ref = _storage.ref().child(storagePath);
           final uploadTask = await ref.putData(
             bytes,
@@ -230,6 +261,10 @@ class FirebaseProjectRepository implements ProjectRepository {
   Future<void> updateProject(
     SiteProject project, {
     Map<String, List<PlatformFile>>? filesByCategory,
+    String? auditNote,
+    String? auditEmployeeId,
+    String? auditEmployeeName,
+    String? auditDesignation,
   }) async {
     try {
       final storageFolderId = (project.projectCode.trim().isNotEmpty
@@ -240,41 +275,58 @@ class FirebaseProjectRepository implements ProjectRepository {
       final tenderDocs = List<ProjectDocument>.from(project.tenderSpecDocuments);
       final bqrDocs = List<ProjectDocument>.from(project.bqrDocuments);
       final emdDocs = List<ProjectDocument>.from(project.emdDocuments);
+      final sdDateDocs = List<ProjectDocument>.from(project.sdDateDocuments);
+      final boqDocs = List<ProjectDocument>.from(project.boqDocuments);
+      final projectDetailsDocs = List<ProjectDocument>.from(project.projectDetailsDocuments);
+      final workOrderDocs = List<ProjectDocument>.from(project.workOrderDocuments);
+      final profileDrawingDocs = List<ProjectDocument>.from(project.profileDrawingDocuments);
+      final agreementDocs = List<ProjectDocument>.from(project.agreementDocuments);
+      final supplyMaterialsDocs = List<ProjectDocument>.from(project.supplyMaterialsDocuments);
+      final billingDetailsDocs = List<ProjectDocument>.from(project.billingDetailsDocuments);
+      final emdRetentionDocs = List<ProjectDocument>.from(project.emdRetentionDocuments);
+      final sdRetentionDocs = List<ProjectDocument>.from(project.sdRetentionDocuments);
+      final otherRetentionDocs = List<ProjectDocument>.from(project.otherRetentionDocuments);
 
       if (filesByCategory != null) {
-        if (filesByCategory['tender_spec'] != null &&
-            filesByCategory['tender_spec']!.isNotEmpty) {
-          final uploaded = await _uploadFiles(
-            storageFolderId,
-            'tender_spec',
-            filesByCategory['tender_spec']!,
-          );
-          tenderDocs.addAll(uploaded);
+        Future<void> uploadCategory(String key, List<ProjectDocument> target) async {
+          final files = filesByCategory[key];
+          if (files != null && files.isNotEmpty) {
+            final uploaded = await _uploadFiles(storageFolderId, key, files);
+            target.addAll(uploaded);
+          }
         }
-        if (filesByCategory['bqr'] != null &&
-            filesByCategory['bqr']!.isNotEmpty) {
-          final uploaded = await _uploadFiles(
-            storageFolderId,
-            'bqr',
-            filesByCategory['bqr']!,
-          );
-          bqrDocs.addAll(uploaded);
-        }
-        if (filesByCategory['emd'] != null &&
-            filesByCategory['emd']!.isNotEmpty) {
-          final uploaded = await _uploadFiles(
-            storageFolderId,
-            'emd',
-            filesByCategory['emd']!,
-          );
-          emdDocs.addAll(uploaded);
-        }
+
+        await uploadCategory('tender_spec', tenderDocs);
+        await uploadCategory('bqr', bqrDocs);
+        await uploadCategory('emd', emdDocs);
+        await uploadCategory('sd_date', sdDateDocs);
+        await uploadCategory('boq', boqDocs);
+        await uploadCategory('project_details', projectDetailsDocs);
+        await uploadCategory('work_order', workOrderDocs);
+        await uploadCategory('profile_drawing', profileDrawingDocs);
+        await uploadCategory('agreement', agreementDocs);
+        await uploadCategory('supply_materials', supplyMaterialsDocs);
+        await uploadCategory('billing_details', billingDetailsDocs);
+        await uploadCategory('emd_retention', emdRetentionDocs);
+        await uploadCategory('sd_retention', sdRetentionDocs);
+        await uploadCategory('other_retention', otherRetentionDocs);
       }
 
       final finalProject = project.copyWith(
         tenderSpecDocuments: tenderDocs,
         bqrDocuments: bqrDocs,
         emdDocuments: emdDocs,
+        sdDateDocuments: sdDateDocs,
+        boqDocuments: boqDocs,
+        projectDetailsDocuments: projectDetailsDocs,
+        workOrderDocuments: workOrderDocs,
+        profileDrawingDocuments: profileDrawingDocs,
+        agreementDocuments: agreementDocs,
+        supplyMaterialsDocuments: supplyMaterialsDocs,
+        billingDetailsDocuments: billingDetailsDocs,
+        emdRetentionDocuments: emdRetentionDocs,
+        sdRetentionDocuments: sdRetentionDocs,
+        otherRetentionDocuments: otherRetentionDocs,
         updatedAt: DateTime.now(),
       );
 
@@ -288,10 +340,64 @@ class FirebaseProjectRepository implements ProjectRepository {
       }
 
       await _projectsRef.doc(project.id).update(data);
+
+      // Record audit history log if audit details are provided
+      if ((auditEmployeeId != null && auditEmployeeId.isNotEmpty) ||
+          (auditNote != null && auditNote.isNotEmpty)) {
+        final auditDoc = _auditLogsRef(project.id).doc();
+        final log = ProjectAuditLog(
+          id: auditDoc.id,
+          projectId: project.id,
+          employeeId: auditEmployeeId ?? project.updatedBy ?? 'EMP-UNKNOWN',
+          employeeName: auditEmployeeName ?? project.updatedByName ?? 'Unknown',
+          designation: auditDesignation ?? 'Staff',
+          changeNote: auditNote ?? 'Updated project details',
+          timestamp: DateTime.now(),
+        );
+        await auditDoc.set(log.toJson());
+      }
     } catch (e, stack) {
       developer.log('Error updating project ${project.id}: $e',
           name: 'FirebaseProjectRepository', error: e, stackTrace: stack);
       rethrow;
+    }
+  }
+
+  @override
+  Future<List<ProjectAuditLog>> getProjectAuditLogs(String projectId) async {
+    try {
+      final snap = await _auditLogsRef(projectId).orderBy('timestamp', descending: true).get();
+      return snap.docs
+          .map((doc) => ProjectAuditLog.fromJson(doc.data(), docId: doc.id))
+          .toList();
+    } catch (e, stack) {
+      developer.log('Error fetching audit logs for $projectId: $e',
+          name: 'FirebaseProjectRepository', error: e, stackTrace: stack);
+      try {
+        final snap = await _auditLogsRef(projectId).get();
+        final list = snap.docs
+            .map((doc) => ProjectAuditLog.fromJson(doc.data(), docId: doc.id))
+            .toList();
+        list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        return list;
+      } catch (_) {
+        return [];
+      }
+    }
+  }
+
+  @override
+  Future<void> addAuditLog(ProjectAuditLog log) async {
+    try {
+      final docRef = _auditLogsRef(log.projectId).doc();
+      final toSave = {
+        ...log.toJson(),
+        'id': docRef.id,
+      };
+      await docRef.set(toSave);
+    } catch (e, stack) {
+      developer.log('Error adding audit log: $e',
+          name: 'FirebaseProjectRepository', error: e, stackTrace: stack);
     }
   }
 

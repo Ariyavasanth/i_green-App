@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 
+import '../models/project_audit_log.dart';
 import '../models/site_project.dart';
 
 abstract class ProjectRepository {
@@ -18,10 +19,15 @@ abstract class ProjectRepository {
   /// Retrieves a specific site project by its ID.
   Future<SiteProject?> getProjectById(String id);
 
-  /// Updates an existing site project, uploading newly attached files (if any).
+  /// Updates an existing site project, uploading newly attached files (if any),
+  /// and automatically records an audit log entry if audit details are provided.
   Future<void> updateProject(
     SiteProject project, {
     Map<String, List<PlatformFile>>? filesByCategory,
+    String? auditNote,
+    String? auditEmployeeId,
+    String? auditEmployeeName,
+    String? auditDesignation,
   });
 
   /// Deletes a site project by its ID.
@@ -32,4 +38,10 @@ abstract class ProjectRepository {
 
   /// Retrieves the next project sequence number for code generation.
   Future<int> getNextProjectSequence();
+
+  /// Retrieves the full audit history for a given project.
+  Future<List<ProjectAuditLog>> getProjectAuditLogs(String projectId);
+
+  /// Records an audit log entry for a project.
+  Future<void> addAuditLog(ProjectAuditLog log);
 }
