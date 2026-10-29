@@ -35,6 +35,9 @@ import 'widgets/monthly_attendance_result_view.dart';
 import 'widgets/all_employees_attendance_view.dart';
 import '../../payroll/providers/payroll_providers.dart';
 import '../../permission/providers/permission_providers.dart';
+import '../../attendance/domain/attendance_correction_request.dart';
+import '../../attendance/providers/attendance_correction_providers.dart';
+import 'widgets/admin_attendance_correction_review_dialog.dart';
 
 enum AttendanceCategoryTab {
   allEmployees,
@@ -43,6 +46,7 @@ enum AttendanceCategoryTab {
   siteVisitAttendance,
   attendanceSettings,
   auditLogs,
+  correctionRequests,
 }
 
 enum AttendanceViewMode { matrix, table }
@@ -699,6 +703,9 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
 
   Widget _buildCategoryTabBar() {
+    final pendingRequestsAsync = ref.watch(pendingCorrectionRequestsProvider);
+    final pendingCount = pendingRequestsAsync.valueOrNull?.length ?? 0;
+
     return Container(
       width: double.infinity,
       height: 56,
@@ -737,6 +744,12 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
             icon: Icons.location_on_outlined,
             label: 'Site',
           ),
+          _buildCategoryTabItem(
+            tab: AttendanceCategoryTab.correctionRequests,
+            icon: Icons.history_toggle_off,
+            label: 'Requests',
+            badgeCount: pendingCount > 0 ? pendingCount : null,
+          ),
         ],
       ),
     );
@@ -746,6 +759,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     required AttendanceCategoryTab tab,
     required IconData icon,
     required String label,
+    int? badgeCount,
   }) {
     final isSelected = _activeTab == tab;
     const primaryColor = Color(0xFF9CC70A);
@@ -778,10 +792,18 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                size: 22,
-                color: isSelected ? primaryColor : const Color(0xFF64748B),
+              Badge(
+                isLabelVisible: badgeCount != null && badgeCount > 0,
+                label: Text(
+                  badgeCount.toString(),
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                backgroundColor: const Color(0xFFE53935),
+                child: Icon(
+                  icon,
+                  size: 22,
+                  color: isSelected ? primaryColor : const Color(0xFF64748B),
+                ),
               ),
               const SizedBox(height: 3),
               Text(
@@ -897,7 +919,204 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
       case AttendanceCategoryTab.auditLogs:
         return const AttendanceAuditLogsEmbeddedView();
+
+      case AttendanceCategoryTab.correctionRequests:
+        return _buildCorrectionRequestsView(isMobile);
     }
+  }
+
+  Widget _buildCorrectionRequestsView(bool isMobile) {
+    final pendingRequestsAsync = ref.watch(pendingCorrectionRequestsProvider);
+
+    return pendingRequestsAsync.when(
+      loading: () => const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 40),
+          child: CircularProgressIndicator(color: Color(0xFF9CC70A)),
+        ),
+      ),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 40),
+          child: Text('Error loading requests: $e', style: const TextStyle(color: Color(0xFFE53935))),
+        ),
+      ),
+      data: (requests) {
+        if (requests.isEmpty) {
+          return Center(
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.check_circle_outline, size: 54, color: Color(0xFF9CC70A)),
+                  SizedBox(height: 12),
+                  Text(
+                    'No Pending Correction Requests',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'All accidental check-out requests have been reviewed.',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          itemCount: requests.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          itemBuilder: (context, index) {
+            final req = requests[index];
+            return Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.person_outline, size: 20, color: Color(0xFF414A51)),
+                          ),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                req.employeeName,
+                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                              ),
+                              Text(
+                                '${req.employeeCode} • ${req.department.isNotEmpty ? req.department : "General"}',
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFF59E0B)),
+                        ),
+                        child: Text(
+                          req.date,
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  const SizedBox(height: 12),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Accidental Check-Out', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                            const SizedBox(height: 2),
+                            Text(
+                              req.accidentalCheckOutTime,
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFC62828)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Intended Activity', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${req.activityType} (${req.startTime})',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  if (req.description.isNotEmpty) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Reason: "${req.description}"',
+                        style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Color(0xFF475569)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF9CC70A),
+                        foregroundColor: const Color(0xFF414A51),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AdminAttendanceCorrectionReviewDialog(request: req),
+                        );
+                      },
+                      icon: const Icon(Icons.rate_review_outlined, size: 18),
+                      label: const Text('Review & Reopen Shift', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildAllEmployeesAttendanceView({

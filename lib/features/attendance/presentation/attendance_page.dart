@@ -30,6 +30,8 @@ import '../providers/attendance_providers.dart';
 import '../../attendance_management/providers/attendance_management_providers.dart';
 import '../services/attendance_location_service.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../providers/attendance_correction_providers.dart';
+import 'widgets/request_accidental_checkout_dialog.dart';
 
 class AttendancePage extends ConsumerStatefulWidget {
   const AttendancePage({super.key});
@@ -365,6 +367,17 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     final todayAttendanceAsync = ref.watch(todayAttendanceRecordProvider(currentEmp.id));
     final leaveAsync = ref.watch(attendanceLeaveRequestsProvider(currentEmp.id));
     final userLeaveRequestsAsync = ref.watch(leaveRequestsProvider(currentEmp.id));
+
+    ref.listen<AsyncValue<AttendanceRecord?>>(todayAttendanceRecordProvider(currentEmp.id), (previous, next) {
+      final prevRec = previous?.valueOrNull;
+      final nextRec = next.valueOrNull;
+      if (prevRec != null && nextRec != null) {
+        if (prevRec.checkOutTime.isNotEmpty && nextRec.checkOutTime.isEmpty && nextRec.effectiveCheckInTime.isNotEmpty) {
+          AttendanceLocationService.instance.startBackgroundMonitoring(currentEmp.id);
+          AttendanceLocationService.instance.startPeriodicGeofenceMonitoring(ref: ref, employeeId: currentEmp.id);
+        }
+      }
+    });
 
     final activeTab = ref.watch(attendanceActiveTabProvider);
     _currentTabIndex = activeTab;
@@ -3939,6 +3952,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 10),
+                _buildAccidentalCheckOutButton(todayRecord, today),
               ],
 
               const SizedBox(height: 16),
@@ -4001,6 +4016,68 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildAccidentalCheckOutButton(AttendanceRecord? record, DateTime today) {
+    final currentEmp = ref.read(currentEmployeeProvider);
+    if (record == null || currentEmp == null) return const SizedBox.shrink();
+
+    final requestsAsync = ref.watch(employeeCorrectionRequestsProvider(currentEmp.id));
+    final dateStr = DateFormat('yyyy-MM-dd').format(today);
+    final hasPending = requestsAsync.valueOrNull?.any((r) =>
+        (r.date == dateStr || r.date.replaceAll('-', '') == dateStr.replaceAll('-', '')) &&
+        r.status == 'pending') ?? false;
+
+    if (hasPending) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF3C7),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFF59E0B)),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.hourglass_top, size: 16, color: Color(0xFFB45309)),
+            SizedBox(width: 8),
+            Text(
+              'Correction Request Pending Admin Review',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: double.infinity,
+      height: 42,
+      child: OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFF414A51),
+          side: const BorderSide(color: Color(0xFF9CC70A), width: 1.5),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          backgroundColor: Colors.white,
+        ),
+        onPressed: () {
+          showDialog(
+            context: context,
+            builder: (ctx) => RequestAccidentalCheckoutDialog(
+              record: record,
+              employee: currentEmp,
+              date: today,
+            ),
+          );
+        },
+        icon: const Icon(Icons.history_toggle_off, size: 18, color: Color(0xFF414A51)),
+        label: const Text(
+          'Accidental checkout request',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+        ),
+      ),
     );
   }
 
