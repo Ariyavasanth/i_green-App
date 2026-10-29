@@ -227,10 +227,66 @@ class FirebaseProjectRepository implements ProjectRepository {
   }
 
   @override
-  Future<void> updateProject(SiteProject project) async {
+  Future<void> updateProject(
+    SiteProject project, {
+    Map<String, List<PlatformFile>>? filesByCategory,
+  }) async {
     try {
-      final data = project.toJson();
+      final storageFolderId = (project.projectCode.trim().isNotEmpty
+              ? project.projectCode.trim()
+              : project.id)
+          .replaceAll('/', '_');
+
+      final tenderDocs = List<ProjectDocument>.from(project.tenderSpecDocuments);
+      final bqrDocs = List<ProjectDocument>.from(project.bqrDocuments);
+      final emdDocs = List<ProjectDocument>.from(project.emdDocuments);
+
+      if (filesByCategory != null) {
+        if (filesByCategory['tender_spec'] != null &&
+            filesByCategory['tender_spec']!.isNotEmpty) {
+          final uploaded = await _uploadFiles(
+            storageFolderId,
+            'tender_spec',
+            filesByCategory['tender_spec']!,
+          );
+          tenderDocs.addAll(uploaded);
+        }
+        if (filesByCategory['bqr'] != null &&
+            filesByCategory['bqr']!.isNotEmpty) {
+          final uploaded = await _uploadFiles(
+            storageFolderId,
+            'bqr',
+            filesByCategory['bqr']!,
+          );
+          bqrDocs.addAll(uploaded);
+        }
+        if (filesByCategory['emd'] != null &&
+            filesByCategory['emd']!.isNotEmpty) {
+          final uploaded = await _uploadFiles(
+            storageFolderId,
+            'emd',
+            filesByCategory['emd']!,
+          );
+          emdDocs.addAll(uploaded);
+        }
+      }
+
+      final finalProject = project.copyWith(
+        tenderSpecDocuments: tenderDocs,
+        bqrDocuments: bqrDocs,
+        emdDocuments: emdDocs,
+        updatedAt: DateTime.now(),
+      );
+
+      final data = finalProject.toJson();
       data['updated_at'] = DateTime.now().toIso8601String();
+      if (finalProject.updatedBy != null) {
+        data['updated_by'] = finalProject.updatedBy;
+      }
+      if (finalProject.updatedByName != null) {
+        data['updated_by_name'] = finalProject.updatedByName;
+      }
+
       await _projectsRef.doc(project.id).update(data);
     } catch (e, stack) {
       developer.log('Error updating project ${project.id}: $e',

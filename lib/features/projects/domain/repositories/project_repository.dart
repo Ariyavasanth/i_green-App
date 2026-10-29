@@ -18,8 +18,11 @@ abstract class ProjectRepository {
   /// Retrieves a specific site project by its ID.
   Future<SiteProject?> getProjectById(String id);
 
-  /// Updates an existing site project.
-  Future<void> updateProject(SiteProject project);
+  /// Updates an existing site project, uploading newly attached files (if any).
+  Future<void> updateProject(
+    SiteProject project, {
+    Map<String, List<PlatformFile>>? filesByCategory,
+  });
 
   /// Deletes a site project by its ID.
   Future<void> deleteProject(String id);

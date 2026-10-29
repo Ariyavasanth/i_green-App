@@ -11,13 +11,21 @@ import '../../../../models/customer.dart';
 import '../../../../providers/customer_providers.dart';
 import '../../../employee/domain/employee.dart';
 import '../../../employee/providers/employee_providers.dart';
+import '../../domain/models/project_document.dart';
 import '../../domain/models/site_project.dart';
 import '../../domain/services/project_code_generator.dart';
 import '../../providers/project_providers.dart';
 import '../dialogs/add_client_dialog.dart';
 
 class NewProjectFormScreen extends ConsumerStatefulWidget {
-  const NewProjectFormScreen({super.key});
+  const NewProjectFormScreen({
+    super.key,
+    this.project,
+    this.projectId,
+  });
+
+  final SiteProject? project;
+  final String? projectId;
 
   @override
   ConsumerState<NewProjectFormScreen> createState() =>
@@ -30,6 +38,8 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
 
   // ── State variables ──
   bool _isSubmitting = false;
+  bool _isEditMode = false;
+  SiteProject? _loadedProject;
 
   // SECTION 1 — GENERAL CODE
   Employee? _selectedCreatorEmployee;
@@ -51,6 +61,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
   // SECTION 4 — TENDER SPEC / ENQUIRY SPEC
   final _tenderSpecRemarkController = TextEditingController();
   final List<PlatformFile> _tenderSpecFiles = [];
+  List<ProjectDocument> _existingTenderSpecDocs = [];
 
   // SECTION 5 — ASSIGNED TO (Multiple employees)
   final List<Employee> _selectedAssignedEmployees = [];
@@ -67,10 +78,12 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
   // SECTION 8 — BQR
   final _bqrRemarkController = TextEditingController();
   final List<PlatformFile> _bqrFiles = [];
+  List<ProjectDocument> _existingBqrDocs = [];
 
   // SECTION 9 — EMD / EMD EXEMPTION
   final _emdRemarkController = TextEditingController();
   final List<PlatformFile> _emdFiles = [];
+  List<ProjectDocument> _existingEmdDocs = [];
 
   // List of districts dynamically computed from State
   List<String> _districtsList = [];
@@ -78,7 +91,54 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.project != null) {
+      _isEditMode = true;
+      _loadedProject = widget.project;
+      _populateFromProject(widget.project!);
+    } else if (widget.projectId != null && widget.projectId!.isNotEmpty) {
+      _isEditMode = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final p = await ref
+            .read(projectRepositoryProvider)
+            .getProjectById(widget.projectId!);
+        if (p != null && mounted) {
+          setState(() {
+            _loadedProject = p;
+            _populateFromProject(p);
+          });
+        }
+      });
+      _updateDistrictsForState(_selectedState);
+    } else {
+      _updateDistrictsForState(_selectedState);
+    }
+  }
+
+  void _populateFromProject(SiteProject p) {
+    _generalDetailsController.text = p.generalDetails;
+    _placeController.text = p.place;
+    _generalCodeController.text = p.generalCode;
+    _subOrOwn = p.subOrOwn.isNotEmpty ? p.subOrOwn : 'Own';
+    _selectedState = p.state.isNotEmpty ? p.state : 'Tamil Nadu';
     _updateDistrictsForState(_selectedState);
+    _selectedDistrict =
+        p.district.isNotEmpty && _districtsList.contains(p.district)
+            ? p.district
+            : (_districtsList.isNotEmpty ? _districtsList.first : 'Chennai');
+    _areaController.text = p.area;
+    _projectCodeController.text = p.projectCode;
+    _selectedTenderType =
+        p.tenderType.isNotEmpty ? p.tenderType : 'Open Tender';
+    _tenderSpecRemarkController.text = p.tenderSpecRemark;
+    _existingTenderSpecDocs = List.from(p.tenderSpecDocuments);
+    _openingDate = p.openingDate;
+    _openingDateRemarkController.text = p.openingDateRemark;
+    _closingDate = p.closingDate;
+    _closingDateRemarkController.text = p.closingDateRemark;
+    _bqrRemarkController.text = p.bqrRemark;
+    _existingBqrDocs = List.from(p.bqrDocuments);
+    _emdRemarkController.text = p.emdRemark;
+    _existingEmdDocs = List.from(p.emdDocuments);
   }
 
   @override
@@ -257,7 +317,10 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     );
   }
 
-  Future<void> _pickFiles(List<PlatformFile> targetList) async {
+  Future<void> _pickFiles(
+    List<PlatformFile> targetList, {
+    List<ProjectDocument>? existingDocs,
+  }) async {
     try {
       final result = await FilePicker.pickFiles(
         allowMultiple: true,
@@ -265,7 +328,8 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
       );
       if (result == null) return;
 
-      final remaining = 5 - targetList.length;
+      final existingCount = (existingDocs?.length ?? 0) + targetList.length;
+      final remaining = 5 - existingCount;
       if (remaining <= 0) {
         _showToast('You can upload a maximum of 5 files.');
         return;
@@ -406,47 +470,18 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
 
     try {
       final currentEmp = ref.read(currentEmployeeProvider);
-      final clientName = _selectedClient!.displayName.isNotEmpty
-          ? _selectedClient!.displayName
-          : (_selectedClient!.companyName.isNotEmpty
-              ? _selectedClient!.companyName
-              : 'Unknown Client');
+      final clientName = _selectedClient != null
+          ? (_selectedClient!.displayName.isNotEmpty
+              ? _selectedClient!.displayName
+              : (_selectedClient!.companyName.isNotEmpty
+                  ? _selectedClient!.companyName
+                  : 'Unknown Client'))
+          : (_loadedProject?.clientName ?? 'Unknown Client');
 
       final assignedNames =
           _selectedAssignedEmployees.map((e) => e.fullName).toList();
       final assignedIds =
           _selectedAssignedEmployees.map((e) => e.employeeId).toList();
-
-      final project = SiteProject(
-        employeeName: _selectedCreatorEmployee!.fullName,
-        employeeId: _selectedCreatorEmployee!.employeeId,
-        clientName: clientName,
-        clientId: _selectedClient!.id,
-        generalDetails: _generalDetailsController.text.trim(),
-        place: _placeController.text.trim(),
-        generalCode: _generalCodeController.text.trim(),
-        subOrOwn: _subOrOwn,
-        state: _selectedState,
-        district: _selectedDistrict,
-        area: _areaController.text.trim(),
-        projectCode: _projectCodeController.text.trim(),
-        tenderType: _selectedTenderType,
-        tenderSpecRemark: _tenderSpecRemarkController.text.trim(),
-        assignedToEmployeeNames: assignedNames,
-        assignedToEmployeeIds: assignedIds,
-        assignedToEmployeeName: assignedNames.join(', '),
-        assignedToEmployeeId: assignedIds.join(', '),
-        openingDate: _openingDate,
-        openingDateRemark: _openingDateRemarkController.text.trim(),
-        closingDate: _closingDate,
-        closingDateRemark: _closingDateRemarkController.text.trim(),
-        bqrRemark: _bqrRemarkController.text.trim(),
-        emdRemark: _emdRemarkController.text.trim(),
-        status: 'Active',
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-        createdBy: currentEmp?.fullName ?? currentEmp?.employeeId ?? 'Admin',
-      );
 
       final filesByCategory = <String, List<PlatformFile>>{
         'tender_spec': _tenderSpecFiles,
@@ -454,45 +489,150 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
         'emd': _emdFiles,
       };
 
-      await ref.read(projectRepositoryProvider).createProject(
-            project,
-            filesByCategory: filesByCategory,
-          );
-
-      ref.invalidate(projectsStreamProvider);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle_rounded, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Site Project "${project.projectCode}" created successfully!',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: const Color(0xFF414A51),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
+      if (_isEditMode && _loadedProject != null) {
+        final updatedProject = _loadedProject!.copyWith(
+          employeeName: _selectedCreatorEmployee!.fullName,
+          employeeId: _selectedCreatorEmployee!.employeeId,
+          clientName: clientName,
+          clientId: _selectedClient?.id,
+          generalDetails: _generalDetailsController.text.trim(),
+          place: _placeController.text.trim(),
+          generalCode: _generalCodeController.text.trim(),
+          subOrOwn: _subOrOwn,
+          state: _selectedState,
+          district: _selectedDistrict,
+          area: _areaController.text.trim(),
+          projectCode: _projectCodeController.text.trim().isNotEmpty
+              ? _projectCodeController.text.trim()
+              : _loadedProject!.projectCode,
+          tenderType: _selectedTenderType,
+          tenderSpecRemark: _tenderSpecRemarkController.text.trim(),
+          tenderSpecDocuments: _existingTenderSpecDocs,
+          assignedToEmployeeNames: assignedNames,
+          assignedToEmployeeIds: assignedIds,
+          assignedToEmployeeName: assignedNames.join(', '),
+          assignedToEmployeeId: assignedIds.join(', '),
+          openingDate: _openingDate,
+          openingDateRemark: _openingDateRemarkController.text.trim(),
+          closingDate: _closingDate,
+          closingDateRemark: _closingDateRemarkController.text.trim(),
+          bqrRemark: _bqrRemarkController.text.trim(),
+          bqrDocuments: _existingBqrDocs,
+          emdRemark: _emdRemarkController.text.trim(),
+          emdDocuments: _existingEmdDocs,
+          updatedAt: DateTime.now(),
+          updatedBy: currentEmp?.employeeId ?? currentEmp?.id.toString() ?? 'Unknown',
+          updatedByName: currentEmp?.fullName ?? currentEmp?.name ?? 'Admin',
         );
 
-        if (context.canPop()) {
-          context.pop();
-        } else {
-          context.go('/module/project');
+        await ref.read(projectRepositoryProvider).updateProject(
+              updatedProject,
+              filesByCategory: filesByCategory,
+            );
+
+        ref.invalidate(projectsStreamProvider);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Site Project "${updatedProject.projectCode}" updated successfully!',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: const Color(0xFF414A51),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+
+          if (context.canPop()) {
+            context.pop(true);
+          } else {
+            context.go('/projects/assigned');
+          }
+        }
+      } else {
+        final project = SiteProject(
+          employeeName: _selectedCreatorEmployee!.fullName,
+          employeeId: _selectedCreatorEmployee!.employeeId,
+          clientName: clientName,
+          clientId: _selectedClient!.id,
+          generalDetails: _generalDetailsController.text.trim(),
+          place: _placeController.text.trim(),
+          generalCode: _generalCodeController.text.trim(),
+          subOrOwn: _subOrOwn,
+          state: _selectedState,
+          district: _selectedDistrict,
+          area: _areaController.text.trim(),
+          projectCode: _projectCodeController.text.trim(),
+          tenderType: _selectedTenderType,
+          tenderSpecRemark: _tenderSpecRemarkController.text.trim(),
+          assignedToEmployeeNames: assignedNames,
+          assignedToEmployeeIds: assignedIds,
+          assignedToEmployeeName: assignedNames.join(', '),
+          assignedToEmployeeId: assignedIds.join(', '),
+          openingDate: _openingDate,
+          openingDateRemark: _openingDateRemarkController.text.trim(),
+          closingDate: _closingDate,
+          closingDateRemark: _closingDateRemarkController.text.trim(),
+          bqrRemark: _bqrRemarkController.text.trim(),
+          emdRemark: _emdRemarkController.text.trim(),
+          status: 'Active',
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+          createdBy: currentEmp?.fullName ?? currentEmp?.employeeId ?? 'Admin',
+        );
+
+        await ref.read(projectRepositoryProvider).createProject(
+              project,
+              filesByCategory: filesByCategory,
+            );
+
+        ref.invalidate(projectsStreamProvider);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Site Project "${project.projectCode}" created successfully!',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: const Color(0xFF414A51),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+
+          if (context.canPop()) {
+            context.pop(true);
+          } else {
+            context.go('/module/project');
+          }
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to create site project: $e'),
+            content: Text(_isEditMode
+                ? 'Failed to update site project: $e'
+                : 'Failed to create site project: $e'),
             backgroundColor: Colors.red.shade700,
             behavior: SnackBarBehavior.floating,
           ),
@@ -509,33 +649,85 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     final allEmployees = employeesAsync.valueOrNull ?? [];
     final currentEmp = ref.watch(currentEmployeeProvider);
 
-    // Auto-select creator employee if not yet selected
-    if (_selectedCreatorEmployee == null && allEmployees.isNotEmpty) {
-      if (currentEmp != null) {
-        final match = allEmployees.firstWhere(
-          (e) => e.id == currentEmp.id || e.employeeId == currentEmp.employeeId,
-          orElse: () => allEmployees.first,
-        );
-        _selectedCreatorEmployee = match;
-      } else {
-        _selectedCreatorEmployee = allEmployees.first;
-      }
-    }
-
-    if (!_assignedInitialized && allEmployees.isNotEmpty) {
-      _assignedInitialized = true;
-      if (_selectedCreatorEmployee != null) {
-        _selectedAssignedEmployees.add(_selectedCreatorEmployee!);
-      } else {
-        _selectedAssignedEmployees.add(allEmployees.first);
-      }
-    }
-
     final customersAsync = ref.watch(activeCustomersProvider);
     final customers = customersAsync.valueOrNull ?? [];
 
-    if (_selectedClient == null && customers.isNotEmpty) {
-      _selectedClient = customers.first;
+    if (_isEditMode && _loadedProject != null) {
+      if (_selectedCreatorEmployee == null && allEmployees.isNotEmpty) {
+        final creatorId = _loadedProject!.employeeId;
+        final creatorName = _loadedProject!.employeeName.trim().toLowerCase();
+        final match = allEmployees.firstWhere(
+          (e) =>
+              (creatorId != null &&
+                  creatorId.isNotEmpty &&
+                  (e.employeeId == creatorId || e.id.toString() == creatorId)) ||
+              (creatorName.isNotEmpty &&
+                  e.fullName.trim().toLowerCase() == creatorName),
+          orElse: () => allEmployees.first,
+        );
+        _selectedCreatorEmployee = match;
+      }
+
+      if (!_assignedInitialized && allEmployees.isNotEmpty) {
+        _assignedInitialized = true;
+        final targetIds = _loadedProject!.assignedToEmployeeIds;
+        final targetNames = _loadedProject!.assignedToEmployeeNames
+            .map((n) => n.trim().toLowerCase())
+            .toList();
+
+        final matches = allEmployees.where((e) {
+          final idHit = targetIds.contains(e.employeeId) ||
+              targetIds.contains(e.id.toString());
+          final nameHit = targetNames.contains(e.fullName.trim().toLowerCase());
+          return idHit || nameHit;
+        }).toList();
+
+        if (matches.isNotEmpty) {
+          _selectedAssignedEmployees.addAll(matches);
+        } else if (_selectedCreatorEmployee != null) {
+          _selectedAssignedEmployees.add(_selectedCreatorEmployee!);
+        }
+      }
+
+      if (_selectedClient == null && customers.isNotEmpty) {
+        final clientId = _loadedProject!.clientId;
+        final clientName = _loadedProject!.clientName.trim().toLowerCase();
+        final match = customers.firstWhere(
+          (c) =>
+              (clientId != null && c.id == clientId) ||
+              (clientName.isNotEmpty &&
+                  (c.displayName.trim().toLowerCase() == clientName ||
+                      c.companyName.trim().toLowerCase() == clientName)),
+          orElse: () => customers.first,
+        );
+        _selectedClient = match;
+      }
+    } else {
+      // Auto-select creator employee if not yet selected
+      if (_selectedCreatorEmployee == null && allEmployees.isNotEmpty) {
+        if (currentEmp != null) {
+          final match = allEmployees.firstWhere(
+            (e) => e.id == currentEmp.id || e.employeeId == currentEmp.employeeId,
+            orElse: () => allEmployees.first,
+          );
+          _selectedCreatorEmployee = match;
+        } else {
+          _selectedCreatorEmployee = allEmployees.first;
+        }
+      }
+
+      if (!_assignedInitialized && allEmployees.isNotEmpty) {
+        _assignedInitialized = true;
+        if (_selectedCreatorEmployee != null) {
+          _selectedAssignedEmployees.add(_selectedCreatorEmployee!);
+        } else {
+          _selectedAssignedEmployees.add(allEmployees.first);
+        }
+      }
+
+      if (_selectedClient == null && customers.isNotEmpty) {
+        _selectedClient = customers.first;
+      }
     }
 
     final tenderTypesAsync = ref.watch(tenderTypesProvider);
@@ -568,7 +760,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
             if (context.canPop()) {
               context.pop();
             } else {
-              context.go('/module/project');
+              context.go(_isEditMode ? '/projects/assigned' : '/module/project');
             }
           },
         ),
@@ -587,9 +779,9 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
               ),
             ),
             const SizedBox(width: 12),
-            const Text(
-              'NEW PROJECT',
-              style: TextStyle(
+            Text(
+              _isEditMode ? 'EDIT PROJECT' : 'NEW PROJECT',
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
                 color: Color(0xFF414A51),
@@ -812,6 +1004,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                           _buildFileUploadWidget(
                             label: 'Tender Spec Documents',
                             files: _tenderSpecFiles,
+                            existingDocs: _existingTenderSpecDocs,
                           ),
                         ],
                       ),
@@ -902,6 +1095,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                           _buildFileUploadWidget(
                             label: 'BQR Documents',
                             files: _bqrFiles,
+                            existingDocs: _existingBqrDocs,
                           ),
                         ],
                       ),
@@ -929,13 +1123,14 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                           _buildFileUploadWidget(
                             label: 'EMD Documents',
                             files: _emdFiles,
+                            existingDocs: _existingEmdDocs,
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 28),
 
-                    // ── FINAL ACTION: CREATE NEW SITE PROJECT ──
+                    // ── FINAL ACTION: CREATE OR UPDATE SITE PROJECT ──
                     SizedBox(
                       height: 52,
                       child: FilledButton(
@@ -950,10 +1145,10 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                         onPressed:
                             _isSubmitting ? null : _handleCreateSiteProject,
                         child: _isSubmitting
-                            ? const Row(
+                            ? Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  SizedBox(
+                                  const SizedBox(
                                     width: 20,
                                     height: 20,
                                     child: CircularProgressIndicator(
@@ -961,10 +1156,12 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                                       color: Colors.white,
                                     ),
                                   ),
-                                  SizedBox(width: 14),
+                                  const SizedBox(width: 14),
                                   Text(
-                                    'CREATING SITE PROJECT...',
-                                    style: TextStyle(
+                                    _isEditMode
+                                        ? 'UPDATING PROJECT...'
+                                        : 'CREATING SITE PROJECT...',
+                                    style: const TextStyle(
                                       fontWeight: FontWeight.w700,
                                       fontSize: 15,
                                       letterSpacing: 0.5,
@@ -972,14 +1169,20 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                                   ),
                                 ],
                               )
-                            : const Row(
+                            : Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.add_task_rounded, size: 20),
-                                  SizedBox(width: 10),
+                                  Icon(
+                                      _isEditMode
+                                          ? Icons.check_circle_rounded
+                                          : Icons.add_task_rounded,
+                                      size: 20),
+                                  const SizedBox(width: 10),
                                   Text(
-                                    'CREATE NEW SITE PROJECT',
-                                    style: TextStyle(
+                                    _isEditMode
+                                        ? 'UPDATE PROJECT'
+                                        : 'CREATE NEW SITE PROJECT',
+                                    style: const TextStyle(
                                       fontWeight: FontWeight.w800,
                                       fontSize: 15,
                                       letterSpacing: 0.8,
@@ -1867,7 +2070,9 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
   Widget _buildFileUploadWidget({
     required String label,
     required List<PlatformFile> files,
+    List<ProjectDocument>? existingDocs,
   }) {
+    final totalCount = (existingDocs?.length ?? 0) + files.length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1881,16 +2086,17 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              onPressed: () => _pickFiles(files),
+              onPressed: () => _pickFiles(files, existingDocs: existingDocs),
               icon: const Icon(Icons.upload_file_rounded, size: 18),
               label: const Text('Upload Documents'),
             ),
             const SizedBox(width: 12),
             Text(
-              files.isEmpty
+              totalCount == 0
                   ? 'No documents attached'
-                  : '${files.length} document(s) selected',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  : '$totalCount document(s) attached',
+              style:
+                  const TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
           ],
         ),
@@ -1899,6 +2105,62 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
           'Supported: PDF, Word, Excel, PNG, JPG (Max 5 files, 10MB each)',
           style: TextStyle(fontSize: 11, color: Color(0xFF718096)),
         ),
+        if (existingDocs != null && existingDocs.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          for (final doc in existingDocs)
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAF8),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE5E8E2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.insert_drive_file_outlined,
+                      size: 16, color: Color(0xFF9CC70A)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      doc.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'Saved',
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF414A51)),
+                    ),
+                  ),
+                  Text(
+                    '${(doc.size / 1024).toStringAsFixed(0)} KB',
+                    style: const TextStyle(
+                        fontSize: 11, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 16),
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Remove document',
+                    onPressed: () => setState(() => existingDocs.remove(doc)),
+                  ),
+                ],
+              ),
+            ),
+        ],
         if (files.isNotEmpty) ...[
           const SizedBox(height: 10),
           for (final f in files)
@@ -1912,14 +2174,31 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.insert_drive_file_outlined,
+                  const Icon(Icons.upload_file_rounded,
                       size: 16, color: Color(0xFF414A51)),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       f.name,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF414A51).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'New',
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF414A51)),
                     ),
                   ),
                   Text(

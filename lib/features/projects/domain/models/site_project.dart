@@ -34,6 +34,8 @@ class SiteProject {
     required this.createdAt,
     required this.updatedAt,
     this.createdBy = '',
+    this.updatedBy,
+    this.updatedByName,
   })  : assignedToEmployeeNames = assignedToEmployeeNames ??
             (assignedToEmployeeName != null && assignedToEmployeeName.isNotEmpty
                 ? [assignedToEmployeeName]
@@ -97,6 +99,8 @@ class SiteProject {
   final DateTime createdAt;
   final DateTime updatedAt;
   final String createdBy;
+  final String? updatedBy;
+  final String? updatedByName;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -132,6 +136,8 @@ class SiteProject {
         'created_at': createdAt.toIso8601String(),
         'updated_at': updatedAt.toIso8601String(),
         'created_by': createdBy,
+        'updated_by': updatedBy,
+        'updated_by_name': updatedByName,
       };
 
   factory SiteProject.fromJson(Map<String, dynamic> json, {String? docId}) {
@@ -207,6 +213,8 @@ class SiteProject {
           ? DateTime.tryParse(json['updated_at'].toString()) ?? DateTime.now()
           : DateTime.now(),
       createdBy: json['created_by'] as String? ?? '',
+      updatedBy: json['updated_by'] as String?,
+      updatedByName: json['updated_by_name'] as String?,
     );
   }
 
@@ -243,6 +251,8 @@ class SiteProject {
     DateTime? createdAt,
     DateTime? updatedAt,
     String? createdBy,
+    String? updatedBy,
+    String? updatedByName,
   }) {
     return SiteProject(
       id: id ?? this.id,
@@ -280,6 +290,8 @@ class SiteProject {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       createdBy: createdBy ?? this.createdBy,
+      updatedBy: updatedBy ?? this.updatedBy,
+      updatedByName: updatedByName ?? this.updatedByName,
     );
   }
 }

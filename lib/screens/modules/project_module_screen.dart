@@ -33,6 +33,12 @@ class ProjectModuleScreen extends ConsumerStatefulWidget {
         '/projects/new',
         Color(0xFF9C27B0),
       ),
+      _SubModule(
+        'ASSIGNED PROJECTS',
+        Icons.assignment_ind_outlined,
+        '/projects/assigned',
+        Color(0xFF414A51),
+      ),
     ],
   };
 

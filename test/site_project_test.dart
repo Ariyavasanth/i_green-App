@@ -124,6 +124,39 @@ void main() {
       expect(restoredLegacy.assignedToEmployeeNames, ['Single Employee']);
       expect(restoredLegacy.assignedToEmployeeIds, ['EMP-9999']);
       expect(restoredLegacy.assignedToEmployeeName, 'Single Employee');
+      expect(restoredLegacy.updatedBy, isNull);
+      expect(restoredLegacy.updatedByName, isNull);
+    });
+
+    test('SiteProject serializes and deserializes updatedBy and updatedByName correctly', () {
+      final now = DateTime(2026, 10, 29, 2, 15);
+      final project = SiteProject(
+        id: 'proj_updated',
+        employeeName: 'Admin',
+        clientName: 'Client Y',
+        generalCode: 'GC-CLI-002',
+        projectCode: 'PRJ-OWN-CLI-TN-002',
+        createdAt: now,
+        updatedAt: now,
+        createdBy: 'Admin User',
+        updatedBy: 'EMP-0005',
+        updatedByName: 'Ravi Kumar',
+      );
+
+      final json = project.toJson();
+      expect(json['updated_by'], 'EMP-0005');
+      expect(json['updated_by_name'], 'Ravi Kumar');
+
+      final restored = SiteProject.fromJson(json, docId: 'proj_updated');
+      expect(restored.updatedBy, 'EMP-0005');
+      expect(restored.updatedByName, 'Ravi Kumar');
+
+      final copied = restored.copyWith(
+        updatedBy: 'EMP-0009',
+        updatedByName: 'Priya S',
+      );
+      expect(copied.updatedBy, 'EMP-0009');
+      expect(copied.updatedByName, 'Priya S');
     });
 
     test('ProjectCodeGenerator generates valid General Code', () {
