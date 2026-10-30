@@ -196,6 +196,12 @@ class AppShell extends ConsumerWidget {
       'Employee',
     ),
     SidebarDestination(
+      'Fund Requester',
+      '/fund-requester',
+      Icons.currency_exchange_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
       'My Exit',
       '/my-exit',
       Icons.exit_to_app_outlined,
@@ -384,6 +390,9 @@ class _TopBar extends ConsumerWidget {
     if (cleanLoc == '/loan-management/create') {
       return 'Loan';
     }
+    if (cleanLoc == '/fund-requester/create' || cleanLoc == '/fund-request/create') {
+      return 'Fund Request';
+    }
     if (cleanLoc == '/inventory-adjustments/add-stock') return 'Add Stock';
     if (cleanLoc == '/inventory-adjustments/add-material') return 'Add Material';
     if (cleanLoc == '/inventory-adjustments/move-stock') return 'Move Stock';
@@ -423,6 +432,9 @@ class _TopBar extends ConsumerWidget {
     final cleanLoc = location.split('?').first.trim();
 
     // Nested sub-pages -> Section main page
+    if (cleanLoc == '/fund-requester/create' || cleanLoc == '/fund-request/create') {
+      return '/fund-requester';
+    }
     if (cleanLoc.startsWith('/loan/details') || cleanLoc.startsWith('/loan-management/details')) {
       return '/loan-management';
     }

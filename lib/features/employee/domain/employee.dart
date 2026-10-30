@@ -367,6 +367,17 @@ class Employee {
           (pClean == 'projects' || pClean == 'project' || pClean == 'projectoperations'))
         return true;
 
+      // Fund Requester aliases
+      if ((normClean == 'fundrequester' || normClean == 'fundrequest')) {
+        if (pClean == 'fundrequester' ||
+            pClean == 'fundrequest' ||
+            pClean == 'projects' ||
+            pClean == 'project' ||
+            pClean == 'projectoperations') {
+          return true;
+        }
+      }
+
       return false;
     });
   }
@@ -411,6 +422,8 @@ class Employee {
           pClean == 'myasset' ||
           pClean == 'loan' ||
           pClean == 'loanmanagement' ||
+          pClean == 'fundrequester' ||
+          pClean == 'fundrequest' ||
           pClean == 'myexit' ||
           pClean == 'exitmanagement' ||
           pClean == 'incentiverequest' ||
@@ -506,6 +519,7 @@ class Employee {
     'Asset Management',
     'My Asset',
     'Loan',
+    'Fund Requester',
     'Incentive Request',
     'Incentive Management',
     'My Exit',
@@ -560,6 +574,7 @@ class Employee {
       'Asset Management',
       'My Asset',
       'Loan',
+      'Fund Requester',
       'Incentive Request',
       'Incentive Management',
       'My Exit',

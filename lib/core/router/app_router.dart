@@ -89,6 +89,8 @@ import '../../features/permission/presentation/permission_dashboard_page.dart';
 import '../../features/permission/presentation/permission_details_page.dart';
 import '../../features/authentication/providers/authentication_providers.dart';
 import '../../features/employee/providers/employee_providers.dart';
+import '../../features/fund_requester/presentation/fund_requester_page.dart';
+import '../../features/fund_requester/presentation/create_fund_request_page.dart';
 
 String? _getRequiredPermissionForPath(String path) {
   if (path == '/home') return 'Home';
@@ -116,6 +118,7 @@ String? _getRequiredPermissionForPath(String path) {
   if (path == '/my-asset') return 'My Asset';
   if (path == '/loan') return 'Loan';
   if (path == '/loan-management') return 'Loan Management';
+  if (path == '/fund-requester' || path == '/fund-request') return 'Fund Requester';
   if (path == '/my-exit') return 'My Exit';
   if (path == '/exit-management') return 'Exit Management';
   if (path == '/incentive') return 'Incentive Request';
@@ -278,6 +281,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return EditProjectFormScreen(project: project, projectId: id);
         },
       ),
+      GoRoute(path: '/projects/fund-request', builder: (_, _) => const FundRequesterPage()),
+      GoRoute(path: '/project/fund-request', builder: (_, _) => const FundRequesterPage()),
       GoRoute(path: '/module/factory', builder: (_, _) => const FactoryModuleScreen()),
       GoRoute(
         path: '/employee/register/:linkId',
@@ -482,6 +487,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/my-exit',
             builder: (_, _) => const MyExitPage(),
+          ),
+          GoRoute(
+            path: '/fund-requester',
+            builder: (_, _) => const FundRequesterPage(),
+            routes: [
+              GoRoute(
+                path: 'create',
+                builder: (_, state) {
+                  final cat = state.extra as String?;
+                  return CreateFundRequestPage(initialCategory: cat);
+                },
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/fund-request',
+            builder: (_, _) => const FundRequesterPage(),
+            routes: [
+              GoRoute(
+                path: 'create',
+                builder: (_, state) {
+                  final cat = state.extra as String?;
+                  return CreateFundRequestPage(initialCategory: cat);
+                },
+              ),
+            ],
           ),
           GoRoute(
             path: '/exit-management',
