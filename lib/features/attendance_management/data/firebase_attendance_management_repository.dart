@@ -20,30 +20,46 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
   CollectionReference<Map<String, dynamic>> get _employeesRef =>
       _firestore.collection('employees');
 
+  static final Map<int, String> _empCodeCache = {};
+  static DateTime? _empCodeCacheTime;
+  static int? _cachedTotalEmployees;
+  static DateTime? _cachedTotalEmployeesTime;
+
   /// Looks up the employee's string code (e.g. 'EMP-002') from Firestore by integer ID.
   /// No employee-specific codes or offsets are hardcoded — always reads from the database.
   Future<String> _resolveEmpCode(int employeeId) async {
+    final now = DateTime.now();
+    if (_empCodeCache.containsKey(employeeId) &&
+        _empCodeCacheTime != null &&
+        now.difference(_empCodeCacheTime!).inMinutes < 5) {
+      return _empCodeCache[employeeId] ?? '';
+    }
     try {
       final snap = await _employeesRef.get();
+      _empCodeCache.clear();
       for (final doc in snap.docs) {
         final data = doc.data();
         final dataId = data['id'] is int
             ? data['id'] as int
             : (int.tryParse(data['id']?.toString() ?? '') ?? 0);
-        if (dataId == employeeId) {
-          final docId = doc.id.trim().toUpperCase();
-          if (docId.contains('-') && !docId.startsWith('EMP-') && !docId.startsWith('TEMP')) {
-            return docId;
-          }
+        final docId = doc.id.trim().toUpperCase();
+        String code = '';
+        if (docId.contains('-') && !docId.startsWith('EMP-') && !docId.startsWith('TEMP')) {
+          code = docId;
+        } else {
           final stored = (data['employee_id'] as String? ?? '').trim().toUpperCase();
           if (stored.isNotEmpty && !stored.startsWith('EMP-')) {
-            return stored;
+            code = stored;
+          } else {
+            code = (data['employee_id'] ?? doc.id).toString().trim().toUpperCase();
           }
-          return (data['employee_id'] ?? doc.id).toString().trim().toUpperCase();
         }
+        if (dataId != 0) _empCodeCache[dataId] = code;
       }
+      _empCodeCacheTime = now;
+      return _empCodeCache[employeeId] ?? '';
     } catch (_) {}
-    return '';
+    return _empCodeCache[employeeId] ?? '';
   }
 
   String _normalizeDateKey(String dateStr) {
@@ -117,8 +133,24 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
 
     List<AttendanceRecord> firestoreRecords = [];
     try {
-      final snap = await _recordsRef.get();
-      for (final doc in snap.docs) {
+      final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs = [];
+      if (employeeId != null) {
+        final idSnap = await _recordsRef.where('employee_id', isEqualTo: employeeId).get();
+        docs.addAll(idSnap.docs);
+        if (targetEmpCode.isNotEmpty) {
+          final codeSnap = await _recordsRef.where('employee_code', isEqualTo: targetEmpCode).get();
+          for (final cd in codeSnap.docs) {
+            if (!docs.any((d) => d.id == cd.id)) {
+              docs.add(cd);
+            }
+          }
+        }
+      } else {
+        final snap = await _recordsRef.get();
+        docs.addAll(snap.docs);
+      }
+
+      for (final doc in docs) {
         final data = doc.data();
         if (employeeId != null) {
           final docEmpCode = _extractDocEmpCode(data);
@@ -177,7 +209,11 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
     // Resolve the employee code once before streaming so we never hardcode IDs
     final String targetEmpCode = employeeId != null ? await _resolveEmpCode(employeeId) : '';
 
-    yield* _recordsRef.snapshots().map((snap) {
+    final query = employeeId != null
+        ? _recordsRef.where('employee_id', isEqualTo: employeeId)
+        : _recordsRef;
+
+    yield* query.snapshots().map((snap) {
       final List<AttendanceRecord> firestoreRecords = [];
       for (final doc in snap.docs) {
         final data = doc.data();
@@ -234,11 +270,17 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
       final defaultDate = '${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year}';
       final targetDate = _normalizeDateKey(date ?? defaultDate);
 
-      int totalEmployees = 0;
-      try {
-        final empSnap = await _employeesRef.get();
-        totalEmployees = empSnap.docs.length;
-      } catch (_) {}
+      int totalEmployees = _cachedTotalEmployees ?? 0;
+      if (totalEmployees == 0 ||
+          _cachedTotalEmployeesTime == null ||
+          now.difference(_cachedTotalEmployeesTime!).inMinutes >= 5) {
+        try {
+          final empSnap = await _employeesRef.get();
+          totalEmployees = empSnap.docs.length;
+          _cachedTotalEmployees = totalEmployees;
+          _cachedTotalEmployeesTime = now;
+        } catch (_) {}
+      }
 
       List<AttendanceRecord> firestoreRecords = [];
       try {
@@ -306,11 +348,18 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
     final targetDate = _normalizeDateKey(date ?? defaultDate);
 
     return _recordsRef.snapshots().asyncMap((snap) async {
-      int totalEmployees = 0;
-      try {
-        final empSnap = await _employeesRef.get();
-        totalEmployees = empSnap.docs.length;
-      } catch (_) {}
+      int totalEmployees = _cachedTotalEmployees ?? 0;
+      final currentTime = DateTime.now();
+      if (totalEmployees == 0 ||
+          _cachedTotalEmployeesTime == null ||
+          currentTime.difference(_cachedTotalEmployeesTime!).inMinutes >= 5) {
+        try {
+          final empSnap = await _employeesRef.get();
+          totalEmployees = empSnap.docs.length;
+          _cachedTotalEmployees = totalEmployees;
+          _cachedTotalEmployeesTime = currentTime;
+        } catch (_) {}
+      }
 
       final firestoreRecords = snap.docs.map((d) => AttendanceRecord.fromMap(d.data())).toList();
 

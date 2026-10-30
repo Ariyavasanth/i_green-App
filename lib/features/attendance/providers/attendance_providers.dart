@@ -21,22 +21,11 @@ final allAttendanceRecordsProvider = FutureProvider<List<AttendanceRecord>>(
 );
 
 final todayAttendanceRecordProvider = FutureProvider.family<AttendanceRecord?, int>(
-  (ref, employeeId) async {
-    final repo = ref.watch(attendanceRepositoryProvider);
-    final activeRecord = await repo.getActiveAttendanceRecord(employeeId);
-    if (activeRecord != null) return activeRecord;
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    return repo.getAttendanceRecordForDate(employeeId, today);
-  },
+  (ref, employeeId) => ref.watch(attendanceRepositoryProvider).getActiveAttendanceRecord(employeeId),
 );
 
 final attendanceAttemptsProvider = FutureProvider<List<Map<String, dynamic>>>(
   (ref) => ref.watch(attendanceRepositoryProvider).getAttendanceAttempts(),
 );
 
-final attendanceLeaveRequestsProvider = FutureProvider.family<List<LeaveRequest>, int>(
-  (ref, employeeId) async {
-    final repo = ref.watch(leaveRepositoryProvider);
-    return repo.getLeaveRequests(employeeId);
-  },
-);
+final attendanceLeaveRequestsProvider = leaveRequestsProvider;

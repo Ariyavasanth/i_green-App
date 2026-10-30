@@ -38,9 +38,14 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     } catch (_) {}
   }
 
+  static List<Map<String, dynamic>>? _cachedEmployeeDocs;
+  static DateTime? _cachedEmployeeDocsTime;
+
   Future<void> autoSyncCompletedOdSessions({int? employeeId}) async {
     try {
-      final assignmentsSnap = await _firestore.collection('on_duty_assignments').get();
+      final assignmentsSnap = employeeId != null && employeeId > 0
+          ? await _firestore.collection('on_duty_assignments').where('employee_id', isEqualTo: employeeId).get()
+          : await _firestore.collection('on_duty_assignments').get();
       final allAssignmentsById = <int, Map<String, dynamic>>{};
       final assignmentsByEmpDate = <String, List<Map<String, dynamic>>>{};
 
@@ -73,7 +78,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
       if (allAssignmentsById.isEmpty && assignmentsByEmpDate.isEmpty) return;
 
-      final recordsSnap = await _recordsRef.get();
+      final recordsSnap = employeeId != null && employeeId > 0
+          ? await _recordsRef.where('employee_id', isEqualTo: employeeId).get()
+          : await _recordsRef.get();
       final processedRecordKeys = <String>{};
 
       for (final doc in recordsSnap.docs) {
@@ -324,7 +331,10 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       final now = DateTime.now();
       final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-      final snap = await _recordsRef.get();
+      final snap = employeeId != null && employeeId > 0
+          ? await _recordsRef.where('employee_id', isEqualTo: employeeId).get()
+          : await _recordsRef.get();
+      final settings = await getAttendanceSettings();
       for (final doc in snap.docs) {
         final data = doc.data();
         final docEmpIdRaw = data['employee_id'];
@@ -341,7 +351,6 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         final normDate = _normalizeDateKey(recDateStr);
         final inTimeStr = (data['check_in_time'] ?? data['time'] ?? '').toString().trim();
         if (normDate == todayStr && checkOutTime.isEmpty && status == 'Missing Check-Out') {
-          final settings = await getAttendanceSettings();
           final empObj = await _getEmployeeById(docEmpIdNum);
           final checkInMins = _parseMinutes(inTimeStr);
           final schedIn = empObj?.inTime.trim() ?? '';
@@ -429,8 +438,24 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     unawaited(autoResolveMissingCheckOuts(employeeId: employeeId));
 
     try {
-      final snap = await _recordsRef.get();
-      for (final doc in snap.docs) {
+      final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs = [];
+      if (employeeId != 0) {
+        final idSnap = await _recordsRef.where('employee_id', isEqualTo: employeeId).get();
+        docs.addAll(idSnap.docs);
+        if (empCode.isNotEmpty) {
+          final codeSnap = await _recordsRef.where('employee_code', isEqualTo: empCode).get();
+          for (final cd in codeSnap.docs) {
+            if (!docs.any((d) => d.id == cd.id)) {
+              docs.add(cd);
+            }
+          }
+        }
+      } else {
+        final allSnap = await _recordsRef.get();
+        docs.addAll(allSnap.docs);
+      }
+
+      for (final doc in docs) {
         final data = doc.data();
         final docEmpIdNum = _extractDocEmpId(data);
         final docEmpCode = _extractDocEmpCode(data);
@@ -502,6 +527,20 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       return normDate;
     }();
 
+    // Check memory cache first for immediate synchronous return
+    if (empCode.isNotEmpty) {
+      final cachedByCode = _localMemoryCache['${empCode}_$date'] ??
+          _localMemoryCache['${empCode}_$normDate'] ??
+          _localMemoryCache['${empCode}_$dmyDate'] ??
+          _localMemoryCache['${empCode}_${normDate.replaceAll('-', '')}'];
+      if (cachedByCode != null) return cachedByCode;
+    }
+    final cachedById = _localMemoryCache['${employeeId}_$date'] ??
+        _localMemoryCache['${employeeId}_$normDate'] ??
+        _localMemoryCache['${employeeId}_$dmyDate'] ??
+        _localMemoryCache['${employeeId}_${normDate.replaceAll('-', '')}'];
+    if (cachedById != null) return cachedById;
+
     final candidateDocIds = <String>[
       if (empCode.isNotEmpty) ...[
         '${empCode}_${normDate.replaceAll('-', '')}',
@@ -519,8 +558,8 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       final todayNormDate = _normalizeDateKey('${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}');
 
       DocumentSnapshot<Map<String, dynamic>>? recordSnap;
-      for (final cid in candidateDocIds) {
-        final snap = await _recordsRef.doc(cid).get();
+      final snaps = await Future.wait(candidateDocIds.map((cid) => _recordsRef.doc(cid).get()));
+      for (final snap in snaps) {
         if (snap.exists && snap.data() != null) {
           final docEmpCode = (snap.data()!['employee_code'] ?? '').toString().trim().toUpperCase();
           if (empCode.isEmpty || docEmpCode.isEmpty || docEmpCode == empCode) {
@@ -581,8 +620,22 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         return rec;
       }
 
-      final snap = await _recordsRef.get();
-      for (final doc in snap.docs) {
+      // If candidate doc IDs didn't match, query only docs belonging to this employee
+      final List<QueryDocumentSnapshot<Map<String, dynamic>>> empDocs = [];
+      if (employeeId != 0) {
+        final idSnap = await _recordsRef.where('employee_id', isEqualTo: employeeId).get();
+        empDocs.addAll(idSnap.docs);
+        if (empCode.isNotEmpty) {
+          final codeSnap = await _recordsRef.where('employee_code', isEqualTo: empCode).get();
+          for (final cd in codeSnap.docs) {
+            if (!empDocs.any((d) => d.id == cd.id)) {
+              empDocs.add(cd);
+            }
+          }
+        }
+      }
+
+      for (final doc in empDocs) {
         final data = doc.data();
         final docEmpIdNum = _extractDocEmpId(data);
         final docEmpCode = _extractDocEmpCode(data);
@@ -3021,10 +3074,25 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     final idNum = isStringCode ? 0 : (int.tryParse(idStr) ?? 0);
 
     try {
-      final snap = await _firestore.collection('employees').get();
-      for (final doc in snap.docs) {
-        final data = Map<String, dynamic>.from(doc.data());
-        final docId = doc.id.trim();
+      final now = DateTime.now();
+      List<Map<String, dynamic>> employeeDocs;
+      if (_cachedEmployeeDocs != null &&
+          _cachedEmployeeDocsTime != null &&
+          now.difference(_cachedEmployeeDocsTime!).inMinutes < 5) {
+        employeeDocs = _cachedEmployeeDocs!;
+      } else {
+        final snap = await _firestore.collection('employees').get();
+        employeeDocs = snap.docs.map((doc) {
+          final data = Map<String, dynamic>.from(doc.data());
+          data['__doc_id'] = doc.id.trim();
+          return data;
+        }).toList();
+        _cachedEmployeeDocs = employeeDocs;
+        _cachedEmployeeDocsTime = now;
+      }
+
+      for (final data in employeeDocs) {
+        final docId = (data['__doc_id'] ?? '').toString();
         final docIdUpper = docId.toUpperCase();
         final codeStr = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
         final dataId = data['id'] is int ? data['id'] as int : (int.tryParse(data['id']?.toString() ?? '') ?? 0);

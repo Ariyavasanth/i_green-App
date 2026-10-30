@@ -82,6 +82,59 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
   int _currentPage = 1;
   int _rowsPerPage = 10;
 
+  final Map<String, AttendanceRecord> _officeRecordsByEmpDate = {};
+  final Map<String, List<SiteVisitRecord>> _siteVisitsByEmpDate = {};
+  final Map<int, List<AttendanceRecord>> _monthlyOfficeRecordsByEmp = {};
+  final Map<int, List<SiteVisitRecord>> _monthlySiteVisitsByEmp = {};
+
+  void _rebuildIndices() {
+    _officeRecordsByEmpDate.clear();
+    _siteVisitsByEmpDate.clear();
+    _monthlyOfficeRecordsByEmp.clear();
+    _monthlySiteVisitsByEmp.clear();
+
+    for (final r in widget.staticRecords) {
+      final dt = _parseDate(r.date);
+      if (dt == null) continue;
+      final dateKey = '${dt.year}-${dt.month}-${dt.day}';
+
+      if (r.employeeId != 0) {
+        _officeRecordsByEmpDate['${r.employeeId}_$dateKey'] = r;
+      }
+      if (r.employeeCode.isNotEmpty) {
+        _officeRecordsByEmpDate['${r.employeeCode.trim().toUpperCase()}_$dateKey'] = r;
+      }
+      if (r.employeeName.trim().isNotEmpty) {
+        _officeRecordsByEmpDate['${r.employeeName.trim().toLowerCase()}_$dateKey'] = r;
+      }
+
+      if (dt.year == widget.focusedMonth.year && dt.month == widget.focusedMonth.month) {
+        if (r.employeeId != 0) {
+          _monthlyOfficeRecordsByEmp.putIfAbsent(r.employeeId, () => []).add(r);
+        }
+      }
+    }
+
+    for (final v in widget.siteVisits) {
+      final dt = _parseDate(v.visitDate);
+      if (dt == null) continue;
+      final dateKey = '${dt.year}-${dt.month}-${dt.day}';
+
+      if (v.employeeId != 0) {
+        _siteVisitsByEmpDate.putIfAbsent('${v.employeeId}_$dateKey', () => []).add(v);
+      }
+      if (v.employeeName.trim().isNotEmpty) {
+        _siteVisitsByEmpDate.putIfAbsent('${v.employeeName.trim().toLowerCase()}_$dateKey', () => []).add(v);
+      }
+
+      if (dt.year == widget.focusedMonth.year && dt.month == widget.focusedMonth.month) {
+        if (v.employeeId != 0) {
+          _monthlySiteVisitsByEmp.putIfAbsent(v.employeeId, () => []).add(v);
+        }
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -91,6 +144,7 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
     } else {
       _selectedDate = DateTime(widget.focusedMonth.year, widget.focusedMonth.month, 1);
     }
+    _rebuildIndices();
   }
 
   @override
@@ -104,6 +158,11 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
       } else {
         _selectedDate = DateTime(widget.focusedMonth.year, widget.focusedMonth.month, 1);
       }
+    }
+    if (oldWidget.staticRecords != widget.staticRecords ||
+        oldWidget.siteVisits != widget.siteVisits ||
+        oldWidget.focusedMonth != widget.focusedMonth) {
+      _rebuildIndices();
     }
   }
 
@@ -148,6 +207,20 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
   }
 
   AttendanceRecord? _findOfficeRecord(Employee emp, DateTime date) {
+    final dateKey = '${date.year}-${date.month}-${date.day}';
+    if (emp.id != 0) {
+      final r = _officeRecordsByEmpDate['${emp.id}_$dateKey'];
+      if (r != null) return r;
+    }
+    if (emp.employeeId.isNotEmpty) {
+      final r = _officeRecordsByEmpDate['${emp.employeeId.trim().toUpperCase()}_$dateKey'];
+      if (r != null) return r;
+    }
+    if (emp.fullName.trim().isNotEmpty) {
+      final r = _officeRecordsByEmpDate['${emp.fullName.trim().toLowerCase()}_$dateKey'];
+      if (r != null) return r;
+    }
+
     for (final r in widget.staticRecords) {
       if (!_isSameDay(r.date, date)) continue;
       if (r.employeeId != 0 && r.employeeId == emp.id) return r;
@@ -167,6 +240,16 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
   }
 
   List<SiteVisitRecord> _findSiteVisits(Employee emp, DateTime date) {
+    final dateKey = '${date.year}-${date.month}-${date.day}';
+    if (emp.id != 0) {
+      final list = _siteVisitsByEmpDate['${emp.id}_$dateKey'];
+      if (list != null && list.isNotEmpty) return list;
+    }
+    if (emp.fullName.trim().isNotEmpty) {
+      final list = _siteVisitsByEmpDate['${emp.fullName.trim().toLowerCase()}_$dateKey'];
+      if (list != null && list.isNotEmpty) return list;
+    }
+
     final list = <SiteVisitRecord>[];
     for (final v in widget.siteVisits) {
       if (!_isSameDay(v.visitDate, date)) continue;
@@ -183,6 +266,9 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
   }
 
   List<AttendanceRecord> _getMonthlyOfficeRecords(Employee emp) {
+    if (emp.id != 0 && _monthlyOfficeRecordsByEmp.containsKey(emp.id)) {
+      return _monthlyOfficeRecordsByEmp[emp.id]!;
+    }
     final list = <AttendanceRecord>[];
     for (final r in widget.staticRecords) {
       if (!_isSameMonth(r.date, widget.focusedMonth)) continue;
@@ -203,6 +289,9 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
   }
 
   List<SiteVisitRecord> _getMonthlySiteVisits(Employee emp) {
+    if (emp.id != 0 && _monthlySiteVisitsByEmp.containsKey(emp.id)) {
+      return _monthlySiteVisitsByEmp[emp.id]!;
+    }
     final list = <SiteVisitRecord>[];
     for (final v in widget.siteVisits) {
       if (!_isSameMonth(v.visitDate, widget.focusedMonth)) continue;
