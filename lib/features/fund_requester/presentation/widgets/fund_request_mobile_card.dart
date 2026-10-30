@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_application_1/core/theme/app_colors.dart';
 import 'package:flutter_application_1/features/fund_requester/domain/models/fund_request.dart';
+import 'image_viewer_dialog.dart';
+import 'voice_note_player_widget.dart';
 
 /// Requested funds mobile card matching reference screenshot (Image 5).
 class FundRequestMobileCard extends StatelessWidget {
@@ -155,47 +157,121 @@ class FundRequestMobileCard extends StatelessWidget {
                   }),
 
                 // Attachments indicator
-                if (request.billUrls.isNotEmpty || request.audioNoteUrl != null) ...[
+                if (request.billUrls.isNotEmpty || (request.audioNoteUrl != null && request.audioNoteUrl!.isNotEmpty)) ...[
                   const SizedBox(height: 12),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
                     children: [
                       if (request.billUrls.isNotEmpty)
-                        Container(
-                          margin: const EdgeInsets.only(right: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.receipt_long_rounded, size: 14, color: Color(0xFF475569)),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${request.billUrls.length} Bill(s)',
-                                style: const TextStyle(fontSize: 11, color: Color(0xFF475569)),
-                              ),
-                            ],
+                        InkWell(
+                          onTap: () {
+                            final billItems = request.billUrls.asMap().entries.map((e) {
+                              return BillImageItem(
+                                title: 'Bill #${e.key + 1}',
+                                url: e.value,
+                              );
+                            }).toList();
+                            ImageViewerDialog.show(
+                              context: context,
+                              images: billItems,
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFBFDBFE)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.image_outlined, size: 14, color: Color(0xFF2563EB)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'View Bills (${request.billUrls.length})',
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF2563EB),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      if (request.audioNoteUrl != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEDE9FE),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.mic_rounded, size: 14, color: Color(0xFF7C3AED)),
-                              SizedBox(width: 4),
-                              Text(
-                                'Voice Note',
-                                style: TextStyle(fontSize: 11, color: Color(0xFF7C3AED)),
+                      if (request.audioNoteUrl != null && request.audioNoteUrl!.isNotEmpty)
+                        InkWell(
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => Dialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                child: Container(
+                                  padding: const EdgeInsets.all(20),
+                                  constraints: const BoxConstraints(maxWidth: 420),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          const Text(
+                                            'Attached Voice Note',
+                                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.close_rounded),
+                                            onPressed: () => Navigator.of(ctx).pop(),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Recorded for project ${request.projectCode}',
+                                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                      ),
+                                      const SizedBox(height: 14),
+                                      VoiceNotePlayerWidget(
+                                        isRecording: false,
+                                        hasVoiceNote: true,
+                                        audioUrl: request.audioNoteUrl,
+                                        onStartRecord: () {},
+                                        onStopRecord: () {},
+                                        onDelete: () => Navigator.of(ctx).pop(),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ],
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF5F3FF),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFDDD6FE)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.play_circle_outline_rounded, size: 14, color: Color(0xFF7C3AED)),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Play Voice Note',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF7C3AED),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                     ],

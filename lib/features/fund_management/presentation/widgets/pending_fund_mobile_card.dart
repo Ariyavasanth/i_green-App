@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import 'package:flutter_application_1/features/fund_requester/domain/models/fund_request.dart';
+import 'package:flutter_application_1/features/fund_requester/presentation/widgets/image_viewer_dialog.dart';
+import 'package:flutter_application_1/features/fund_requester/presentation/widgets/voice_note_player_widget.dart';
 import 'view_quotation_dialog.dart';
 
 class PendingFundMobileCard extends StatelessWidget {
@@ -19,7 +21,7 @@ class PendingFundMobileCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
-    final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
+    final dateFormat = DateFormat('yyyy-MM-dd');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -168,50 +170,157 @@ class PendingFundMobileCard extends StatelessWidget {
 
                 const SizedBox(height: 10),
 
-                // Attachments row (Quotation / Images / Audio)
-                Row(
+                // Interactive Attachments Bar (View Bills & Play Voice Note)
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    InkWell(
-                      onTap: () {
-                        showDialog(
-                          context: context,
-                          builder: (_) => ViewQuotationDialog(request: request),
-                        );
-                      },
-                      child: Row(
+                    if (request.billUrls.isNotEmpty)
+                      InkWell(
+                        onTap: () {
+                          final billItems = request.billUrls.asMap().entries.map((e) {
+                            return BillImageItem(
+                              title: 'Bill #${e.key + 1}',
+                              url: e.value,
+                            );
+                          }).toList();
+                          ImageViewerDialog.show(
+                            context: context,
+                            images: billItems,
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFBFDBFE)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.image_outlined, size: 15, color: Color(0xFF2563EB)),
+                              const SizedBox(width: 5),
+                              Text(
+                                'View Bills (${request.billUrls.length})',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF2563EB),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      const Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            request.billUrls.isNotEmpty ? Icons.receipt_long : Icons.info_outline,
-                            size: 15,
-                            color: const Color(0xFF2563EB),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            request.billUrls.isNotEmpty
-                                ? 'View Bills (${request.billUrls.length})'
-                                : 'Quotation N/A',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: request.billUrls.isNotEmpty ? const Color(0xFF2563EB) : const Color(0xFF64748B),
-                            ),
-                          ),
+                          Icon(Icons.info_outline, size: 14, color: Color(0xFF94A3B8)),
+                          SizedBox(width: 4),
+                          Text('Quotation N/A', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
                         ],
                       ),
-                    ),
-                    const Spacer(),
+
                     if (request.audioNoteUrl != null && request.audioNoteUrl!.isNotEmpty)
-                      const Row(
-                        children: [
-                          Icon(Icons.mic, size: 14, color: Color(0xFF414A51)),
-                          SizedBox(width: 2),
-                          Text('Audio Attached', style: TextStyle(fontSize: 11, color: Color(0xFF414A51))),
-                        ],
+                      InkWell(
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => Dialog(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              child: Container(
+                                padding: const EdgeInsets.all(20),
+                                constraints: const BoxConstraints(maxWidth: 420),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text(
+                                          'Employee Voice Note',
+                                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.close_rounded),
+                                          onPressed: () => Navigator.of(ctx).pop(),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Recorded for ${request.projectCode}',
+                                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    VoiceNotePlayerWidget(
+                                      isRecording: false,
+                                      hasVoiceNote: true,
+                                      audioUrl: request.audioNoteUrl,
+                                      onStartRecord: () {},
+                                      onStopRecord: () {},
+                                      onDelete: () => Navigator.of(ctx).pop(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F3FF),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFDDD6FE)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.play_circle_outline_rounded, size: 15, color: Color(0xFF7C3AED)),
+                              SizedBox(width: 5),
+                              Text(
+                                'Play Voice Note',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF7C3AED),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                   ],
                 ),
 
-                const Divider(height: 20),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      ViewQuotationDialog.show(
+                        context: context,
+                        request: request,
+                        onApprove: onApprove,
+                        onReject: onReject,
+                      );
+                    },
+                    icon: const Icon(Icons.visibility_outlined, size: 16, color: Color(0xFF414A51)),
+                    label: const Text(
+                      'View Full Details',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF414A51)),
+                    ),
+                  ),
+                ),
+
+                const Divider(height: 16),
 
                 // Action Buttons
                 Row(

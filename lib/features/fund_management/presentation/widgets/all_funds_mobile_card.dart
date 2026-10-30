@@ -12,7 +12,7 @@ class AllFundsMobileCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
-    final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
+    final dateFormat = DateFormat('yyyy-MM-dd');
 
     Color statusBg;
     Color statusFg;

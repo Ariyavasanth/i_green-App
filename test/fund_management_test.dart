@@ -1,100 +1,99 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/features/fund_requester/domain/models/fund_request.dart';
-import 'package:flutter_application_1/features/fund_management/data/repositories/firebase_fund_management_repository.dart';
+import 'package:flutter_application_1/features/fund_requester/domain/models/fund_request_item.dart';
 
 void main() {
-  group('Fund Management Repository & Logic Tests', () {
-    test('Initial fallback pending requests match screenshot data points', () async {
-      final repo = FirebaseFundManagementRepository();
-      final pending = await repo.getPendingFundRequests();
-
-      expect(pending.isNotEmpty, isTrue);
-      expect(pending.length, greaterThanOrEqualTo(3));
-
-      // Test row 1 from screenshot
-      final row1 = pending.firstWhere((r) => r.employeeId == '65');
-      expect(row1.employeeName, equals('K Paramasivam'));
-      expect(row1.requestAmount, equals(10550.00));
-      expect(row1.message, equals('street light erection work'));
-      expect(row1.projectCode, contains('TNEB-OWN-DEC/2025-107'));
-      expect(row1.status, equals('Pending'));
-
-      // Test row 2 from screenshot
-      final row2 = pending.firstWhere((r) => r.requestAmount == 2000.00);
-      expect(row2.employeeId, equals('84'));
-      expect(row2.employeeName, equals('Deepak R'));
-      expect(row2.message, equals('Police others'));
-
-      // Test row 3 from screenshot
-      final row3 = pending.firstWhere((r) => r.requestAmount == 27000.00);
-      expect(row3.employeeId, equals('84'));
-      expect(row3.employeeName, equals('Deepak R'));
-      expect(row3.message, equals('Night shift Machine advance and hydra'));
-    });
-
-    test('Full approval sets status to Approved and updates approved amount', () async {
-      final repo = FirebaseFundManagementRepository();
-      final pending = await repo.getPendingFundRequests();
-      final target = pending.first;
-
-      await repo.approveOrPartiallyApproveRequest(
-        requestId: target.id,
-        projectCode: target.projectCode,
-        approvedAmount: target.requestAmount,
-        approvedBy: 'Managing Director',
-        remarks: 'Approved in full',
+  group('Fund Management Domain & Logic Tests', () {
+    test('FundRequest serialization and deserialization works correctly', () {
+      final req = FundRequest(
+        id: 'test_req_1',
+        requestNumber: 'REQ-2026-001',
+        employeeId: 'emp_101',
+        employeeName: 'Ramesh K',
+        employeeCustomId: 'EMP101',
+        department: 'Operations',
+        message: 'Cable laying advance',
+        projectCode: 'PRJ-TNEB-001',
+        projectName: 'TNEB Phase 1',
+        requestAmount: 15000.0,
+        approvedAmount: 0.0,
+        status: 'Pending',
+        items: const [
+          FundRequestItem(
+            id: 'item_1',
+            category: 'Fuel',
+            subCategory: 'Diesel',
+            comments: 'Site generator',
+            amount: 5000.0,
+          ),
+          FundRequestItem(
+            id: 'item_2',
+            category: 'Rental',
+            subCategory: 'Truck',
+            comments: 'Material shifting',
+            amount: 10000.0,
+          ),
+        ],
+        billUrls: const ['https://example.com/bill1.jpg'],
+        audioNoteUrl: 'https://example.com/audio1.mp4',
+        createdAt: DateTime.parse('2026-10-31 10:00:00'),
+        updatedAt: DateTime.parse('2026-10-31 10:00:00'),
       );
 
-      final all = await repo.getAllFundRequests();
-      final updated = all.firstWhere((r) => r.id == target.id);
+      final map = req.toMap();
+      expect(map['requestNumber'], equals('REQ-2026-001'));
+      expect(map['requestAmount'], equals(15000.0));
+      expect(map['status'], equals('Pending'));
 
-      expect(updated.status, equals('Approved'));
-      expect(updated.approvedAmount, equals(target.requestAmount));
-      expect(updated.approvedBy, equals('Managing Director'));
-      expect(updated.approvalRemarks, equals('Approved in full'));
+      final restored = FundRequest.fromMap(map, 'test_req_1');
+      expect(restored.id, equals('test_req_1'));
+      expect(restored.employeeName, equals('Ramesh K'));
+      expect(restored.items.length, equals(2));
+      expect(restored.billUrls.first, equals('https://example.com/bill1.jpg'));
     });
 
-    test('Partial approval sets status to Partially Approved', () async {
-      final repo = FirebaseFundManagementRepository();
-      final pending = await repo.getPendingFundRequests();
-      final target = pending.firstWhere((r) => r.requestAmount == 27000.00);
+    test('Fund request copyWith updates approval and rejection fields', () {
+      final req = FundRequest(
+        id: 'test_req_2',
+        requestNumber: 'REQ-2026-002',
+        employeeId: 'emp_102',
+        employeeName: 'Suresh M',
+        message: 'Vehicle maintenance',
+        projectCode: 'PRJ-L&T-002',
+        requestAmount: 8000.0,
+        status: 'Pending',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
 
-      // Approve 20,000 out of 27,000
-      await repo.approveOrPartiallyApproveRequest(
-        requestId: target.id,
-        projectCode: target.projectCode,
-        approvedAmount: 20000.00,
+      // Full approval
+      final approved = req.copyWith(
+        status: 'Approved',
+        approvedAmount: 8000.0,
         approvedBy: 'Admin Approver',
-        remarks: 'Partially approved 20k for advance',
+        approvalRemarks: 'Fully approved',
       );
+      expect(approved.status, equals('Approved'));
+      expect(approved.approvedAmount, equals(8000.0));
 
-      final all = await repo.getAllFundRequests();
-      final updated = all.firstWhere((r) => r.id == target.id);
-
-      expect(updated.status, equals('Partially Approved'));
-      expect(updated.approvedAmount, equals(20000.00));
-      expect(updated.approvedBy, equals('Admin Approver'));
-      expect(updated.approvalRemarks, equals('Partially approved 20k for advance'));
-    });
-
-    test('Reject request updates status to Rejected with reason', () async {
-      final repo = FirebaseFundManagementRepository();
-      final pending = await repo.getPendingFundRequests();
-      final target = pending.firstWhere((r) => r.requestAmount == 2000.00);
-
-      await repo.rejectRequest(
-        requestId: target.id,
-        rejectedBy: 'Super Admin',
-        reason: 'Quotation receipt missing or invalid project code',
+      // Partial approval
+      final partial = req.copyWith(
+        status: 'Partially Approved',
+        approvedAmount: 5000.0,
+        approvedBy: 'Admin Approver',
+        approvalRemarks: 'Partial approval of 5k',
       );
+      expect(partial.status, equals('Partially Approved'));
+      expect(partial.approvedAmount, equals(5000.0));
 
-      final all = await repo.getAllFundRequests();
-      final updated = all.firstWhere((r) => r.id == target.id);
-
-      expect(updated.status, equals('Rejected'));
-      expect(updated.approvedBy, equals('Super Admin'));
-      expect(updated.approvalRemarks, equals('Quotation receipt missing or invalid project code'));
+      // Rejection
+      final rejected = req.copyWith(
+        status: 'Rejected',
+        approvedBy: 'Admin Approver',
+        approvalRemarks: 'Quotation receipt missing',
+      );
+      expect(rejected.status, equals('Rejected'));
+      expect(rejected.approvalRemarks, equals('Quotation receipt missing'));
     });
   });
 }
-

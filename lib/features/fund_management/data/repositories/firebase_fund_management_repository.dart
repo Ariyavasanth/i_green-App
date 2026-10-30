@@ -31,94 +31,34 @@ class FirebaseFundManagementRepository implements FundManagementRepository {
     }
   }
 
-  // Fallback demo requests matching the screenshots if database is offline or empty
-  static final List<FundRequest> _fallbackRequests = [
-    FundRequest(
-      id: 'fr_screen_1',
-      requestNumber: 'REQ-2026-10550',
-      employeeId: '65',
-      employeeName: 'K Paramasivam',
-      employeeCustomId: '65',
-      department: 'Site Operations',
-      message: 'street light erection work',
-      projectCode:
-          'TNEB-OWN-DEC/2025-107-TN-Thanjavur-11kv cable Laying_Kumbakonam',
-      projectName: 'Thanjavur 11KV Cable Laying Kumbakonam',
-      approvedAmount: 0.0,
-      requestAmount: 10550.00,
-      status: 'Pending',
-      createdAt: DateTime.parse('2026-10-30 16:38:16'),
-      updatedAt: DateTime.parse('2026-10-30 16:38:16'),
-    ),
-    FundRequest(
-      id: 'fr_screen_2',
-      requestNumber: 'REQ-2026-2000',
-      employeeId: '84',
-      employeeName: 'Deepak R',
-      employeeCustomId: '84',
-      department: 'Site Engineering',
-      message: 'Police others',
-      projectCode:
-          'TNEB-OWN-SEP/2025-103-TN-Kanchipuram-11KV TNHB Feeder-Sholinganallur',
-      projectName: 'Kanchipuram 11KV TNHB Feeder Sholinganallur',
-      approvedAmount: 0.0,
-      requestAmount: 2000.00,
-      status: 'Pending',
-      createdAt: DateTime.parse('2026-10-30 12:07:21'),
-      updatedAt: DateTime.parse('2026-10-30 12:07:21'),
-    ),
-    FundRequest(
-      id: 'fr_screen_3',
-      requestNumber: 'REQ-2026-27000',
-      employeeId: '84',
-      employeeName: 'Deepak R',
-      employeeCustomId: '84',
-      department: 'Site Engineering',
-      message: 'Night shift Machine advance and hydra',
-      projectCode:
-          'TNEB-OWN-SEP/2025-103-TN-Kanchipuram-11KV TNHB Feeder-Sholinganallur',
-      projectName: 'Kanchipuram 11KV TNHB Feeder Sholinganallur',
-      approvedAmount: 0.0,
-      requestAmount: 27000.00,
-      status: 'Pending',
-      createdAt: DateTime.parse('2026-10-29 19:45:08'),
-      updatedAt: DateTime.parse('2026-10-29 19:45:08'),
-    ),
-  ];
-
   @override
   Stream<List<FundRequest>> watchPendingFundRequests() {
     final ref = _requestsRef;
     if (ref == null) {
-      return Stream.value(
-        _fallbackRequests.where((r) => r.status == 'Pending' && !r.isDeleted).toList(),
-      );
+      return Stream.value(<FundRequest>[]);
     }
     try {
-      return ref
-          .where('status', isEqualTo: 'Pending')
-          .snapshots()
-          .map((snapshot) {
-        if (snapshot.docs.isEmpty) {
-          return _fallbackRequests
-              .where((r) => r.status == 'Pending' && !r.isDeleted)
-              .toList();
+      return ref.snapshots().map((snapshot) {
+        final list = <FundRequest>[];
+        for (final doc in snapshot.docs) {
+          try {
+            final req = FundRequest.fromMap(doc.data(), doc.id);
+            if (!req.isDeleted && req.status.toLowerCase() == 'pending') {
+              list.add(req);
+            }
+          } catch (e) {
+            developer.log('Error parsing fund request ${doc.id}: $e', name: 'FirebaseFundManagementRepo');
+          }
         }
-        final list = snapshot.docs
-            .map((doc) => FundRequest.fromMap(doc.data(), doc.id))
-            .where((r) => !r.isDeleted)
-            .toList();
         list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
         return list;
-      }).handleError((_) {
-        return _fallbackRequests
-            .where((r) => r.status == 'Pending' && !r.isDeleted)
-            .toList();
+      }).handleError((e) {
+        developer.log('Error in watchPendingFundRequests: $e', name: 'FirebaseFundManagementRepo');
+        return <FundRequest>[];
       });
-    } catch (_) {
-      return Stream.value(
-        _fallbackRequests.where((r) => r.status == 'Pending' && !r.isDeleted).toList(),
-      );
+    } catch (e) {
+      developer.log('Exception in watchPendingFundRequests: $e', name: 'FirebaseFundManagementRepo');
+      return Stream.value(<FundRequest>[]);
     }
   }
 
@@ -126,71 +66,76 @@ class FirebaseFundManagementRepository implements FundManagementRepository {
   Stream<List<FundRequest>> watchAllFundRequests() {
     final ref = _requestsRef;
     if (ref == null) {
-      return Stream.value(List<FundRequest>.from(_fallbackRequests));
+      return Stream.value(<FundRequest>[]);
     }
     try {
-      return ref
-          .orderBy('createdAt', descending: true)
-          .snapshots()
-          .map((snapshot) {
-        if (snapshot.docs.isEmpty) {
-          return List<FundRequest>.from(_fallbackRequests);
+      return ref.snapshots().map((snapshot) {
+        final list = <FundRequest>[];
+        for (final doc in snapshot.docs) {
+          try {
+            final req = FundRequest.fromMap(doc.data(), doc.id);
+            if (!req.isDeleted) {
+              list.add(req);
+            }
+          } catch (e) {
+            developer.log('Error parsing fund request ${doc.id}: $e', name: 'FirebaseFundManagementRepo');
+          }
         }
-        return snapshot.docs
-            .map((doc) => FundRequest.fromMap(doc.data(), doc.id))
-            .where((r) => !r.isDeleted)
-            .toList();
-      }).handleError((_) => List<FundRequest>.from(_fallbackRequests));
-    } catch (_) {
-      return Stream.value(List<FundRequest>.from(_fallbackRequests));
+        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return list;
+      }).handleError((e) {
+        developer.log('Error in watchAllFundRequests: $e', name: 'FirebaseFundManagementRepo');
+        return <FundRequest>[];
+      });
+    } catch (e) {
+      developer.log('Exception in watchAllFundRequests: $e', name: 'FirebaseFundManagementRepo');
+      return Stream.value(<FundRequest>[]);
     }
   }
 
   @override
   Future<List<FundRequest>> getPendingFundRequests() async {
     final ref = _requestsRef;
-    if (ref == null) {
-      return _fallbackRequests
-          .where((r) => r.status == 'Pending' && !r.isDeleted)
-          .toList();
-    }
+    if (ref == null) return [];
     try {
-      final snap = await ref.where('status', isEqualTo: 'Pending').get();
-      if (snap.docs.isEmpty) {
-        return _fallbackRequests
-            .where((r) => r.status == 'Pending' && !r.isDeleted)
-            .toList();
+      final snap = await ref.get();
+      final list = <FundRequest>[];
+      for (final doc in snap.docs) {
+        try {
+          final req = FundRequest.fromMap(doc.data(), doc.id);
+          if (!req.isDeleted && req.status.toLowerCase() == 'pending') {
+            list.add(req);
+          }
+        } catch (_) {}
       }
-      final list = snap.docs
-          .map((doc) => FundRequest.fromMap(doc.data(), doc.id))
-          .where((r) => !r.isDeleted)
-          .toList();
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
-    } catch (_) {
-      return _fallbackRequests
-          .where((r) => r.status == 'Pending' && !r.isDeleted)
-          .toList();
+    } catch (e) {
+      developer.log('Error getPendingFundRequests: $e');
+      return [];
     }
   }
 
   @override
   Future<List<FundRequest>> getAllFundRequests() async {
     final ref = _requestsRef;
-    if (ref == null) {
-      return List<FundRequest>.from(_fallbackRequests);
-    }
+    if (ref == null) return [];
     try {
-      final snap = await ref.orderBy('createdAt', descending: true).get();
-      if (snap.docs.isEmpty) {
-        return List<FundRequest>.from(_fallbackRequests);
+      final snap = await ref.get();
+      final list = <FundRequest>[];
+      for (final doc in snap.docs) {
+        try {
+          final req = FundRequest.fromMap(doc.data(), doc.id);
+          if (!req.isDeleted) {
+            list.add(req);
+          }
+        } catch (_) {}
       }
-      return snap.docs
-          .map((doc) => FundRequest.fromMap(doc.data(), doc.id))
-          .where((r) => !r.isDeleted)
-          .toList();
-    } catch (_) {
-      return List<FundRequest>.from(_fallbackRequests);
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    } catch (e) {
+      developer.log('Error getAllFundRequests: $e');
+      return [];
     }
   }
 
@@ -220,8 +165,8 @@ class FirebaseFundManagementRepository implements FundManagementRepository {
     required String approvedBy,
     String? remarks,
   }) async {
-    FundRequest? existing;
     final rRef = _requestsRef;
+    FundRequest? existing;
     if (rRef != null) {
       try {
         final doc = await rRef.doc(requestId).get();
@@ -230,7 +175,6 @@ class FirebaseFundManagementRepository implements FundManagementRepository {
         }
       } catch (_) {}
     }
-    existing ??= _fallbackRequests.where((r) => r.id == requestId).firstOrNull;
 
     final reqAmt = existing?.requestAmount ?? approvedAmount;
     final isPartial = approvedAmount < (reqAmt - 0.01);
@@ -254,52 +198,35 @@ class FirebaseFundManagementRepository implements FundManagementRepository {
       }
     }
 
-    final idx = _fallbackRequests.indexWhere((r) => r.id == requestId);
-    if (idx != -1) {
-      _fallbackRequests[idx] = _fallbackRequests[idx].copyWith(
-        status: finalStatus,
-        approvedAmount: approvedAmount,
-        approvedBy: approvedBy,
-        approvedAt: DateTime.now(),
-        approvalRemarks: remarks,
-        updatedAt: DateTime.now(),
-      );
-    }
+    // Deduct approved amount from the project's actual value
+    final proj = await getProjectByCode(projectCode);
+    if (proj != null && approvedAmount > 0) {
+      final pRef = _projectsRef;
+      if (pRef != null) {
+        final currentActual = proj.actualProjectValue;
+        final newActual = (currentActual - approvedAmount).clamp(0.0, double.infinity);
 
-    // Deduct from Project Actual Amount
-    final pRef = _projectsRef;
-    if (pRef != null && projectCode.trim().isNotEmpty) {
-      try {
-        final snap = await pRef
-            .where('project_code', isEqualTo: projectCode.trim())
-            .limit(1)
-            .get();
-
-        if (snap.docs.isNotEmpty) {
-          final doc = snap.docs.first;
-          final project = SiteProject.fromJson(doc.data(), docId: doc.id);
-          final currentActual = project.actualProjectValue;
-          final newActual = (currentActual - approvedAmount).clamp(0.0, double.infinity);
-
-          await doc.reference.update({
+        try {
+          await pRef.doc(proj.id).update({
             'actual_project_value': newActual,
             'updated_at': nowIso,
-            'updated_by': approvedBy,
             'updated_by_name': approvedBy,
           });
 
-          await doc.reference.collection('audit_logs').add({
-            'timestamp': nowIso,
-            'summary':
-                'Fund Request ${existing?.requestNumber ?? requestId} $finalStatus: ₹$approvedAmount deducted from Actual Project Value (Previous: ₹$currentActual, New: ₹$newActual)',
-            'updated_fields': ['actual_project_value'],
-            'employee_name': approvedBy,
-            'designation': 'Admin Approver',
-            'note': remarks ?? 'Approved from Fund Management',
-          });
+          await pRef.doc(proj.id).collection('audit_logs').add(
+                ProjectAuditLog(
+                  id: '',
+                  projectId: proj.id,
+                  employeeId: '',
+                  employeeName: approvedBy,
+                  designation: 'Fund Approver',
+                  changeNote: 'Fund ${isPartial ? "Partial Approval" : "Approval"}: Deducted ₹${approvedAmount.toStringAsFixed(2)} for Request $requestId. Remarks: ${remarks ?? "Approved"}',
+                  timestamp: DateTime.now(),
+                ).toJson(),
+              );
+        } catch (e) {
+          developer.log('Error deducting fund from project: $e');
         }
-      } catch (e) {
-        developer.log('Error deducting fund amount from project: $e');
       }
     }
   }
@@ -310,33 +237,20 @@ class FirebaseFundManagementRepository implements FundManagementRepository {
     required String rejectedBy,
     required String reason,
   }) async {
-    final nowIso = DateTime.now().toIso8601String();
-    final updateData = {
-      'status': 'Rejected',
-      'approvedBy': rejectedBy,
-      'approvedAt': nowIso,
-      'approvalRemarks': reason,
-      'updatedAt': nowIso,
-    };
-
     final rRef = _requestsRef;
     if (rRef != null) {
+      final nowIso = DateTime.now().toIso8601String();
       try {
-        await rRef.doc(requestId).update(updateData);
+        await rRef.doc(requestId).update({
+          'status': 'Rejected',
+          'approvedBy': rejectedBy,
+          'approvedAt': nowIso,
+          'approvalRemarks': reason,
+          'updatedAt': nowIso,
+        });
       } catch (e) {
         developer.log('Error rejecting fund request: $e');
       }
-    }
-
-    final idx = _fallbackRequests.indexWhere((r) => r.id == requestId);
-    if (idx != -1) {
-      _fallbackRequests[idx] = _fallbackRequests[idx].copyWith(
-        status: 'Rejected',
-        approvedBy: rejectedBy,
-        approvedAt: DateTime.now(),
-        approvalRemarks: reason,
-        updatedAt: DateTime.now(),
-      );
     }
   }
 }

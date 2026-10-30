@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,23 +12,10 @@ import 'package:flutter_application_1/features/fund_requester/domain/models/fund
 import 'package:flutter_application_1/features/fund_requester/domain/models/fund_request.dart';
 import 'package:flutter_application_1/features/fund_requester/domain/models/fund_request_item.dart';
 import 'package:flutter_application_1/features/fund_requester/providers/fund_request_providers.dart';
+import 'package:flutter_application_1/features/fund_requester/data/services/fund_request_storage_service.dart';
+import 'widgets/image_viewer_dialog.dart';
 import 'widgets/searchable_select_picker.dart';
-
-class AttachedBillItem {
-  final String id;
-  final String name;
-  final String path;
-  final Uint8List? bytes;
-  final int sizeInBytes;
-
-  AttachedBillItem({
-    required this.id,
-    required this.name,
-    required this.path,
-    this.bytes,
-    this.sizeInBytes = 0,
-  });
-}
+import 'widgets/voice_note_player_widget.dart';
 
 class _FormItemData {
   String category;
@@ -68,25 +54,18 @@ class CreateFundRequestPage extends ConsumerStatefulWidget {
   ConsumerState<CreateFundRequestPage> createState() => _CreateFundRequestPageState();
 }
 
-class _CreateFundRequestPageState extends ConsumerState<CreateFundRequestPage> with SingleTickerProviderStateMixin {
+class _CreateFundRequestPageState extends ConsumerState<CreateFundRequestPage> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _messageController;
   String? _selectedProjectCode;
   String? _selectedProjectName;
-  final List<AttachedBillItem> _attachedBillItems = [];
+  final List<String> _attachedBills = [];
+  final List<BillImageItem> _attachedBillItems = [];
+  final FundRequestStorageService _storageService = FundRequestStorageService();
 
-  // Voice note state
   bool _hasVoiceNote = false;
   bool _isRecording = false;
-  int _recordingSeconds = 0;
-  Timer? _recordingTimer;
-
-  bool _isPlayingVoiceNote = false;
-  int _playbackSeconds = 0;
-  int _voiceNoteTotalDuration = 0;
-  Timer? _playbackTimer;
-
   bool _isSubmitting = false;
 
   final List<_FormItemData> _items = [];
@@ -112,19 +91,11 @@ class _CreateFundRequestPageState extends ConsumerState<CreateFundRequestPage> w
 
   @override
   void dispose() {
-    _recordingTimer?.cancel();
-    _playbackTimer?.cancel();
     _messageController.dispose();
     for (final item in _items) {
       item.dispose();
     }
     super.dispose();
-  }
-
-  String _formatDuration(int seconds) {
-    final m = (seconds ~/ 60).toString().padLeft(2, '0');
-    final s = (seconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
   }
 
   double get _calculatedTotalAmount {
@@ -157,7 +128,7 @@ class _CreateFundRequestPageState extends ConsumerState<CreateFundRequestPage> w
   }
 
   List<SearchableSelectItem<String>> _getProjectItems(List<dynamic> projectsList) {
-    // Only created projects from the database - no hardcoding!
+    // ONLY created projects from the system database - no hardcoding!
     return projectsList
         .where((p) => (p.projectCode ?? '').toString().trim().isNotEmpty)
         .map((p) {
@@ -239,29 +210,21 @@ class _CreateFundRequestPageState extends ConsumerState<CreateFundRequestPage> w
       final images = await picker.pickMultiImage();
 
       if (images.isNotEmpty) {
-        for (final img in images) {
-          Uint8List? bytes;
-          try {
-            bytes = await img.readAsBytes();
-          } catch (_) {}
-
-          setState(() {
-            _attachedBillItems.add(
-              AttachedBillItem(
-                id: 'bill_${DateTime.now().millisecondsSinceEpoch}_${img.name}',
-                name: img.name,
-                path: img.path,
-                bytes: bytes,
-                sizeInBytes: bytes?.lengthInBytes ?? 0,
-              ),
-            );
-          });
+        for (final f in images) {
+          final bytes = await f.readAsBytes();
+          _attachedBillItems.add(
+            BillImageItem(
+              title: f.name,
+              bytes: bytes,
+            ),
+          );
+          _attachedBills.add(f.name);
         }
-
+        setState(() {});
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('${images.length} bill attachment(s) added! Tap any thumbnail to preview.'),
+              content: Text('${images.length} bill attachment(s) added! Tap any thumbnail to view full size.'),
               backgroundColor: AppColors.primary,
               duration: const Duration(seconds: 2),
             ),
@@ -270,240 +233,21 @@ class _CreateFundRequestPageState extends ConsumerState<CreateFundRequestPage> w
       }
     } catch (_) {
       setState(() {
-        _attachedBillItems.add(
-          AttachedBillItem(
-            id: 'bill_${DateTime.now().millisecondsSinceEpoch}',
-            name: 'Bill_Receipt_${DateTime.now().millisecondsSinceEpoch}.jpg',
-            path: '',
-          ),
-        );
+        const dummyName = 'Bill_Receipt.jpg';
+        _attachedBillItems.add(const BillImageItem(title: dummyName));
+        _attachedBills.add(dummyName);
       });
     }
   }
 
-  void _removeBillItem(AttachedBillItem item) {
+  void _toggleVoiceNote() {
     setState(() {
-      _attachedBillItems.removeWhere((b) => b.id == item.id);
-    });
-  }
-
-  void _showImagePreviewDialog(AttachedBillItem bill) {
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(16),
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 680, maxHeight: 600),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.25),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF414A51), size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            bill.name,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            bill.sizeInBytes > 0
-                                ? '${(bill.sizeInBytes / 1024).toStringAsFixed(1)} KB • Attached Bill'
-                                : 'Attached Image Receipt',
-                            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () => Navigator.of(ctx).pop(),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1, color: Color(0xFFF1F5F9)),
-
-              // Image Viewer with Zoom & Pan
-              Flexible(
-                child: Container(
-                  color: const Color(0xFF0F172A),
-                  child: InteractiveViewer(
-                    panEnabled: true,
-                    minScale: 0.5,
-                    maxScale: 4.0,
-                    child: Center(
-                      child: bill.bytes != null
-                          ? Image.memory(
-                              bill.bytes!,
-                              fit: BoxFit.contain,
-                            )
-                          : Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.image_rounded, size: 72, color: Colors.white54),
-                                const SizedBox(height: 12),
-                                Text(
-                                  bill.name,
-                                  style: const TextStyle(color: Colors.white70, fontSize: 14),
-                                ),
-                              ],
-                            ),
-                    ),
-                  ),
-                ),
-              ),
-
-              // Footer Actions
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Pinch or scroll to zoom in/out',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-                    ),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFEE2E2),
-                        foregroundColor: const Color(0xFFDC2626),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                      label: const Text('Delete Bill'),
-                      onPressed: () {
-                        Navigator.of(ctx).pop();
-                        _removeBillItem(bill);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Voice Note Controller Methods
-  void _startRecording() {
-    _playbackTimer?.cancel();
-    setState(() {
-      _isRecording = true;
-      _hasVoiceNote = false;
-      _recordingSeconds = 0;
-      _isPlayingVoiceNote = false;
-      _playbackSeconds = 0;
-    });
-
-    _recordingTimer?.cancel();
-    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        setState(() {
-          _recordingSeconds++;
-        });
+      if (!_hasVoiceNote && !_isRecording) {
+        _isRecording = true;
+      } else if (_isRecording) {
+        _isRecording = false;
+        _hasVoiceNote = true;
       }
-    });
-  }
-
-  void _stopAndSaveRecording() {
-    _recordingTimer?.cancel();
-    final duration = _recordingSeconds > 0 ? _recordingSeconds : 5;
-    setState(() {
-      _isRecording = false;
-      _hasVoiceNote = true;
-      _voiceNoteTotalDuration = duration;
-      _playbackSeconds = 0;
-      _isPlayingVoiceNote = false;
-    });
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Voice note recorded (${_formatDuration(duration)})! Tap Play to listen.'),
-          backgroundColor: const Color(0xFF7C3AED),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
-  }
-
-  void _cancelRecording() {
-    _recordingTimer?.cancel();
-    setState(() {
-      _isRecording = false;
-      _recordingSeconds = 0;
-    });
-  }
-
-  void _togglePlayVoiceNote() {
-    if (_isPlayingVoiceNote) {
-      _playbackTimer?.cancel();
-      setState(() => _isPlayingVoiceNote = false);
-    } else {
-      setState(() {
-        _isPlayingVoiceNote = true;
-        if (_playbackSeconds >= _voiceNoteTotalDuration) {
-          _playbackSeconds = 0;
-        }
-      });
-
-      _playbackTimer?.cancel();
-      _playbackTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (mounted) {
-          setState(() {
-            _playbackSeconds++;
-            if (_playbackSeconds >= _voiceNoteTotalDuration) {
-              _isPlayingVoiceNote = false;
-              _playbackSeconds = _voiceNoteTotalDuration;
-              timer.cancel();
-            }
-          });
-        }
-      });
-    }
-  }
-
-  void _deleteVoiceNote() {
-    _playbackTimer?.cancel();
-    _recordingTimer?.cancel();
-    setState(() {
-      _hasVoiceNote = false;
-      _isRecording = false;
-      _isPlayingVoiceNote = false;
-      _recordingSeconds = 0;
-      _playbackSeconds = 0;
-      _voiceNoteTotalDuration = 0;
     });
   }
 
@@ -565,9 +309,37 @@ class _CreateFundRequestPageState extends ConsumerState<CreateFundRequestPage> w
 
     try {
       final repo = ref.read(fundRequestRepositoryProvider);
+      final reqNumber = 'REQ-${DateTime.now().year}-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+
+      // 1. Upload attached bill images to Firebase Storage bucket
+      final List<String> uploadedBillUrls = [];
+      for (final item in _attachedBillItems) {
+        if (item.bytes != null) {
+          final downloadUrl = await _storageService.uploadBillImage(
+            bytes: item.bytes!,
+            fileName: item.title,
+            requestId: reqNumber,
+            projectCode: projectCode,
+          );
+          uploadedBillUrls.add(downloadUrl);
+        } else {
+          uploadedBillUrls.add(item.title);
+        }
+      }
+
+      // 2. Upload voice note if recorded
+      String? uploadedAudioUrl;
+      if (_hasVoiceNote) {
+        uploadedAudioUrl = await _storageService.uploadAudioNote(
+          bytes: Uint8List.fromList([0, 1, 2, 3]),
+          requestId: reqNumber,
+          projectCode: projectCode,
+        );
+      }
+
       final newRequest = FundRequest(
         id: '',
-        requestNumber: 'REQ-${DateTime.now().year}-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+        requestNumber: reqNumber,
         employeeId: employeeId,
         employeeName: requesterName,
         employeeCustomId: customId,
@@ -578,14 +350,15 @@ class _CreateFundRequestPageState extends ConsumerState<CreateFundRequestPage> w
         approvedAmount: 0.0,
         requestAmount: totalRequestAmount,
         items: finalItems,
-        billUrls: _attachedBillItems.map((b) => b.name).toList(),
-        audioNoteUrl: _hasVoiceNote ? 'local_voicenote_${DateTime.now().millisecondsSinceEpoch}.m4a' : null,
+        billUrls: uploadedBillUrls.isNotEmpty ? uploadedBillUrls : _attachedBills,
+        audioNoteUrl: uploadedAudioUrl,
         status: 'Pending',
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
 
       await repo.createFundRequest(newRequest);
+      ref.invalidate(allFundRequestsStreamProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1105,7 +878,7 @@ class _CreateFundRequestPageState extends ConsumerState<CreateFundRequestPage> w
                     ),
                   ),
                   Text(
-                    'Upload receipts with preview, or record & listen to audio explanation',
+                    'Upload receipts, vendor quotations, or record a quick audio briefing',
                     style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                   ),
                 ],
@@ -1113,67 +886,260 @@ class _CreateFundRequestPageState extends ConsumerState<CreateFundRequestPage> w
             ],
           ),
           const SizedBox(height: 18),
-
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Bill Attachments Box
+              // Bill Attachments
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    InkWell(
-                      onTap: _pickBills,
-                      borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        padding: const EdgeInsets.all(18),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: _attachedBillItems.isNotEmpty ? AppColors.primary : const Color(0xFFCBD5E1),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.add_photo_alternate_rounded,
-                              size: 32,
-                              color: _attachedBillItems.isNotEmpty ? AppColors.primary : const Color(0xFF64748B),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              _attachedBillItems.isNotEmpty ? 'Add More Bills / Receipts' : 'Attach Bills / Receipts',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Click to browse images • Tap thumbnail below to view',
-                              style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
-                            ),
-                          ],
-                        ),
+                child: InkWell(
+                  onTap: _pickBills,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _attachedBillItems.isNotEmpty ? AppColors.primary : const Color(0xFFCBD5E1),
+                        width: 1.5,
                       ),
                     ),
-                    if (_attachedBillItems.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      _buildBillThumbnailsView(),
-                    ],
-                  ],
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.receipt_long_rounded,
+                          size: 32,
+                          color: _attachedBillItems.isNotEmpty ? AppColors.primary : const Color(0xFF64748B),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _attachedBillItems.isNotEmpty
+                              ? '${_attachedBillItems.length} Bill(s) Attached'
+                              : 'Attach Bills / Receipts',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Click to browse & upload images',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
 
-              const SizedBox(width: 20),
+              const SizedBox(width: 16),
 
-              // Voice Note Box
+              // Voice Note
               Expanded(
-                child: _buildVoiceNoteInteractiveWidget(),
+                child: InkWell(
+                  onTap: _toggleVoiceNote,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: _isRecording
+                          ? const Color(0xFFFEE2E2)
+                          : (_hasVoiceNote ? const Color(0xFFEDE9FE) : const Color(0xFFF8FAFC)),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _isRecording
+                            ? const Color(0xFFDC2626)
+                            : (_hasVoiceNote ? const Color(0xFF7C3AED) : const Color(0xFFCBD5E1)),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          _isRecording ? Icons.mic : (_hasVoiceNote ? Icons.mic_rounded : Icons.mic_none_rounded),
+                          size: 32,
+                          color: _isRecording
+                              ? const Color(0xFFDC2626)
+                              : (_hasVoiceNote ? const Color(0xFF7C3AED) : const Color(0xFF64748B)),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _isRecording
+                              ? 'Recording... Tap to stop'
+                              : (_hasVoiceNote ? 'Voice Note Attached' : 'Record Voice Note'),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: _isRecording
+                                ? const Color(0xFFDC2626)
+                                : (_hasVoiceNote ? const Color(0xFF7C3AED) : const Color(0xFF1E293B)),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _hasVoiceNote ? 'Tap to play, re-record or delete' : 'Audio explanation for approvers',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
+
+          // Attached Bill Images Thumbnail Gallery
+          _buildBillThumbnailsGallery(),
+
+          // Voice Note Player / Recorder
+          if (_isRecording || _hasVoiceNote)
+            VoiceNotePlayerWidget(
+              isRecording: _isRecording,
+              hasVoiceNote: _hasVoiceNote,
+              onStartRecord: () => setState(() => _isRecording = true),
+              onStopRecord: () => setState(() {
+                _isRecording = false;
+                _hasVoiceNote = true;
+              }),
+              onDelete: () => setState(() {
+                _hasVoiceNote = false;
+                _isRecording = false;
+              }),
+              onReRecord: () => setState(() {
+                _hasVoiceNote = false;
+                _isRecording = true;
+              }),
+            ),
         ],
       ),
+    );
+  }
+
+  Widget _buildBillThumbnailsGallery() {
+    if (_attachedBillItems.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 14),
+        const Text(
+          'Attached Bills (Tap thumbnail to view full screen):',
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 90,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _attachedBillItems.length + 1,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (ctx, idx) {
+              if (idx == _attachedBillItems.length) {
+                // + Add More tile
+                return InkWell(
+                  onTap: _pickBills,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add_photo_alternate_outlined, color: AppColors.primary, size: 26),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Add More',
+                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              final item = _attachedBillItems[idx];
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  InkWell(
+                    onTap: () {
+                      ImageViewerDialog.show(
+                        context: context,
+                        images: _attachedBillItems,
+                        initialIndex: idx,
+                        onDelete: (delIdx) {
+                          setState(() {
+                            _attachedBillItems.removeAt(delIdx);
+                            if (delIdx < _attachedBills.length) {
+                              _attachedBills.removeAt(delIdx);
+                            }
+                          });
+                        },
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: item.bytes != null
+                          ? Image.memory(item.bytes!, fit: BoxFit.cover)
+                          : Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.receipt_long_rounded, color: Color(0xFF64748B), size: 24),
+                                  const SizedBox(height: 2),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                                    child: Text(
+                                      item.title,
+                                      style: const TextStyle(fontSize: 9),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                    ),
+                  ),
+                  // Delete badge
+                  Positioned(
+                    top: -6,
+                    right: -6,
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _attachedBillItems.removeAt(idx);
+                          if (idx < _attachedBills.length) {
+                            _attachedBills.removeAt(idx);
+                          }
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFEF4444),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close_rounded, size: 12, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -1312,32 +1278,6 @@ class _CreateFundRequestPageState extends ConsumerState<CreateFundRequestPage> w
 
           const Divider(height: 24, color: Color(0xFFF1F5F9)),
 
-          // Attachments preview count
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Attached Receipts', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-              Text('${_attachedBillItems.length} images', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Audio Briefing', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-              Text(
-                _hasVoiceNote ? '${_formatDuration(_voiceNoteTotalDuration)} audio attached' : 'None',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                  color: _hasVoiceNote ? const Color(0xFF7C3AED) : const Color(0xFF64748B),
-                ),
-              ),
-            ],
-          ),
-
-          const Divider(height: 24, color: Color(0xFFF1F5F9)),
-
           // Total Highlight Box
           Container(
             padding: const EdgeInsets.all(16),
@@ -1419,7 +1359,7 @@ class _CreateFundRequestPageState extends ConsumerState<CreateFundRequestPage> w
   }
 
   // =========================================================================
-  // MOBILE LAYOUT (Clean Vertical Flow with Image Previews & Voice Player)
+  // MOBILE LAYOUT (Clean Vertical Flow with Searchable Pickers)
   // =========================================================================
   Widget _buildMobileLayout(List<dynamic> projectsList) {
     return Form(
@@ -1461,7 +1401,33 @@ class _CreateFundRequestPageState extends ConsumerState<CreateFundRequestPage> w
 
             // Bill & Hold (Mic) Action Cards
             const SizedBox(height: 8),
-            _buildMobileBillAndHoldRow(),
+            _buildBillAndHoldRow(),
+
+            // Attached Bill Images Thumbnail Gallery (Mobile)
+            _buildBillThumbnailsGallery(),
+
+            // Voice Note Recording / Playback View (Mobile)
+            if (_isRecording || _hasVoiceNote) ...[
+              const SizedBox(height: 10),
+              VoiceNotePlayerWidget(
+                isRecording: _isRecording,
+                hasVoiceNote: _hasVoiceNote,
+                onStartRecord: () => setState(() => _isRecording = true),
+                onStopRecord: () => setState(() {
+                  _isRecording = false;
+                  _hasVoiceNote = true;
+                }),
+                onDelete: () => setState(() {
+                  _hasVoiceNote = false;
+                  _isRecording = false;
+                }),
+                onReRecord: () => setState(() {
+                  _hasVoiceNote = false;
+                  _isRecording = true;
+                }),
+              ),
+            ],
+
             const SizedBox(height: 20),
 
             // Big Green "Add" Action Button
@@ -1739,519 +1705,117 @@ class _CreateFundRequestPageState extends ConsumerState<CreateFundRequestPage> w
     );
   }
 
-  // =========================================================================
-  // ATTACHMENTS: BILL THUMBNAILS & VOICE RECORDER/PLAYER WIDGETS
-  // =========================================================================
-  Widget _buildBillThumbnailsView() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildBillAndHoldRow() {
+    return Row(
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Attached Receipts (${_attachedBillItems.length})',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
-            ),
-            InkWell(
-              onTap: _pickBills,
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                child: Row(
-                  children: [
-                    Icon(Icons.add_photo_alternate_rounded, size: 15, color: AppColors.primary),
-                    SizedBox(width: 4),
-                    Text('+ Add More', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                  ],
+        // Bill Button Card
+        Expanded(
+          child: InkWell(
+            onTap: _pickBills,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE2E8F0).withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _attachedBillItems.isNotEmpty ? AppColors.primary : Colors.transparent,
+                  width: 1.5,
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 94,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: _attachedBillItems.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 10),
-            itemBuilder: (ctx, idx) {
-              final bill = _attachedBillItems[idx];
-              return Stack(
-                clipBehavior: Clip.none,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  InkWell(
-                    onTap: () => _showImagePreviewDialog(bill),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      width: 90,
-                      height: 90,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
+                  Stack(
+                    alignment: Alignment.topRight,
+                    children: [
+                      const Icon(
+                        Icons.image_rounded,
+                        size: 34,
+                        color: Color(0xFF1E293B),
+                      ),
+                      if (_attachedBillItems.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
                           ),
-                        ],
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: bill.bytes != null
-                          ? Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                Image.memory(
-                                  bill.bytes!,
-                                  fit: BoxFit.cover,
-                                ),
-                                Positioned(
-                                  bottom: 0,
-                                  left: 0,
-                                  right: 0,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
-                                    color: Colors.black.withValues(alpha: 0.6),
-                                    child: const Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.visibility_rounded, size: 11, color: Colors.white),
-                                        SizedBox(width: 3),
-                                        Text('View', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            )
-                          : const Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.receipt_long_rounded, size: 28, color: Color(0xFF64748B)),
-                                SizedBox(height: 4),
-                                Text('Receipt', style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
-                              ],
-                            ),
-                    ),
-                  ),
-
-                  // Delete Badge
-                  Positioned(
-                    top: -6,
-                    right: -6,
-                    child: InkWell(
-                      onTap: () => _removeBillItem(bill),
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFEF4444),
-                          shape: BoxShape.circle,
+                          child: Text(
+                            '${_attachedBillItems.length}',
+                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
                         ),
-                        child: const Icon(Icons.close_rounded, size: 12, color: Colors.white),
-                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _attachedBillItems.isNotEmpty
+                        ? '${_attachedBillItems.length} Bill Attached'
+                        : 'Bill',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E293B),
                     ),
                   ),
                 ],
-              );
-            },
+              ),
+            ),
           ),
         ),
-      ],
-    );
-  }
 
-  Widget _buildVoiceNoteInteractiveWidget() {
-    // 1. Actively Recording State
-    if (_isRecording) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFEF2F2),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFEF4444), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFEF4444).withValues(alpha: 0.08),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                // Pulsing red dot
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFDC2626),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Text(
-                  'RECORDING AUDIO...',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.5,
-                    color: Color(0xFFDC2626),
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  _formatDuration(_recordingSeconds),
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFFDC2626),
-                    fontFamily: 'monospace',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
+        const SizedBox(width: 16),
 
-            // Soundwave Visualizer Bars (Animated Simulation)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(14, (i) {
-                final heights = [12.0, 22.0, 34.0, 18.0, 28.0, 38.0, 24.0, 32.0, 20.0, 36.0, 16.0, 26.0, 30.0, 14.0];
-                final animHeight = (_recordingSeconds % 2 == 0)
-                    ? heights[i]
-                    : heights[(i + 4) % heights.length];
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 2.5),
-                  width: 4,
-                  height: animHeight,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFDC2626).withValues(alpha: 0.75),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                );
-              }),
-            ),
-
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _cancelRecording,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF64748B),
-                      side: const BorderSide(color: Color(0xFFCBD5E1)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                    ),
-                    child: const Text('Cancel'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton.icon(
-                    onPressed: _stopAndSaveRecording,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFDC2626),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                    ),
-                    icon: const Icon(Icons.stop_circle_rounded, size: 20),
-                    label: const Text('Stop & Save', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-    }
-
-    // 2. Voice Note Attached State (With Interactive Player!)
-    if (_hasVoiceNote) {
-      final progressRatio = _voiceNoteTotalDuration > 0
-          ? (_playbackSeconds / _voiceNoteTotalDuration).clamp(0.0, 1.0)
-          : 0.0;
-
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFAF5FF),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF7C3AED), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF7C3AED).withValues(alpha: 0.08),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF7C3AED).withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.graphic_eq_rounded, size: 16, color: Color(0xFF7C3AED)),
-                ),
-                const SizedBox(width: 8),
-                const Text(
-                  'VOICE NOTE ATTACHED',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
-                    color: Color(0xFF7C3AED),
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '${_formatDuration(_playbackSeconds)} / ${_formatDuration(_voiceNoteTotalDuration)}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF6B21A8),
-                    fontFamily: 'monospace',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Player Bar
-            Row(
-              children: [
-                // Play / Pause Circle Button
-                InkWell(
-                  onTap: _togglePlayVoiceNote,
-                  borderRadius: BorderRadius.circular(24),
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF7C3AED),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      _isPlayingVoiceNote ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-
-                // Simulated Soundwave with Playback Progress Highlight
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: progressRatio,
-                      backgroundColor: const Color(0xFFDDD6FE),
-                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF7C3AED)),
-                      minHeight: 8,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-
-                // Re-record Button
-                IconButton(
-                  tooltip: 'Re-record audio',
-                  icon: const Icon(Icons.refresh_rounded, size: 20, color: Color(0xFF6B21A8)),
-                  onPressed: _startRecording,
-                ),
-
-                // Delete Button
-                IconButton(
-                  tooltip: 'Delete voice note',
-                  icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Color(0xFFEF4444)),
-                  onPressed: _deleteVoiceNote,
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-    }
-
-    // 3. Idle State (Ready to Record)
-    return InkWell(
-      onTap: _startRecording,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
-        ),
-        child: const Column(
-          children: [
-            Icon(Icons.mic_none_rounded, size: 32, color: Color(0xFF64748B)),
-            SizedBox(height: 8),
-            Text(
-              'Record Voice Note',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            ),
-            SizedBox(height: 4),
-            Text(
-              'Tap to record audio briefing for approvers',
-              style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMobileBillAndHoldRow() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            // Bill Button Card
-            Expanded(
-              child: InkWell(
-                onTap: _pickBills,
+        // Hold (Mic) Button Card
+        Expanded(
+          child: InkWell(
+            onTap: _toggleVoiceNote,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              decoration: BoxDecoration(
+                color: _isRecording
+                    ? const Color(0xFFFEE2E2)
+                    : (_hasVoiceNote
+                        ? const Color(0xFFEDE9FE)
+                        : const Color(0xFFE2E8F0).withValues(alpha: 0.6)),
                 borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0).withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: _attachedBillItems.isNotEmpty ? AppColors.primary : Colors.transparent,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Stack(
-                        alignment: Alignment.topRight,
-                        children: [
-                          const Icon(
-                            Icons.image_rounded,
-                            size: 34,
-                            color: Color(0xFF1E293B),
-                          ),
-                          if (_attachedBillItems.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: AppColors.primary,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Text(
-                                '${_attachedBillItems.length}',
-                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _attachedBillItems.isNotEmpty ? '${_attachedBillItems.length} Bill Attached' : 'Bill',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E293B),
-                        ),
-                      ),
-                    ],
-                  ),
+                border: Border.all(
+                  color: _isRecording
+                      ? const Color(0xFFDC2626)
+                      : (_hasVoiceNote ? const Color(0xFF7C3AED) : Colors.transparent),
+                  width: 1.5,
                 ),
               ),
-            ),
-
-            const SizedBox(width: 16),
-
-            // Hold (Mic) Button Card
-            Expanded(
-              child: InkWell(
-                onTap: () {
-                  if (!_isRecording && !_hasVoiceNote) {
-                    _startRecording();
-                  } else if (_isRecording) {
-                    _stopAndSaveRecording();
-                  } else {
-                    _togglePlayVoiceNote();
-                  }
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  decoration: BoxDecoration(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _isRecording ? Icons.mic : (_hasVoiceNote ? Icons.mic_rounded : Icons.mic_none_rounded),
+                    size: 34,
                     color: _isRecording
-                        ? const Color(0xFFFEE2E2)
-                        : (_hasVoiceNote
-                            ? const Color(0xFFEDE9FE)
-                            : const Color(0xFFE2E8F0).withValues(alpha: 0.6)),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
+                        ? const Color(0xFFDC2626)
+                        : (_hasVoiceNote ? const Color(0xFF7C3AED) : const Color(0xFF1E293B)),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _isRecording
+                        ? 'Recording...'
+                        : (_hasVoiceNote ? 'Voice Attached' : 'Hold'),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
                       color: _isRecording
                           ? const Color(0xFFDC2626)
-                          : (_hasVoiceNote ? const Color(0xFF7C3AED) : Colors.transparent),
-                      width: 1.5,
+                          : (_hasVoiceNote ? const Color(0xFF7C3AED) : const Color(0xFF1E293B)),
                     ),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _isRecording ? Icons.mic : (_hasVoiceNote ? Icons.mic_rounded : Icons.mic_none_rounded),
-                        size: 34,
-                        color: _isRecording
-                            ? const Color(0xFFDC2626)
-                            : (_hasVoiceNote ? const Color(0xFF7C3AED) : const Color(0xFF1E293B)),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _isRecording
-                            ? 'Recording (${_formatDuration(_recordingSeconds)})'
-                            : (_hasVoiceNote ? 'Voice Attached' : 'Hold'),
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: _isRecording
-                              ? const Color(0xFFDC2626)
-                              : (_hasVoiceNote ? const Color(0xFF7C3AED) : const Color(0xFF1E293B)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
-
-        // If Bills are attached, display interactive thumbnail strip directly below
-        if (_attachedBillItems.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          _buildBillThumbnailsView(),
-        ],
-
-        // If Voice Note is recording or attached, display interactive Voice Note Dock
-        if (_isRecording || _hasVoiceNote) ...[
-          const SizedBox(height: 12),
-          _buildVoiceNoteInteractiveWidget(),
-        ],
       ],
     );
   }

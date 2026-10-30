@@ -228,9 +228,15 @@ class FirebaseProjectRepository implements ProjectRepository {
   @override
   Stream<List<SiteProject>> watchProjects() {
     return _projectsRef.snapshots().map((snap) {
-      final list = snap.docs
-          .map((doc) => SiteProject.fromJson(doc.data(), docId: doc.id))
-          .toList();
+      final list = <SiteProject>[];
+      for (final doc in snap.docs) {
+        try {
+          list.add(SiteProject.fromJson(doc.data(), docId: doc.id));
+        } catch (e, stack) {
+          developer.log('Error parsing project doc ${doc.id}: $e',
+              name: 'FirebaseProjectRepository', error: e, stackTrace: stack);
+        }
+      }
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
     });

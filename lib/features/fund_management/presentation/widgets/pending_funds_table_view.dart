@@ -108,7 +108,7 @@ class PendingFundsTableView extends StatelessWidget {
                 _buildHeaderColumn('Request Date', hasFilter: true),
                 _buildHeaderColumn('Images'),
                 _buildHeaderColumn('Audio File'),
-                _buildHeaderColumn('View Quotation'),
+                _buildHeaderColumn('View Details'),
                 _buildHeaderColumn('Approve'),
                 _buildHeaderColumn('Reject'),
               ],
@@ -220,9 +220,11 @@ class PendingFundsTableView extends StatelessWidget {
                                 icon: const Icon(Icons.image_outlined, color: Color(0xFF414A51), size: 20),
                                 tooltip: 'View ${r.billUrls.length} image(s)',
                                 onPressed: () {
-                                  showDialog(
+                                  ViewQuotationDialog.show(
                                     context: context,
-                                    builder: (_) => ViewQuotationDialog(request: r),
+                                    request: r,
+                                    onApprove: onApprove,
+                                    onReject: onReject,
                                   );
                                 },
                               )
@@ -235,12 +237,14 @@ class PendingFundsTableView extends StatelessWidget {
                       Center(
                         child: r.audioNoteUrl != null && r.audioNoteUrl!.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(Icons.audiotrack, color: Color(0xFF414A51), size: 20),
+                                icon: const Icon(Icons.audiotrack, color: Color(0xFF7C3AED), size: 20),
                                 tooltip: 'Play Audio Note',
                                 onPressed: () {
-                                  showDialog(
+                                  ViewQuotationDialog.show(
                                     context: context,
-                                    builder: (_) => ViewQuotationDialog(request: r),
+                                    request: r,
+                                    onApprove: onApprove,
+                                    onReject: onReject,
                                   );
                                 },
                               )
@@ -248,24 +252,26 @@ class PendingFundsTableView extends StatelessWidget {
                       ),
                     ),
 
-                    // View Quotation
+                    // View Details
                     DataCell(
                       Center(
-                        child: InkWell(
-                          onTap: () {
-                            showDialog(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            ViewQuotationDialog.show(
                               context: context,
-                              builder: (_) => ViewQuotationDialog(request: r),
+                              request: r,
+                              onApprove: onApprove,
+                              onReject: onReject,
                             );
                           },
-                          child: Text(
-                            r.billUrls.isNotEmpty ? 'View (${r.billUrls.length})' : 'Quotation N/A',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: r.billUrls.isNotEmpty ? const Color(0xFF2563EB) : const Color(0xFF4B5563),
-                              decoration: r.billUrls.isNotEmpty ? TextDecoration.underline : TextDecoration.none,
-                            ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFF414A51)),
+                            foregroundColor: const Color(0xFF414A51),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
+                          child: const Text('View', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ),

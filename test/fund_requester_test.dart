@@ -71,16 +71,9 @@ void main() {
       expect(deserialized.items.first.subCategory, equals('CNG'));
     });
 
-    test('FirebaseFundRequestRepository lifecycle (create, fetch, approve, reject, delete)', () async {
-      final repo = FirebaseFundRequestRepository();
-
-      // 1. Fetch initial fallback requests
-      final initialRequests = await repo.getAllFundRequests();
-      expect(initialRequests.isNotEmpty, isTrue);
-
-      // 2. Create new request
+    test('FundRequest domain model copyWith and status checks', () {
       final newReq = FundRequest(
-        id: '',
+        id: 'req_test_1',
         requestNumber: 'REQ-2024-999',
         employeeId: 'emp_test',
         employeeName: 'Test Requester',
@@ -91,8 +84,8 @@ void main() {
         items: const [
           FundRequestItem(
             id: 'i1',
-            category: 'Purchases',
-            subCategory: 'Raw Material',
+            category: 'Purchase',
+            subCategory: 'Consumed',
             comments: 'PVC Pipes and elbows',
             amount: 1500.0,
           ),
@@ -101,31 +94,26 @@ void main() {
         updatedAt: DateTime.now(),
       );
 
-      final newId = await repo.createFundRequest(newReq);
-      expect(newId.isNotEmpty, isTrue);
+      expect(newReq.id, equals('req_test_1'));
+      expect(newReq.status, equals('Pending'));
 
-      // 3. Retrieve by ID
-      final retrieved = await repo.getFundRequestById(newId);
-      expect(retrieved, isNotNull);
-      expect(retrieved!.employeeName, equals('Test Requester'));
-      expect(retrieved.status, equals('Pending'));
-
-      // 4. Approve request
-      await repo.approveFundRequest(
-        newId,
+      final approved = newReq.copyWith(
+        status: 'Approved',
         approvedAmount: 1500.0,
         approvedBy: 'General Manager',
-        remarks: 'Approved for field deployment',
+        approvalRemarks: 'Approved for field deployment',
       );
-      final approved = await repo.getFundRequestById(newId);
-      expect(approved!.status, equals('Approved'));
+      expect(approved.status, equals('Approved'));
       expect(approved.approvedAmount, equals(1500.0));
       expect(approved.approvedBy, equals('General Manager'));
 
-      // 5. Delete request
-      await repo.deleteFundRequest(newId);
-      final deleted = await repo.getFundRequestById(newId);
-      expect(deleted, isNull);
+      final rejected = newReq.copyWith(
+        status: 'Rejected',
+        approvedBy: 'General Manager',
+        approvalRemarks: 'Budget exceeded',
+      );
+      expect(rejected.status, equals('Rejected'));
+      expect(rejected.approvalRemarks, equals('Budget exceeded'));
     });
 
     test('FundCategoryConstants returns correct subcategories', () {

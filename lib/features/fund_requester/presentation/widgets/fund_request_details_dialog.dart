@@ -1,7 +1,11 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_application_1/core/theme/app_colors.dart';
+import 'package:flutter_application_1/features/fund_requester/domain/models/fund_category_constants.dart';
 import 'package:flutter_application_1/features/fund_requester/domain/models/fund_request.dart';
+import 'image_viewer_dialog.dart';
+import 'voice_note_player_widget.dart';
 
 class FundRequestDetailsDialog extends StatefulWidget {
   final FundRequest request;
@@ -255,51 +259,143 @@ class _FundRequestDetailsDialogState extends State<FundRequestDetailsDialog> {
                     ),
 
                     // Attachments Section
-                    if (widget.request.billUrls.isNotEmpty || widget.request.audioNoteUrl != null) ...[
+                    if (widget.request.billUrls.isNotEmpty ||
+                        widget.request.audioNoteUrl != null) ...[
                       const SizedBox(height: 24),
                       _buildSectionHeader('Attachments & Proofs'),
                       const SizedBox(height: 12),
-                      Row(
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 10,
                         children: [
                           if (widget.request.billUrls.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.image_outlined, color: AppColors.primary, size: 28),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    '${widget.request.billUrls.length} Bill Receipt(s) Attached',
-                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                  ),
-                                ],
+                            InkWell(
+                              onTap: () {
+                                final List<BillImageItem> items = [];
+                                for (int i = 0; i < widget.request.billUrls.length; i++) {
+                                  items.add(BillImageItem(
+                                    title: 'Bill #${i + 1}',
+                                    url: widget.request.billUrls[i],
+                                  ));
+                                }
+                                if (items.isNotEmpty) {
+                                  ImageViewerDialog.show(
+                                    context: context,
+                                    images: items,
+                                  );
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEFF6FF),
+                                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.image_outlined, color: Color(0xFF2563EB), size: 24),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${widget.request.billUrls.length} Bill Receipt(s)',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E3A8A)),
+                                        ),
+                                        const Text(
+                                          'Tap to view fullscreen',
+                                          style: TextStyle(fontSize: 11, color: Color(0xFF3B82F6)),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(width: 6),
+                                    const Icon(Icons.fullscreen_rounded, size: 18, color: Color(0xFF2563EB)),
+                                  ],
+                                ),
                               ),
                             ),
-                          if (widget.request.audioNoteUrl != null) ...[
-                            const SizedBox(width: 12),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF5F3FF),
-                                border: Border.all(color: const Color(0xFFDDD6FE)),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Icon(Icons.mic_rounded, color: Color(0xFF7C3AED), size: 28),
-                                  SizedBox(width: 10),
-                                  Text(
-                                    'Voice Note Included',
-                                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF5B21B6)),
+                          if (widget.request.audioNoteUrl != null && widget.request.audioNoteUrl!.isNotEmpty)
+                            InkWell(
+                              onTap: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (ctx) => Dialog(
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(20),
+                                      constraints: const BoxConstraints(maxWidth: 420),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              const Text(
+                                                'Employee Voice Note',
+                                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.close_rounded),
+                                                onPressed: () => Navigator.of(ctx).pop(),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            'Attached to ${widget.request.requestNumber.isNotEmpty ? widget.request.requestNumber : widget.request.projectCode}',
+                                            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                          ),
+                                          const SizedBox(height: 14),
+                                          VoiceNotePlayerWidget(
+                                            isRecording: false,
+                                            hasVoiceNote: true,
+                                            audioUrl: widget.request.audioNoteUrl,
+                                            onStartRecord: () {},
+                                            onStopRecord: () {},
+                                            onDelete: () => Navigator.of(ctx).pop(),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                ],
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF5F3FF),
+                                  border: Border.all(color: const Color(0xFFDDD6FE)),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.mic_rounded, color: Color(0xFF7C3AED), size: 24),
+                                    SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Voice Note Attached',
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF5B21B6)),
+                                        ),
+                                        Text(
+                                          'Tap to listen & play',
+                                          style: TextStyle(fontSize: 11, color: Color(0xFF7C3AED)),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(width: 6),
+                                    Icon(Icons.play_circle_outline_rounded, size: 18, color: Color(0xFF7C3AED)),
+                                  ],
+                                ),
                               ),
                             ),
-                          ],
                         ],
                       ),
                     ],

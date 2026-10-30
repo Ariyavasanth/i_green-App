@@ -267,6 +267,20 @@ class FundCategoryConstants {
 
   static List<String> get categoryTitles => categories.map((c) => c.title).toList();
 
+  static IconData getCategoryIcon(String categoryTitle) {
+    final cat = categories.where((c) => c.title.toLowerCase() == categoryTitle.toLowerCase()).firstOrNull;
+    return cat?.icon ?? Icons.category_rounded;
+  }
+
+  static IconData getSubCategoryIcon(String categoryTitle, String subCategoryTitle) {
+    final cat = categories.where((c) => c.title.toLowerCase() == categoryTitle.toLowerCase()).firstOrNull;
+    if (cat != null) {
+      final sub = cat.subCategories.where((s) => s.title.toLowerCase() == subCategoryTitle.toLowerCase()).firstOrNull;
+      if (sub != null) return sub.icon;
+    }
+    return Icons.label_outline_rounded;
+  }
+
   static List<String> getSubCategoriesFor(String categoryTitle) {
     final cat = categories.where((c) => c.title.toLowerCase() == categoryTitle.toLowerCase()).firstOrNull;
     if (cat != null) {
