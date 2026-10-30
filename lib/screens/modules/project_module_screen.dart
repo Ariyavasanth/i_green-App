@@ -45,6 +45,12 @@ class ProjectModuleScreen extends ConsumerStatefulWidget {
         '/fund-requester',
         Color(0xFF0284C7),
       ),
+      _SubModule(
+        'FUND MANAGEMENT',
+        Icons.account_balance_wallet_rounded,
+        '/fund-management',
+        Color(0xFF0D9488),
+      ),
     ],
   };
 

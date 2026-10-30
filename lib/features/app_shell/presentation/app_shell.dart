@@ -202,6 +202,12 @@ class AppShell extends ConsumerWidget {
       'Employee',
     ),
     SidebarDestination(
+      'Fund Management',
+      '/fund-management',
+      Icons.account_balance_wallet_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
       'My Exit',
       '/my-exit',
       Icons.exit_to_app_outlined,

@@ -367,13 +367,17 @@ class Employee {
           (pClean == 'projects' || pClean == 'project' || pClean == 'projectoperations'))
         return true;
 
-      // Fund Requester aliases
-      if ((normClean == 'fundrequester' || normClean == 'fundrequest')) {
+      // Fund Requester & Fund Management aliases
+      if (normClean == 'fundrequester' ||
+          normClean == 'fundrequest' ||
+          normClean == 'fundmanagement') {
         if (pClean == 'fundrequester' ||
             pClean == 'fundrequest' ||
+            pClean == 'fundmanagement' ||
             pClean == 'projects' ||
             pClean == 'project' ||
-            pClean == 'projectoperations') {
+            pClean == 'projectoperations' ||
+            pClean == 'admin') {
           return true;
         }
       }

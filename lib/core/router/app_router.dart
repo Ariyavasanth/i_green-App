@@ -91,6 +91,7 @@ import '../../features/authentication/providers/authentication_providers.dart';
 import '../../features/employee/providers/employee_providers.dart';
 import '../../features/fund_requester/presentation/fund_requester_page.dart';
 import '../../features/fund_requester/presentation/create_fund_request_page.dart';
+import '../../features/fund_management/presentation/screens/fund_management_page.dart';
 
 String? _getRequiredPermissionForPath(String path) {
   if (path == '/home') return 'Home';
@@ -119,6 +120,7 @@ String? _getRequiredPermissionForPath(String path) {
   if (path == '/loan') return 'Loan';
   if (path == '/loan-management') return 'Loan Management';
   if (path == '/fund-requester' || path == '/fund-request') return 'Fund Requester';
+  if (path == '/fund-management') return 'Fund Management';
   if (path == '/my-exit') return 'My Exit';
   if (path == '/exit-management') return 'Exit Management';
   if (path == '/incentive') return 'Incentive Request';
@@ -235,7 +237,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (path == '/module-dashboard' ||
           path.startsWith('/module/') ||
           path.startsWith('/projects') ||
-          path.startsWith('/project')) {
+          path.startsWith('/project') ||
+          path.startsWith('/fund-requester') ||
+          path.startsWith('/fund-management') ||
+          path == '/fund-requester' ||
+          path == '/fund-management') {
         return null;
       }
 
@@ -283,6 +289,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/projects/fund-request', builder: (_, _) => const FundRequesterPage()),
       GoRoute(path: '/project/fund-request', builder: (_, _) => const FundRequesterPage()),
+      GoRoute(path: '/projects/fund-management', builder: (_, _) => const FundManagementPage()),
+      GoRoute(path: '/project/fund-management', builder: (_, _) => const FundManagementPage()),
       GoRoute(path: '/module/factory', builder: (_, _) => const FactoryModuleScreen()),
       GoRoute(
         path: '/employee/register/:linkId',
@@ -513,6 +521,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 },
               ),
             ],
+          ),
+          GoRoute(
+            path: '/fund-management',
+            builder: (_, _) => const FundManagementPage(),
           ),
           GoRoute(
             path: '/exit-management',
