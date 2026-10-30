@@ -22,6 +22,8 @@ class SiteProject {
     this.qualified = '',
     this.tenderCategory = '',
     this.tenderAmount = 0.0,
+    this.approximateProjectValue = 0.0,
+    this.actualProjectValue = 0.0,
     // Section 4 – Tender Spec / Enquiry Spec
     this.tenderSpecRemark = '',
     this.tenderSpecDocuments = const [],
@@ -144,6 +146,8 @@ class SiteProject {
   final String qualified;
   final String tenderCategory;
   final double tenderAmount;
+  final double approximateProjectValue;
+  final double actualProjectValue;
 
   // Section 4 – Tender Spec / Enquiry Spec
   final String tenderSpecRemark;
@@ -282,6 +286,8 @@ class SiteProject {
         'qualified': qualified,
         'tender_category': tenderCategory,
         'tender_amount': tenderAmount,
+        'approximate_project_value': approximateProjectValue,
+        'actual_project_value': actualProjectValue,
         // Tender Spec
         'tender_spec_remark': tenderSpecRemark,
         'tender_spec_documents':
@@ -456,6 +462,10 @@ class SiteProject {
       qualified: json['qualified'] as String? ?? '',
       tenderCategory: json['tender_category'] as String? ?? '',
       tenderAmount: (json['tender_amount'] as num?)?.toDouble() ?? 0.0,
+      approximateProjectValue:
+          (json['approximate_project_value'] as num?)?.toDouble() ?? 0.0,
+      actualProjectValue:
+          (json['actual_project_value'] as num?)?.toDouble() ?? 0.0,
       // Tender Spec
       tenderSpecRemark: json['tender_spec_remark'] as String? ?? '',
       tenderSpecDocuments: parseDocList(json['tender_spec_documents']),
@@ -596,6 +606,8 @@ class SiteProject {
     String? qualified,
     String? tenderCategory,
     double? tenderAmount,
+    double? approximateProjectValue,
+    double? actualProjectValue,
     // Tender Spec
     String? tenderSpecRemark,
     List<ProjectDocument>? tenderSpecDocuments,
@@ -705,6 +717,9 @@ class SiteProject {
       qualified: qualified ?? this.qualified,
       tenderCategory: tenderCategory ?? this.tenderCategory,
       tenderAmount: tenderAmount ?? this.tenderAmount,
+      approximateProjectValue:
+          approximateProjectValue ?? this.approximateProjectValue,
+      actualProjectValue: actualProjectValue ?? this.actualProjectValue,
       tenderSpecRemark: tenderSpecRemark ?? this.tenderSpecRemark,
       tenderSpecDocuments: tenderSpecDocuments ?? this.tenderSpecDocuments,
       tenderDescriptions: tenderDescriptions ?? this.tenderDescriptions,

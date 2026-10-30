@@ -66,6 +66,8 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
   String _qualified = 'Yes';
   String _selectedTenderType = '';
   final _tenderAmountCtrl = TextEditingController();
+  final _approximateProjectValueCtrl = TextEditingController();
+  final _actualProjectValueCtrl = TextEditingController();
 
   final _tenderSpecRemarkCtrl = TextEditingController();
   final List<PlatformFile> _tenderSpecFiles = [];
@@ -235,7 +237,17 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
     _qualified = p.qualified.isNotEmpty ? p.qualified : 'Yes';
     _selectedTenderType = p.tenderType;
     _tenderAmountCtrl.text =
-        p.tenderAmount > 0 ? p.tenderAmount.toString() : '';
+        p.tenderAmount > 0 ? (p.tenderAmount % 1 == 0 ? p.tenderAmount.toInt().toString() : p.tenderAmount.toString()) : '';
+    _approximateProjectValueCtrl.text = p.approximateProjectValue > 0
+        ? (p.approximateProjectValue % 1 == 0
+            ? p.approximateProjectValue.toInt().toString()
+            : p.approximateProjectValue.toString())
+        : '';
+    _actualProjectValueCtrl.text = p.actualProjectValue > 0
+        ? (p.actualProjectValue % 1 == 0
+            ? p.actualProjectValue.toInt().toString()
+            : p.actualProjectValue.toString())
+        : '';
 
     _tenderSpecRemarkCtrl.text = p.tenderSpecRemark;
     _existingTenderSpecDocs = List.from(p.tenderSpecDocuments);
@@ -325,6 +337,8 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
   void dispose() {
     _scrollController.dispose();
     _tenderAmountCtrl.dispose();
+    _approximateProjectValueCtrl.dispose();
+    _actualProjectValueCtrl.dispose();
     _tenderSpecRemarkCtrl.dispose();
     _tdDescCtrl.dispose();
     _tdUnitCtrl.dispose();
@@ -639,6 +653,10 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
         qualified: _qualified,
         tenderAmount:
             double.tryParse(_tenderAmountCtrl.text.trim()) ?? 0.0,
+        approximateProjectValue:
+            double.tryParse(_approximateProjectValueCtrl.text.trim()) ?? 0.0,
+        actualProjectValue:
+            double.tryParse(_actualProjectValueCtrl.text.trim()) ?? 0.0,
         tenderSpecRemark: _tenderSpecRemarkCtrl.text.trim(),
         tenderSpecDocuments: _existingTenderSpecDocs,
         tenderDescriptions: List.from(_tenderDescriptions),
@@ -736,6 +754,14 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
       if (old.tenderAmount != updatedProject.tenderAmount) {
         changes.add(
             'Tender Amount updated from ₹${old.tenderAmount} to ₹${updatedProject.tenderAmount}');
+      }
+      if (old.approximateProjectValue != updatedProject.approximateProjectValue) {
+        changes.add(
+            'Approximate Project Value updated to ₹${updatedProject.approximateProjectValue}');
+      }
+      if (old.actualProjectValue != updatedProject.actualProjectValue) {
+        changes.add(
+            'Actual Project Value updated to ₹${updatedProject.actualProjectValue}');
       }
       if (old.tenderType != updatedProject.tenderType) {
         changes.add('Tender Type updated to "${updatedProject.tenderType}"');
@@ -1723,6 +1749,12 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
                   _extractFromProjectCode(p)),
               _buildMetaTag(Icons.tag_rounded, 'Serial Num',
                   _extractSerialFromCode(p.projectCode)),
+              if (p.approximateProjectValue > 0)
+                _buildMetaTag(Icons.currency_rupee_rounded, 'Approx Value',
+                    NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0).format(p.approximateProjectValue)),
+              if (p.actualProjectValue > 0)
+                _buildMetaTag(Icons.currency_rupee_rounded, 'Actual Value',
+                    NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0).format(p.actualProjectValue)),
             ],
           ),
         ],
@@ -1904,8 +1936,7 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
   // ─── 1. Tender Type Grid ───
 
   Widget _buildTenderTypeGrid(List<String> tenderTypes) {
-    final tOptions =
-        tenderTypes.isEmpty ? ['Open Tender', 'Limited Tender', 'Other'] : tenderTypes;
+    final tOptions = const ['Open', 'Close'];
 
     if (_isMobile) {
       return Column(
@@ -1958,49 +1989,9 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
                 fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
             decoration: _inputDeco('Tender Amount', prefixText: '₹ '),
           ),
-        ],
-      );
-    }
-
-    return Row(
-      children: [
-        Expanded(
-          flex: 2,
-          child: DropdownButtonFormField<String>(
-            initialValue:
-                _qualifiedOptions.contains(_qualified) ? _qualified : 'Yes',
-            decoration: _inputDeco('Qualified Status'),
-            style: const TextStyle(
-                fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-            items: _qualifiedOptions
-                .map((o) => DropdownMenuItem(value: o, child: Text(o)))
-                .toList(),
-            onChanged: (v) => setState(() => _qualified = v ?? 'Yes'),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 3,
-          child: DropdownButtonFormField<String>(
-            initialValue: tOptions.contains(_selectedTenderType)
-                ? _selectedTenderType
-                : null,
-            decoration: _inputDeco('Choose Tender Category / Type'),
-            style: const TextStyle(
-                fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-            items: tOptions
-                .map((o) => DropdownMenuItem(
-                    value: o,
-                    child: Text(o, style: const TextStyle(fontSize: 12.5))))
-                .toList(),
-            onChanged: (v) => setState(() => _selectedTenderType = v ?? ''),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 3,
-          child: TextFormField(
-            controller: _tenderAmountCtrl,
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _approximateProjectValueCtrl,
             keyboardType:
                 const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [
@@ -2008,8 +1999,111 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
             ],
             style: const TextStyle(
                 fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-            decoration: _inputDeco('Tender Amount', prefixText: '₹ '),
+            decoration:
+                _inputDeco('Approximate Project Value', prefixText: '₹ '),
           ),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _actualProjectValueCtrl,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+            ],
+            style: const TextStyle(
+                fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+            decoration: _inputDeco('Actual Project Value', prefixText: '₹ '),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: DropdownButtonFormField<String>(
+                initialValue:
+                    _qualifiedOptions.contains(_qualified) ? _qualified : 'Yes',
+                decoration: _inputDeco('Qualified Status'),
+                style: const TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                items: _qualifiedOptions
+                    .map((o) => DropdownMenuItem(value: o, child: Text(o)))
+                    .toList(),
+                onChanged: (v) => setState(() => _qualified = v ?? 'Yes'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 3,
+              child: DropdownButtonFormField<String>(
+                initialValue: tOptions.contains(_selectedTenderType)
+                    ? _selectedTenderType
+                    : null,
+                decoration: _inputDeco('Choose Tender Category / Type'),
+                style: const TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                items: tOptions
+                    .map((o) => DropdownMenuItem(
+                        value: o,
+                        child: Text(o, style: const TextStyle(fontSize: 12.5))))
+                    .toList(),
+                onChanged: (v) => setState(() => _selectedTenderType = v ?? ''),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 3,
+              child: TextFormField(
+                controller: _tenderAmountCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                ],
+                style: const TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                decoration: _inputDeco('Tender Amount', prefixText: '₹ '),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _approximateProjectValueCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                ],
+                style: const TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                decoration:
+                    _inputDeco('Approximate Project Value', prefixText: '₹ '),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextFormField(
+                controller: _actualProjectValueCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                ],
+                style: const TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                decoration: _inputDeco('Actual Project Value', prefixText: '₹ '),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -4034,12 +4128,14 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
 
   String _extractFromProjectCode(SiteProject p) {
     final parts = p.projectCode.split('-');
+    if (parts.length > 2 && parts[2].contains('/')) return parts[2];
     if (parts.length > 3) return parts[3];
     return '—';
   }
 
   String _extractSerialFromCode(String code) {
     final parts = code.split('-');
+    if (parts.length > 3 && int.tryParse(parts[3]) != null) return parts[3];
     if (parts.isNotEmpty) return parts.last;
     return '';
   }

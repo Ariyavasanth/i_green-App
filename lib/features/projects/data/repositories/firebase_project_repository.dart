@@ -34,16 +34,8 @@ class FirebaseProjectRepository implements ProjectRepository {
       _projectsRef.doc(projectId).collection('audit_logs');
 
   static const List<String> _defaultTenderTypes = [
-    'Open Tender',
-    'Limited Tender',
-    'Single Tender / Direct',
-    'E-Tender',
-    'Item Rate Tender',
-    'Percentage Rate Tender',
-    'EPC Tender',
-    'Turnkey Tender',
-    'Quotation',
-    'Other',
+    'Open',
+    'Close',
   ];
 
   @override

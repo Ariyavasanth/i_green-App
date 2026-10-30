@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -54,9 +55,14 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
   String _selectedDistrict = 'Chennai';
   final _areaController = TextEditingController();
   final _projectCodeController = TextEditingController();
+  final _approximateProjectValueController = TextEditingController();
+  final _actualProjectValueController = TextEditingController();
 
   // SECTION 3 — TENDER TYPE
-  String _selectedTenderType = 'Open Tender';
+  static const List<String> _tenderTypeOptions = ['Open', 'Close'];
+  String _selectedTenderType = 'Open';
+  String _selectedQualified = 'Yes';
+  final _tenderAmountController = TextEditingController();
 
   // SECTION 4 — TENDER SPEC / ENQUIRY SPEC
   final _tenderSpecRemarkController = TextEditingController();
@@ -127,8 +133,25 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
             : (_districtsList.isNotEmpty ? _districtsList.first : 'Chennai');
     _areaController.text = p.area;
     _projectCodeController.text = p.projectCode;
-    _selectedTenderType =
-        p.tenderType.isNotEmpty ? p.tenderType : 'Open Tender';
+    _approximateProjectValueController.text = p.approximateProjectValue > 0
+        ? (p.approximateProjectValue % 1 == 0
+            ? p.approximateProjectValue.toInt().toString()
+            : p.approximateProjectValue.toString())
+        : '';
+    _actualProjectValueController.text = p.actualProjectValue > 0
+        ? (p.actualProjectValue % 1 == 0
+            ? p.actualProjectValue.toInt().toString()
+            : p.actualProjectValue.toString())
+        : '';
+    _selectedTenderType = p.tenderType.toLowerCase().contains('close')
+        ? 'Close'
+        : 'Open';
+    _selectedQualified = p.qualified.isNotEmpty ? p.qualified : 'Yes';
+    _tenderAmountController.text = p.tenderAmount > 0
+        ? (p.tenderAmount % 1 == 0
+            ? p.tenderAmount.toInt().toString()
+            : p.tenderAmount.toString())
+        : '';
     _tenderSpecRemarkController.text = p.tenderSpecRemark;
     _existingTenderSpecDocs = List.from(p.tenderSpecDocuments);
     _openingDate = p.openingDate;
@@ -149,6 +172,9 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     _generalCodeController.dispose();
     _areaController.dispose();
     _projectCodeController.dispose();
+    _approximateProjectValueController.dispose();
+    _actualProjectValueController.dispose();
+    _tenderAmountController.dispose();
     _tenderSpecRemarkController.dispose();
     _openingDateRemarkController.dispose();
     _closingDateRemarkController.dispose();
@@ -268,10 +294,12 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     final clientName = _selectedClient?.displayName.isNotEmpty == true
         ? _selectedClient!.displayName
         : (_selectedClient?.companyName ?? 'GEN');
+    final details = _generalDetailsController.text.trim();
     final place = _placeController.text.trim();
 
     final code = ProjectCodeGenerator.generateGeneralCode(
       clientName: clientName,
+      details: details,
       place: place,
       sequenceNumber: 1,
     );
@@ -289,11 +317,16 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     );
   }
 
-  void _generateProjectCodeAction() {
+  Future<void> _generateProjectCodeAction() async {
     final clientName = _selectedClient?.displayName.isNotEmpty == true
         ? _selectedClient!.displayName
         : (_selectedClient?.companyName ?? 'CLI');
     final area = _areaController.text.trim();
+
+    int seq = 1;
+    try {
+      seq = await ref.read(projectRepositoryProvider).getNextProjectSequence();
+    } catch (_) {}
 
     final code = ProjectCodeGenerator.generateProjectCode(
       clientName: clientName,
@@ -301,7 +334,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
       state: _selectedState,
       district: _selectedDistrict,
       area: area,
-      sequenceNumber: 1,
+      sequenceNumber: seq,
     );
 
     setState(() {
@@ -444,17 +477,23 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     if (_generalCodeController.text.trim().isEmpty) {
       _generalCodeController.text = ProjectCodeGenerator.generateGeneralCode(
         clientName: _selectedClient!.displayName,
+        details: _generalDetailsController.text.trim(),
         place: _placeController.text.trim(),
       );
     }
 
     if (_projectCodeController.text.trim().isEmpty) {
+      int seq = 1;
+      try {
+        seq = await ref.read(projectRepositoryProvider).getNextProjectSequence();
+      } catch (_) {}
       _projectCodeController.text = ProjectCodeGenerator.generateProjectCode(
         clientName: _selectedClient!.displayName,
         subOrOwn: _subOrOwn,
         state: _selectedState,
         district: _selectedDistrict,
         area: _areaController.text.trim(),
+        sequenceNumber: seq,
       );
     }
 
@@ -506,6 +545,13 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
               ? _projectCodeController.text.trim()
               : _loadedProject!.projectCode,
           tenderType: _selectedTenderType,
+          qualified: _selectedQualified,
+          tenderAmount: double.tryParse(_tenderAmountController.text.trim()) ?? 0.0,
+          approximateProjectValue:
+              double.tryParse(_approximateProjectValueController.text.trim()) ??
+                  0.0,
+          actualProjectValue:
+              double.tryParse(_actualProjectValueController.text.trim()) ?? 0.0,
           tenderSpecRemark: _tenderSpecRemarkController.text.trim(),
           tenderSpecDocuments: _existingTenderSpecDocs,
           assignedToEmployeeNames: assignedNames,
@@ -574,6 +620,13 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
           area: _areaController.text.trim(),
           projectCode: _projectCodeController.text.trim(),
           tenderType: _selectedTenderType,
+          qualified: _selectedQualified,
+          tenderAmount: double.tryParse(_tenderAmountController.text.trim()) ?? 0.0,
+          approximateProjectValue:
+              double.tryParse(_approximateProjectValueController.text.trim()) ??
+                  0.0,
+          actualProjectValue:
+              double.tryParse(_actualProjectValueController.text.trim()) ?? 0.0,
           tenderSpecRemark: _tenderSpecRemarkController.text.trim(),
           assignedToEmployeeNames: assignedNames,
           assignedToEmployeeIds: assignedIds,
@@ -950,6 +1003,23 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                                 Expanded(child: _buildAreaField()),
                               ],
                             ),
+                          const SizedBox(height: 14),
+                          // Project Values (Approximate & Actual)
+                          if (isMobile) ...[
+                            _buildApproximateProjectValueField(),
+                            const SizedBox(height: 14),
+                            _buildActualProjectValueField(),
+                          ] else
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                    child:
+                                        _buildApproximateProjectValueField()),
+                                const SizedBox(width: 16),
+                                Expanded(child: _buildActualProjectValueField()),
+                              ],
+                            ),
                           const SizedBox(height: 16),
                           // Project Code Action & Display
                           _buildCodeActionRow(
@@ -968,18 +1038,58 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                       sectionNumber: 'SECTION 3',
                       sectionTitle: 'TENDER TYPE',
                       icon: Icons.assignment_outlined,
-                      child: AppSearchableDropdown<String>(
-                        label: 'Tender Type',
-                        value: tenderTypes.contains(_selectedTenderType)
-                            ? _selectedTenderType
-                            : (tenderTypes.isNotEmpty ? tenderTypes.first : 'Open Tender'),
-                        items: tenderTypes,
-                        searchHint: 'Search tender type...',
-                        placeholder: 'Select Tender Type',
-                        onChanged: (val) {
-                          if (val != null) setState(() => _selectedTenderType = val);
-                        },
-                      ),
+                      child: isMobile
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                AppSearchableDropdown<String>(
+                                  label: 'Tender Type',
+                                  value: _tenderTypeOptions.contains(_selectedTenderType)
+                                      ? _selectedTenderType
+                                      : 'Open',
+                                  items: _tenderTypeOptions,
+                                  searchHint: 'Search tender type...',
+                                  placeholder: 'Select Tender Type',
+                                  onChanged: (val) {
+                                    if (val != null) setState(() => _selectedTenderType = val);
+                                  },
+                                ),
+                                const SizedBox(height: 14),
+                                _buildQualifiedDropdown(),
+                                const SizedBox(height: 14),
+                                _buildTenderAmountField(),
+                              ],
+                            )
+                          : Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: AppSearchableDropdown<String>(
+                                    label: 'Tender Type',
+                                    value: _tenderTypeOptions.contains(_selectedTenderType)
+                                        ? _selectedTenderType
+                                        : 'Open',
+                                    items: _tenderTypeOptions,
+                                    searchHint: 'Search tender type...',
+                                    placeholder: 'Select Tender Type',
+                                    onChanged: (val) {
+                                      if (val != null) setState(() => _selectedTenderType = val);
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  flex: 2,
+                                  child: _buildQualifiedDropdown(),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  flex: 3,
+                                  child: _buildTenderAmountField(),
+                                ),
+                              ],
+                            ),
                     ),
                     const SizedBox(height: 18),
 
@@ -1946,6 +2056,185 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
             style: const TextStyle(fontSize: 12, color: Colors.black87),
             decoration: InputDecoration(
               hintText: 'e.g. Porur / Guindy',
+              hintStyle: const TextStyle(fontSize: 11.5, color: Colors.black38),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8.5),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: AppColors.primary, width: 1.2),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildApproximateProjectValueField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Approximate Project Value',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 5),
+        SizedBox(
+          height: 38,
+          child: TextFormField(
+            controller: _approximateProjectValueController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+            ],
+            style: const TextStyle(fontSize: 12, color: Colors.black87),
+            decoration: InputDecoration(
+              hintText: 'e.g. 2500000',
+              prefixText: '₹ ',
+              prefixStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87),
+              hintStyle:
+                  const TextStyle(fontSize: 11.5, color: Colors.black38),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8.5),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide:
+                    const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide:
+                    const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide:
+                    const BorderSide(color: AppColors.primary, width: 1.2),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActualProjectValueField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Actual Project Value',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 5),
+        SizedBox(
+          height: 38,
+          child: TextFormField(
+            controller: _actualProjectValueController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+            ],
+            style: const TextStyle(fontSize: 12, color: Colors.black87),
+            decoration: InputDecoration(
+              hintText: 'e.g. 2000000',
+              prefixText: '₹ ',
+              prefixStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87),
+              hintStyle:
+                  const TextStyle(fontSize: 11.5, color: Colors.black38),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8.5),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide:
+                    const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide:
+                    const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide:
+                    const BorderSide(color: AppColors.primary, width: 1.2),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQualifiedDropdown() {
+    return AppSearchableDropdown<String>(
+      label: 'Qualified',
+      value: _selectedQualified,
+      items: const ['Yes', 'No'],
+      searchHint: 'Search Qualified...',
+      placeholder: 'Select Qualified',
+      onChanged: (val) {
+        if (val != null) setState(() => _selectedQualified = val);
+      },
+    );
+  }
+
+  Widget _buildTenderAmountField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Tender Amount',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 5),
+        SizedBox(
+          height: 38,
+          child: TextFormField(
+            controller: _tenderAmountController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+            ],
+            style: const TextStyle(fontSize: 12, color: Colors.black87),
+            decoration: InputDecoration(
+              hintText: 'Enter amount',
+              prefixText: '₹ ',
+              prefixStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
               hintStyle: const TextStyle(fontSize: 11.5, color: Colors.black38),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8.5),
               border: OutlineInputBorder(

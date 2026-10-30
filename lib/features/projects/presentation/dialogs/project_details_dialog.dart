@@ -320,6 +320,14 @@ class ProjectDetailsDialog extends StatelessWidget {
                         items: [
                           _InfoPair('Tender Type', project.tenderType.isNotEmpty ? project.tenderType : '—'),
                           _InfoPair('Assigned To', project.assignedToEmployeeName),
+                          _InfoPair('Approximate Project Value',
+                              project.approximateProjectValue > 0
+                                  ? NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0).format(project.approximateProjectValue)
+                                  : '—'),
+                          _InfoPair('Actual Project Value',
+                              project.actualProjectValue > 0
+                                  ? NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0).format(project.actualProjectValue)
+                                  : '—'),
                           _InfoPair('Opening Date', project.openingDate != null ? DateFormat('dd-MM-yyyy').format(project.openingDate!) : '—'),
                           _InfoPair('Closing Date', project.closingDate != null ? DateFormat('dd-MM-yyyy').format(project.closingDate!) : '—'),
                         ],

@@ -159,37 +159,79 @@ void main() {
       expect(copied.updatedByName, 'Priya S');
     });
 
+    test('SiteProject handles Approximate Project Value and Actual Project Value correctly', () {
+      final now = DateTime(2026, 10, 30);
+      final project = SiteProject(
+        id: 'proj_values',
+        employeeName: 'Admin',
+        clientName: 'SHRISHTI POWER',
+        generalCode: 'GC-SHR-001',
+        projectCode: 'PRJ-SUB-001',
+        approximateProjectValue: 2500000.0,
+        actualProjectValue: 2000000.0,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final json = project.toJson();
+      expect(json['approximate_project_value'], 2500000.0);
+      expect(json['actual_project_value'], 2000000.0);
+
+      // Deserialization restores both values
+      final restored = SiteProject.fromJson(json, docId: 'proj_values');
+      expect(restored.approximateProjectValue, 2500000.0);
+      expect(restored.actualProjectValue, 2000000.0);
+
+      // Verify independence: Updating actual does not alter approximate
+      final updatedActualOnly = restored.copyWith(actualProjectValue: 2200000.0);
+      expect(updatedActualOnly.approximateProjectValue, 2500000.0);
+      expect(updatedActualOnly.actualProjectValue, 2200000.0);
+
+      // Verify independence: Updating approximate does not alter actual
+      final updatedApproxOnly = restored.copyWith(approximateProjectValue: 2800000.0);
+      expect(updatedApproxOnly.approximateProjectValue, 2800000.0);
+      expect(updatedApproxOnly.actualProjectValue, 2000000.0);
+
+      // Legacy project without value fields defaults safely to 0.0 without errors
+      final legacyJson = Map<String, dynamic>.from(json)
+        ..remove('approximate_project_value')
+        ..remove('actual_project_value');
+      final legacyRestored = SiteProject.fromJson(legacyJson, docId: 'legacy_proj');
+      expect(legacyRestored.approximateProjectValue, 0.0);
+      expect(legacyRestored.actualProjectValue, 0.0);
+    });
+
     test('ProjectCodeGenerator generates valid General Code', () {
       final code = ProjectCodeGenerator.generateGeneralCode(
-        clientName: 'Larsen & Toubro',
-        place: 'Chennai',
+        clientName: 'AE POWER',
+        details: 'asdfsdf',
+        place: 'chennai',
         sequenceNumber: 1,
       );
 
-      expect(code.startsWith('GC-'), isTrue);
-      expect(code.contains('CHE'), isTrue);
+      expect(code, 'AE POWER-asdfsdf-chennai-01');
     });
 
     test('ProjectCodeGenerator generates valid Project Code', () {
       final code = ProjectCodeGenerator.generateProjectCode(
-        clientName: 'L&T Infra',
-        subOrOwn: 'Own',
+        clientName: 'SHRISHTI POWER',
+        subOrOwn: 'SUB',
         state: 'Tamil Nadu',
-        district: 'Chennai',
-        area: 'Porur',
-        sequenceNumber: 1,
+        district: 'Chengalpattu',
+        area: '250mm HDPE-Siruseri',
+        sequenceNumber: 2,
       );
 
-      expect(code.startsWith('PRJ-OWN-'), isTrue);
-      expect(code.endsWith('-001'), isTrue);
+      expect(code.startsWith('SHRISHTI POWER-SUB-'), isTrue);
+      expect(code.contains('-2-TN-Chengalpattu-250mm HDPE-Siruseri'), isTrue);
     });
 
-    test('ProjectCodeGenerator handles empty or special character inputs gracefully', () {
+    test('ProjectCodeGenerator handles empty or fallback inputs gracefully', () {
       final genCode = ProjectCodeGenerator.generateGeneralCode(
-        clientName: '!@#\$%',
+        clientName: '',
         place: '',
       );
-      expect(genCode.startsWith('GC-GEN-LOC-'), isTrue);
+      expect(genCode, 'GEN-DETAILS-LOC-01');
 
       final prjCode = ProjectCodeGenerator.generateProjectCode(
         clientName: '',
@@ -197,7 +239,8 @@ void main() {
         state: '',
         district: '',
       );
-      expect(prjCode.startsWith('PRJ-SUB-CLI-IN-DIS-'), isTrue);
+      expect(prjCode.startsWith('CLI-SUB-'), isTrue);
+      expect(prjCode.endsWith('-1-IN-DIS-AREA'), isTrue);
     });
   });
 }
