@@ -483,6 +483,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                   ref.invalidate(allAttendanceRecordsProvider);
                   ref.invalidate(attendanceRecordsProvider);
                   ref.invalidate(allLeaveRequestsProvider);
+                  ref.invalidate(allOnDutyAssignmentsProvider);
                   ref.invalidate(employeesProvider);
                   ref.invalidate(payrollRecordsForMonthProvider);
                   ref.invalidate(allPayrollRecordsProvider);

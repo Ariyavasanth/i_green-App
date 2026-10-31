@@ -311,6 +311,23 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
     required AttendanceStatusInfo? statusInfo,
     required DateTime date,
   }) {
+    // 1. On Duty Check
+    final isOdRecord = officeRecord != null &&
+        (officeRecord.status.toLowerCase().contains('on duty') ||
+         officeRecord.status.toLowerCase() == 'od' ||
+         officeRecord.notes.toLowerCase().contains('on duty'));
+    final isOnDuty = statusInfo == AttendanceStatusInfo.onDuty || isOdRecord;
+
+    if (isOnDuty) {
+      return 'On Duty';
+    }
+
+    // 2. On Leave Check
+    if (statusInfo == AttendanceStatusInfo.onLeave ||
+        (officeRecord != null && officeRecord.status.toLowerCase().contains('leave'))) {
+      return 'On Leave';
+    }
+
     final hasOfficeCheckIn = officeRecord != null &&
         (officeRecord.effectiveCheckInTime.isNotEmpty ||
          officeRecord.status.toLowerCase() == 'present' ||
@@ -332,8 +349,6 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
       return 'Site Active (${daySiteVisits.length})';
     }
 
-    if (statusInfo == AttendanceStatusInfo.onDuty) return 'On Duty';
-    if (statusInfo == AttendanceStatusInfo.onLeave) return 'On Leave';
     if (statusInfo == AttendanceStatusInfo.holiday) return 'Holiday';
     if (statusInfo == AttendanceStatusInfo.weeklyOff) return 'Weekly Off';
     if (statusInfo == AttendanceStatusInfo.beforeJoining) return 'Before Joining';
@@ -441,7 +456,9 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
         if (_selectedStatusFilter == 'Office & Site' && !unifiedStatus.contains('Office & Site')) {
           return false;
         }
-        if (_selectedStatusFilter == 'Office Present' && !unifiedStatus.contains('Office Present')) {
+        if (_selectedStatusFilter == 'Office Present' &&
+            !unifiedStatus.contains('Office Present') &&
+            !unifiedStatus.contains('Late (Office)')) {
           return false;
         }
         if (_selectedStatusFilter == 'Site Active' && !unifiedStatus.contains('Site Active')) {
@@ -453,7 +470,9 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
         if (_selectedStatusFilter == 'On Leave' && unifiedStatus != 'On Leave') {
           return false;
         }
-        if (_selectedStatusFilter == 'Absent' && unifiedStatus != 'Absent') {
+        if (_selectedStatusFilter == 'Absent' &&
+            unifiedStatus != 'Absent' &&
+            unifiedStatus != 'Not Checked In') {
           return false;
         }
       }
@@ -1077,38 +1096,37 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
     for (final emp in widget.allEmployees) {
       final officeRec = _findOfficeRecord(emp, _selectedDate);
       final siteVisits = _findSiteVisits(emp, _selectedDate);
-      final hasOffice = officeRec != null &&
-          (officeRec.effectiveCheckInTime.isNotEmpty ||
-           officeRec.status.toLowerCase() == 'present' ||
-           officeRec.status.toLowerCase() == 'checked out' ||
-           officeRec.status.toLowerCase() == 'late');
-      final hasSite = siteVisits.isNotEmpty;
+      final statusInfo = AttendanceStatusHelper.resolveStatus(
+        employee: emp,
+        date: _selectedDate,
+        record: officeRec,
+        leaves: widget.leaves,
+        onDutyAssignments: widget.onDutyAssignments,
+        holidays: widget.holidays,
+        permissions: widget.permissions,
+      );
+      final unifiedStatus = _resolveUnifiedStatus(
+        employee: emp,
+        officeRecord: officeRec,
+        daySiteVisits: siteVisits,
+        statusInfo: statusInfo,
+        date: _selectedDate,
+      );
 
-      if (hasOffice && hasSite) {
+      if (unifiedStatus == 'Office & Site') {
         totalBothOfficeAndSite++;
         totalOfficePresent++;
         totalSiteEmployees++;
         totalSiteVisitsToday += siteVisits.length;
-      } else if (hasOffice) {
+      } else if (unifiedStatus.contains('Office Present') || unifiedStatus.contains('Late (Office)')) {
         totalOfficePresent++;
-      } else if (hasSite) {
+      } else if (unifiedStatus.contains('Site Active')) {
         totalSiteEmployees++;
         totalSiteVisitsToday += siteVisits.length;
-      } else {
-        final statusInfo = AttendanceStatusHelper.resolveStatus(
-          employee: emp,
-          date: _selectedDate,
-          record: officeRec,
-          leaves: widget.leaves,
-          onDutyAssignments: widget.onDutyAssignments,
-          holidays: widget.holidays,
-          permissions: widget.permissions,
-        );
-        if (statusInfo == AttendanceStatusInfo.onDuty || statusInfo == AttendanceStatusInfo.onLeave) {
-          totalOnDutyOrLeave++;
-        } else if (statusInfo == AttendanceStatusInfo.absent) {
-          totalAbsent++;
-        }
+      } else if (unifiedStatus == 'On Duty' || unifiedStatus == 'On Leave') {
+        totalOnDutyOrLeave++;
+      } else if (unifiedStatus == 'Absent' || unifiedStatus == 'Not Checked In') {
+        totalAbsent++;
       }
     }
 

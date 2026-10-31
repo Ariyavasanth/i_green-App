@@ -148,7 +148,9 @@ class AttendanceStatusHelper {
         }
         return AttendanceStatusInfo.late;
       }
-      if (stLower.contains('on duty') || stLower == 'od') {
+      if (stLower.contains('on duty') ||
+          stLower == 'od' ||
+          effectiveRecord.notes.toLowerCase().contains('on duty')) {
         return AttendanceStatusInfo.onDuty;
       }
       if (stLower == 'present' || stLower == 'completed' || stLower == 'checked out') {
@@ -226,10 +228,20 @@ class AttendanceStatusHelper {
     // 3. Check On Duty Assignments (Isolated by integer employeeId which is now unique per employee)
     if (onDutyAssignments != null && onDutyAssignments.isNotEmpty) {
       for (final od in onDutyAssignments) {
-        if (od.employeeId == employee.id &&
+        final isEmpMatch = od.employeeId == employee.id ||
+            (curNum > 0 && od.employeeId > 0 && curNum == od.employeeId) ||
+            (od.employeeName.trim().isNotEmpty &&
+                employee.fullName.trim().isNotEmpty &&
+                od.employeeName.trim().toLowerCase() == employee.fullName.trim().toLowerCase());
+        if (isEmpMatch &&
             od.status.toUpperCase() != 'CANCELLED' &&
             od.status.toUpperCase() != 'REJECTED') {
           if (od.date.trim() == dateStr) {
+            return AttendanceStatusInfo.onDuty;
+          }
+          final odParsedDate = _parseDate(od.date);
+          if (odParsedDate != null &&
+              DateTime(odParsedDate.year, odParsedDate.month, odParsedDate.day) == targetDate) {
             return AttendanceStatusInfo.onDuty;
           }
         }
