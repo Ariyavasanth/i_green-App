@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../firebase_options.dart';
 import '../data/firebase_attendance_repository.dart';
+import 'geofence_exit_validator.dart';
 
 /// Top-level callback required by flutter_foreground_task.
 /// Must be annotated with @pragma('vm:entry-point') so it is preserved in release mode.
@@ -81,36 +82,73 @@ class AttendanceTaskHandler extends TaskHandler {
       }
 
       // 4. GPS Reading Sanity Validation (Rule: Never auto-checkout on invalid GPS)
-      if (position.latitude == 0.0 && position.longitude == 0.0) {
-        return; // Invalid 0,0 coordinates
-      }
-      if (position.accuracy > 100 || position.accuracy <= 0) {
-        return; // Accuracy too low (>100 meters) to reliably judge geofence exit
-      }
-      if (!kIsWeb && position.isMocked) {
-        return; // Fake/mocked location -> ignore
+      if (!GeofenceExitValidator.isValidGpsReading(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        accuracy: position.accuracy,
+        isMocked: !kIsWeb && position.isMocked,
+      )) {
+        return; // Invalid, imprecise, or fake GPS -> safe skip
       }
 
-      // 5. Invoke the existing repository auto-checkout logic with full safeguards
-      final didAutoCheckOut = await repo.handleGeofenceExitAutoCheckOut(
+      // 5. Verify whether employee is currently inside or outside workplace geofence
+      final isInside = await repo.verifyLocationWithinGeofence(
         employeeId: employeeId,
-        currentLatitude: position.latitude,
-        currentLongitude: position.longitude,
+        latitude: position.latitude,
+        longitude: position.longitude,
       );
 
-      if (didAutoCheckOut) {
-        debugPrint('Background Auto-Checkout successful for employee $employeeId at $timestamp');
-        // Notify the main UI isolate if alive
-        FlutterForegroundTask.sendDataToMain({
-          'action': 'auto_checkout',
-          'employeeId': employeeId,
-          'time': timestamp.toIso8601String(),
-        });
+      if (isInside) {
+        // Employee is safely inside geofence -> reset any transient exit candidate
+        await GeofenceExitValidator.resetCandidateAsync(
+          prefs: prefs,
+          employeeId: employeeId,
+        );
+      } else {
+        // Employee detected outside geofence -> debounce to prevent GPS bounce false exits
+        final isConfirmed = await GeofenceExitValidator.recordExitObservationAsync(
+          prefs: prefs,
+          employeeId: employeeId,
+          timestamp: timestamp,
+        );
 
-        // Clear monitored ID and stop the foreground service immediately
-        await prefs.remove('bg_monitored_employee_id');
-        await FlutterForegroundTask.stopService();
-        return;
+        if (!isConfirmed) {
+          debugPrint('[Background Geofence] Exit candidate detected for employee $employeeId, awaiting confirmation...');
+          return;
+        }
+
+        // 6. Valid geofence exit is CONFIRMED -> connect to existing checkout mechanism
+        final firstExitTime = await GeofenceExitValidator.getFirstExitTimeAsync(
+          prefs: prefs,
+          employeeId: employeeId,
+        ) ?? DateFormat('hh:mm:ss a').format(timestamp);
+
+        final didAutoCheckOut = await repo.handleGeofenceExitAutoCheckOut(
+          employeeId: employeeId,
+          currentLatitude: position.latitude,
+          currentLongitude: position.longitude,
+          exitTime: firstExitTime,
+        );
+
+        await GeofenceExitValidator.resetCandidateAsync(
+          prefs: prefs,
+          employeeId: employeeId,
+        );
+
+        if (didAutoCheckOut) {
+          debugPrint('Background Auto-Checkout successful for employee $employeeId at $timestamp');
+          // Notify the main UI isolate if alive
+          FlutterForegroundTask.sendDataToMain({
+            'action': 'auto_checkout',
+            'employeeId': employeeId,
+            'time': timestamp.toIso8601String(),
+          });
+
+          // Clear monitored ID and stop the foreground service immediately
+          await prefs.remove('bg_monitored_employee_id');
+          await FlutterForegroundTask.stopService();
+          return;
+        }
       }
 
       // 6. If not checked out, verify if record was already checked out manually

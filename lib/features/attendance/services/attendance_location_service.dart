@@ -10,6 +10,7 @@ import '../domain/attendance_record.dart';
 import '../domain/attendance_repository.dart';
 import '../providers/attendance_providers.dart';
 import 'attendance_foreground_handler.dart';
+import 'geofence_exit_validator.dart';
 
 /// Service that checks geofence boundaries and manages auto-checkout when an employee
 /// exits the office premises during an active office attendance session.
@@ -82,12 +83,31 @@ class AttendanceLocationService {
         try {
           position = await Geolocator.getCurrentPosition(
             desiredAccuracy: LocationAccuracy.high,
-            timeLimit: const Duration(seconds: 5),
+            timeLimit: const Duration(seconds: 15),
           );
         } catch (e) {
-          locationAvailable = false;
-          unavailableReason = 'Failed to acquire GPS coordinates: $e';
+          final serviceEnabled = !kIsWeb ? await Geolocator.isLocationServiceEnabled() : true;
+          if (!serviceEnabled) {
+            locationAvailable = false;
+            unavailableReason = 'Location services are disabled on device';
+          } else {
+            // Transient acquisition timeout: safe skip without false interruption
+            _isChecking = false;
+            return false;
+          }
         }
+      }
+
+      // Filter out invalid, low-accuracy, or mocked GPS fixes upfront
+      if (position != null &&
+          !GeofenceExitValidator.isValidGpsReading(
+            latitude: position.latitude,
+            longitude: position.longitude,
+            accuracy: position.accuracy,
+            isMocked: !kIsWeb && position.isMocked,
+          )) {
+        _isChecking = false;
+        return false;
       }
 
       final AttendanceRepository attendanceRepo;
@@ -159,6 +179,7 @@ class AttendanceLocationService {
           );
 
           if (didAutoCheckOut) {
+            GeofenceExitValidator.resetCandidate(employeeId);
             await stopBackgroundMonitoring();
             try {
               ref.invalidate(todayAttendanceRecordProvider(employeeId));
@@ -171,18 +192,48 @@ class AttendanceLocationService {
         }
 
         // Inside geofence: safe to continue normal monitoring
+        GeofenceExitValidator.resetCandidate(employeeId);
         _isChecking = false;
         return false;
       }
 
       // --- 3. Normal Geofence monitoring when location is healthy ---
       if (position != null) {
+        final isInside = await attendanceRepo.verifyLocationWithinGeofence(
+          employeeId: employeeId,
+          latitude: position.latitude,
+          longitude: position.longitude,
+        );
+
+        if (isInside) {
+          // Employee is safely inside geofence -> reset candidate exit tracking
+          GeofenceExitValidator.resetCandidate(employeeId);
+          _isChecking = false;
+          return false;
+        }
+
+        // Employee detected outside office perimeter -> debounce to prevent GPS bounce false exits
+        final isConfirmed = GeofenceExitValidator.recordExitObservation(
+          employeeId: employeeId,
+          timestamp: now,
+        );
+
+        if (!isConfirmed) {
+          debugPrint('[Geofence] Exit candidate detected for employee $employeeId, awaiting confirmation...');
+          _isChecking = false;
+          return false;
+        }
+
+        // Valid geofence exit is confirmed -> connect to existing checkout mechanism
+        final firstExitTime = GeofenceExitValidator.getFirstExitTime(employeeId) ?? exitTime ?? nowFormattedTime;
         final didAutoCheckOut = await attendanceRepo.handleGeofenceExitAutoCheckOut(
           employeeId: employeeId,
           currentLatitude: position.latitude,
           currentLongitude: position.longitude,
-          exitTime: exitTime,
+          exitTime: firstExitTime,
         );
+
+        GeofenceExitValidator.resetCandidate(employeeId);
 
         if (didAutoCheckOut) {
           await stopBackgroundMonitoring();
@@ -226,6 +277,8 @@ class AttendanceLocationService {
   void clearActiveRef([WidgetRef? ref]) {
     if (ref == null || _activeRef == ref) {
       _activeRef = null;
+      _pollingTimer?.cancel();
+      _pollingTimer = null;
     }
   }
 
@@ -398,6 +451,9 @@ class AttendanceLocationService {
   void stopPeriodicGeofenceMonitoring() {
     _pollingTimer?.cancel();
     _pollingTimer = null;
+    if (_monitoredEmployeeId != null) {
+      GeofenceExitValidator.resetCandidate(_monitoredEmployeeId!);
+    }
     _monitoredEmployeeId = null;
     unawaited(stopBackgroundMonitoring());
   }
