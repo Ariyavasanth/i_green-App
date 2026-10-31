@@ -8,8 +8,8 @@ import '../../organization/domain/column_preference.dart';
 
 abstract class EmployeeRepository {
   Stream<Employee?> watchEmployee(String emailOrId);
-  Future<List<Employee>> getEmployees();
-  Future<List<Employee>> getAllEmployees();
+  Future<List<Employee>> getEmployees({bool forceRefresh = false});
+  Future<List<Employee>> getAllEmployees({bool forceRefresh = false});
   Future<Employee?> getEmployeeById(int id);
   Future<Employee> addEmployee(Employee employee);
   Future<void> updateEmployee(Employee employee);

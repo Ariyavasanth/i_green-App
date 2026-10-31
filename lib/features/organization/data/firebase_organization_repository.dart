@@ -79,15 +79,51 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
   final List<Designation> _memoryDesignations = [];
   final List<OrganizationBand> _memoryBands = [];
 
+  DateTime? _orgsLastFetch;
+  DateTime? _deptsLastFetch;
+  DateTime? _desigsLastFetch;
+  DateTime? _locationsLastFetch;
+  DateTime? _busLastFetch;
+  static const Duration _cacheTtl = Duration(minutes: 5);
+
+  Future<QuerySnapshot<Map<String, dynamic>>?> _safeGetCollection(
+    CollectionReference<Map<String, dynamic>>? ref,
+  ) async {
+    if (ref == null) return null;
+    try {
+      final cached = await ref
+          .get(const GetOptions(source: Source.cache))
+          .timeout(const Duration(milliseconds: 300));
+      if (cached.docs.isNotEmpty) return cached;
+    } catch (_) {}
+
+    try {
+      return await ref.get().timeout(const Duration(seconds: 4));
+    } catch (_) {
+      try {
+        return await ref.get(const GetOptions(source: Source.cache));
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
   // --- Organization ---
   @override
   Future<List<Organization>> getOrganizations({
     bool includeInactive = true,
   }) async {
+    if (_memoryOrgs.isNotEmpty &&
+        _orgsLastFetch != null &&
+        DateTime.now().difference(_orgsLastFetch!) < _cacheTtl) {
+      return includeInactive
+          ? List.from(_memoryOrgs)
+          : _memoryOrgs.where((o) => o.isActive).toList();
+    }
+
     try {
-      final ref = _orgsRef;
-      if (ref != null) {
-        final snapshot = await ref.get();
+      final snapshot = await _safeGetCollection(_orgsRef);
+      if (snapshot != null) {
         final orgs = <Organization>[];
         for (final doc in snapshot.docs) {
           final o = Organization.fromMap(doc.data(), doc.id);
@@ -97,6 +133,7 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
         }
         _memoryOrgs.clear();
         _memoryOrgs.addAll(orgs);
+        _orgsLastFetch = DateTime.now();
         return orgs;
       }
     } catch (e) {
@@ -295,18 +332,22 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
     String? organizationName,
     String? organizationId,
   }) async {
-    try {
-      final ref = _buRef;
-      if (ref != null) {
-        final snapshot = await ref.get();
-        final list = snapshot.docs
-            .map((doc) => BusinessUnit.fromMap(doc.data()))
-            .toList();
-        _memoryBUs.clear();
-        _memoryBUs.addAll(list);
+    if (_memoryBUs.isEmpty ||
+        _busLastFetch == null ||
+        DateTime.now().difference(_busLastFetch!) >= _cacheTtl) {
+      try {
+        final snapshot = await _safeGetCollection(_buRef);
+        if (snapshot != null) {
+          final list = snapshot.docs
+              .map((doc) => BusinessUnit.fromMap(doc.data()))
+              .toList();
+          _memoryBUs.clear();
+          _memoryBUs.addAll(list);
+          _busLastFetch = DateTime.now();
+        }
+      } catch (e) {
+        debugPrint('Error getting business units: $e');
       }
-    } catch (e) {
-      debugPrint('Error getting business units: $e');
     }
 
     // Merge business units listed inside Organization documents
@@ -417,18 +458,22 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
     String? organizationId,
     String? businessUnitName,
   }) async {
-    try {
-      final ref = _locationsRef;
-      if (ref != null) {
-        final snapshot = await ref.get();
-        final list = snapshot.docs
-            .map((doc) => Location.fromMap(doc.data()))
-            .toList();
-        _memoryLocations.clear();
-        _memoryLocations.addAll(list);
+    if (_memoryLocations.isEmpty ||
+        _locationsLastFetch == null ||
+        DateTime.now().difference(_locationsLastFetch!) >= _cacheTtl) {
+      try {
+        final snapshot = await _safeGetCollection(_locationsRef);
+        if (snapshot != null) {
+          final list = snapshot.docs
+              .map((doc) => Location.fromMap(doc.data()))
+              .toList();
+          _memoryLocations.clear();
+          _memoryLocations.addAll(list);
+          _locationsLastFetch = DateTime.now();
+        }
+      } catch (e) {
+        debugPrint('Error getting locations: $e');
       }
-    } catch (e) {
-      debugPrint('Error getting locations: $e');
     }
 
     // Merge locations listed inside Organization documents
@@ -552,19 +597,23 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
     String? businessUnitName,
     String? workLocation,
   }) async {
-    try {
-      final ref = _deptsRef;
-      if (ref != null) {
-        final snapshot = await ref.get();
-        final list = snapshot.docs
-            .map((doc) => Department.fromMap(doc.data()))
-            .toList();
-        list.sort((a, b) => a.id.compareTo(b.id));
-        _memoryDepts.clear();
-        _memoryDepts.addAll(list);
+    if (_memoryDepts.isEmpty ||
+        _deptsLastFetch == null ||
+        DateTime.now().difference(_deptsLastFetch!) >= _cacheTtl) {
+      try {
+        final snapshot = await _safeGetCollection(_deptsRef);
+        if (snapshot != null) {
+          final list = snapshot.docs
+              .map((doc) => Department.fromMap(doc.data()))
+              .toList();
+          list.sort((a, b) => a.id.compareTo(b.id));
+          _memoryDepts.clear();
+          _memoryDepts.addAll(list);
+          _deptsLastFetch = DateTime.now();
+        }
+      } catch (e) {
+        debugPrint('Error getting departments: $e');
       }
-    } catch (e) {
-      debugPrint('Error getting departments: $e');
     }
     var res = _memoryDepts;
     final hasOrgId =
@@ -665,32 +714,36 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
     String? organizationId,
     String? departmentName,
   }) async {
-    try {
-      final ref = _designationsRef;
-      if (ref != null) {
-        final snapshot = await ref.get();
-        final list = snapshot.docs.map((doc) {
-          final desig = Designation.fromMap(doc.data());
-          if (desig.organizationName.isEmpty) {
-            final dept = _memoryDepts
-                .where((dept) => dept.departmentName == desig.departmentName)
-                .firstOrNull;
-            final org = (dept != null && dept.organizationName.isNotEmpty)
-                ? dept.organizationName
-                : '';
-            final oId = (dept != null && dept.organizationId.isNotEmpty)
-                ? dept.organizationId
-                : '';
-            return desig.copyWith(organizationName: org, organizationId: oId);
-          }
-          return desig;
-        }).toList();
-        list.sort((a, b) => a.id.compareTo(b.id));
-        _memoryDesignations.clear();
-        _memoryDesignations.addAll(list);
+    if (_memoryDesignations.isEmpty ||
+        _desigsLastFetch == null ||
+        DateTime.now().difference(_desigsLastFetch!) >= _cacheTtl) {
+      try {
+        final snapshot = await _safeGetCollection(_designationsRef);
+        if (snapshot != null) {
+          final list = snapshot.docs.map((doc) {
+            final desig = Designation.fromMap(doc.data());
+            if (desig.organizationName.isEmpty) {
+              final dept = _memoryDepts
+                  .where((dept) => dept.departmentName == desig.departmentName)
+                  .firstOrNull;
+              final org = (dept != null && dept.organizationName.isNotEmpty)
+                  ? dept.organizationName
+                  : '';
+              final oId = (dept != null && dept.organizationId.isNotEmpty)
+                  ? dept.organizationId
+                  : '';
+              return desig.copyWith(organizationName: org, organizationId: oId);
+            }
+            return desig;
+          }).toList();
+          list.sort((a, b) => a.id.compareTo(b.id));
+          _memoryDesignations.clear();
+          _memoryDesignations.addAll(list);
+          _desigsLastFetch = DateTime.now();
+        }
+      } catch (e) {
+        debugPrint('Error getting designations: $e');
       }
-    } catch (e) {
-      debugPrint('Error getting designations: $e');
     }
     return _memoryDesignations
         .map((d) {

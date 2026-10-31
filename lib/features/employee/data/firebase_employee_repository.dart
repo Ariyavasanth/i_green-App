@@ -62,71 +62,108 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   CollectionReference<Map<String, dynamic>> get _columnPreferencesRef =>
       _firestore.collection('column_preferences');
 
-  /// Safely fetches a DocumentSnapshot with recovery logic for browser IndexedDB
-  /// transaction aborts (e.g., Safari iOS app suspension during photo selection,
-  /// multi-tab lock conflicts, or transient storage connection drops).
+  /// In-memory cache for fast, zero-delay module navigation
+  static List<Employee>? _cachedEmployees;
+  static DateTime? _cachedEmployeesTimestamp;
+  static const Duration _memoryCacheDuration = Duration(minutes: 5);
+
+  /// Tracks documents already healed in the current session to avoid infinite write/listener feedback loops
+  static final Set<String> _healedDocs = {};
+
+  /// Invalidate the employee memory cache
+  static void invalidateEmployeeCache() {
+    _cachedEmployees = null;
+    _cachedEmployeesTimestamp = null;
+  }
+
+  /// Safely fetches a DocumentSnapshot with cache-first and timeout protection.
+  /// Resolves in milliseconds from local IndexedDB cache when available, preventing
+  /// UI stalls on iOS Safari PWA cold starts or reconnecting WebChannels.
   Future<DocumentSnapshot<T>> _safeGetDoc<T>(
     DocumentReference<T> ref, {
-    int maxRetries = 3,
+    int maxRetries = 2,
+    Duration timeout = const Duration(seconds: 4),
   }) async {
+    // 1. Try local cache first for instant response
+    try {
+      final cacheSnap = await ref
+          .get(const GetOptions(source: Source.cache))
+          .timeout(const Duration(milliseconds: 300));
+      if (cacheSnap.exists && cacheSnap.data() != null) {
+        return cacheSnap;
+      }
+    } catch (_) {}
+
+    // 2. Fetch from server with timeout protection against stalled WebChannel/IndexedDB locks
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        if (attempt == 1) {
-          return await ref.get();
-        }
-        return await ref.get(const GetOptions(source: Source.server));
+        return await ref.get().timeout(timeout);
       } catch (e) {
-        final errStr = e.toString().toLowerCase();
-        final isRecoverable =
-            errStr.contains('indexeddb') ||
-            errStr.contains('aborterror') ||
-            errStr.contains('allocate target') ||
-            errStr.contains('unavailable') ||
-            errStr.contains('failed-precondition');
+        // Fallback to cache if server timed out
+        try {
+          final fallback = await ref.get(const GetOptions(source: Source.cache));
+          if (fallback.exists && fallback.data() != null) {
+            return fallback;
+          }
+        } catch (_) {}
 
-        if (attempt == maxRetries || !isRecoverable) {
+        if (attempt == maxRetries) {
           try {
-            return await ref.get(const GetOptions(source: Source.server));
+            return await ref
+                .get(const GetOptions(source: Source.server))
+                .timeout(const Duration(seconds: 4));
           } catch (_) {
             rethrow;
           }
         }
-        await Future.delayed(Duration(milliseconds: 300 * attempt));
+        await Future.delayed(Duration(milliseconds: 200 * attempt));
       }
     }
     return await ref.get(const GetOptions(source: Source.server));
   }
 
-  /// Safely fetches a QuerySnapshot with recovery logic for browser IndexedDB
-  /// transaction aborts (e.g., Safari iOS app suspension during photo selection,
-  /// multi-tab lock conflicts, or transient storage connection drops).
+  /// Safely fetches a QuerySnapshot with cache-first and timeout protection.
+  /// Resolves in milliseconds from local IndexedDB cache when available, preventing
+  /// UI stalls on iOS Safari PWA cold starts or reconnecting WebChannels.
   Future<QuerySnapshot<T>> _safeGetQuery<T>(
     Query<T> query, {
-    int maxRetries = 3,
+    int maxRetries = 2,
+    Duration timeout = const Duration(seconds: 4),
   }) async {
+    // 1. Try local cache first for instant response
+    try {
+      final cacheSnap = await query
+          .get(const GetOptions(source: Source.cache))
+          .timeout(const Duration(milliseconds: 300));
+      if (cacheSnap.docs.isNotEmpty) {
+        return cacheSnap;
+      }
+    } catch (_) {}
+
+    // 2. Fetch from server with timeout protection
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        if (attempt == 1) {
-          return await query.get();
-        }
-        return await query.get(const GetOptions(source: Source.server));
+        return await query.get().timeout(timeout);
       } catch (e) {
-        final errStr = e.toString().toLowerCase();
-        final isRecoverable =
-            errStr.contains('indexeddb') ||
-            errStr.contains('aborterror') ||
-            errStr.contains('allocate target') ||
-            errStr.contains('unavailable') ||
-            errStr.contains('failed-precondition');
+        // Fallback to cache if server timed out
+        try {
+          final fallback =
+              await query.get(const GetOptions(source: Source.cache));
+          if (fallback.docs.isNotEmpty) {
+            return fallback;
+          }
+        } catch (_) {}
 
-        if (attempt == maxRetries || !isRecoverable) {
+        if (attempt == maxRetries) {
           try {
-            return await query.get(const GetOptions(source: Source.server));
+            return await query
+                .get(const GetOptions(source: Source.server))
+                .timeout(const Duration(seconds: 4));
           } catch (_) {
             rethrow;
           }
         }
-        await Future.delayed(Duration(milliseconds: 300 * attempt));
+        await Future.delayed(Duration(milliseconds: 200 * attempt));
       }
     }
     return await query.get(const GetOptions(source: Source.server));
@@ -226,13 +263,15 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     }
     mutableMap['employee_id'] = rawEmpId;
 
-    // Self-healing: if the document field in Firestore had stale EMP- or empty, fix it in the DB on read:
-    if (docId.isNotEmpty && origStoredEmpId != rawEmpId && !rawEmpId.startsWith('EMP-')) {
+    // Self-healing: if the document field in Firestore had stale EMP- or empty, fix it in the DB on read once:
+    if (docId.isNotEmpty && origStoredEmpId != rawEmpId && !rawEmpId.startsWith('EMP-') && !_healedDocs.contains('empId_$docId')) {
+      _healedDocs.add('empId_$docId');
       _employeesRef.doc(docId).set({'employee_id': rawEmpId}, SetOptions(merge: true)).ignore();
     }
 
-    // Self-healing: persist id back to Firestore if it was missing, zero, or contaminated with a timestamp
-    if (docId.isNotEmpty && (currentId == null || currentId == 0 || currentId >= 100000)) {
+    // Self-healing: persist id back to Firestore once if it was missing, zero, or contaminated with a timestamp:
+    if (docId.isNotEmpty && (currentId == null || currentId == 0 || currentId >= 100000) && !_healedDocs.contains('id_$docId')) {
+      _healedDocs.add('id_$docId');
       _employeesRef.doc(docId).set({
         'id': resolvedId,
       }, SetOptions(merge: true)).ignore();
@@ -265,27 +304,38 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     final lower = target.toLowerCase();
     if (lower == 'admin' || lower == 'super admin' || lower == 'superadmin') {
-      return _employeesRef.snapshots().asyncMap((snap) async {
-        for (final doc in snap.docs) {
-          final data = doc.data();
-          final userType = (data['user_type'] as String? ?? '').toLowerCase();
-          final isSuper = data['is_super_admin'] == true || userType == 'super admin';
-          if (isSuper) {
-            return _employeeFromFirestore(data, doc.id);
-          }
-        }
-        return _superAdminMotherAccount;
-      });
+      return _employeesRef
+          .where('is_super_admin', isEqualTo: true)
+          .limit(1)
+          .snapshots()
+          .asyncMap((snap) async {
+            if (snap.docs.isNotEmpty) {
+              return _employeeFromFirestore(snap.docs.first.data(), snap.docs.first.id);
+            }
+            // Check memory cache before querying everything
+            if (_cachedEmployees != null) {
+              final admin = _cachedEmployees!.where((e) => e.isSuperAdmin).firstOrNull;
+              if (admin != null) return admin;
+            }
+            return _superAdminMotherAccount;
+          });
     }
 
     if (target.contains('@')) {
       return _employeesRef
           .where('email_address', isEqualTo: target)
           .snapshots()
-          .map((snapshot) {
+          .asyncMap((snapshot) async {
             if (snapshot.docs.isNotEmpty) {
               final doc = snapshot.docs.first;
               return _employeeFromFirestore(doc.data(), doc.id);
+            }
+            // Fallback to check case-insensitive match from cached employees
+            if (_cachedEmployees != null) {
+              final match = _cachedEmployees!
+                  .where((e) => e.emailAddress.toLowerCase() == lower)
+                  .firstOrNull;
+              if (match != null) return match;
             }
             return null;
           });
@@ -296,24 +346,35 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       if (doc.exists && doc.data() != null) {
         return _employeeFromFirestore(doc.data()!, doc.id);
       }
-      final byEmpId = await _employeesRef.where('employee_id', isEqualTo: docKey).limit(1).get();
-      if (byEmpId.docs.isNotEmpty) {
-        return _employeeFromFirestore(byEmpId.docs.first.data(), byEmpId.docs.first.id);
-      }
-      final all = await getAllEmployees();
-      return all.where((e) {
+      try {
+        final byEmpId = await _employeesRef
+            .where('employee_id', isEqualTo: docKey)
+            .limit(1)
+            .get()
+            .timeout(const Duration(seconds: 3));
+        if (byEmpId.docs.isNotEmpty) {
+          return _employeeFromFirestore(
+              byEmpId.docs.first.data(), byEmpId.docs.first.id);
+        }
+      } catch (_) {}
+
+      if (_cachedEmployees != null) {
         final t = target.toLowerCase();
-        return e.employeeId.toLowerCase() == t ||
-            e.emailAddress.toLowerCase() == t ||
-            e.firstName.toLowerCase() == t ||
-            e.fullName.toLowerCase() == t;
-      }).firstOrNull;
+        final match = _cachedEmployees!.where((e) {
+          return e.employeeId.toLowerCase() == t ||
+              e.emailAddress.toLowerCase() == t ||
+              e.firstName.toLowerCase() == t ||
+              e.fullName.toLowerCase() == t;
+        }).firstOrNull;
+        if (match != null) return match;
+      }
+      return null;
     });
   }
 
   @override
-  Future<List<Employee>> getEmployees() async {
-    final all = await getAllEmployees();
+  Future<List<Employee>> getEmployees({bool forceRefresh = false}) async {
+    final all = await getAllEmployees(forceRefresh: forceRefresh);
     final result = <Employee>[];
 
     for (final emp in all) {
@@ -548,6 +609,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       (e) => e.employeeId == saved.employeeId || e.id == assignedId,
     );
     _memoryEmployees.add(saved);
+    invalidateEmployeeCache();
     return saved;
   }
 
@@ -618,6 +680,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     } else {
       _memoryEmployees.add(emp);
     }
+    invalidateEmployeeCache();
   }
 
   @override
@@ -651,11 +714,13 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       }
     }
     await batch.commit();
+    invalidateEmployeeCache();
   }
 
   @override
   Future<void> deleteEmployee(int id) async {
     _memoryEmployees.removeWhere((e) => e.id == id);
+    invalidateEmployeeCache();
     if (isInMemory) return;
 
     // 1. Try querying by the stored integer 'id' field
@@ -787,7 +852,13 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   );
 
   @override
-  Future<List<Employee>> getAllEmployees() async {
+  Future<List<Employee>> getAllEmployees({bool forceRefresh = false}) async {
+    if (!forceRefresh && _cachedEmployees != null && _cachedEmployeesTimestamp != null) {
+      if (DateTime.now().difference(_cachedEmployeesTimestamp!) < _memoryCacheDuration) {
+        return List.unmodifiable(_cachedEmployees!);
+      }
+    }
+
     if (isInMemory) {
       _memoryEmployees.removeWhere((e) =>
           e.employeeId == 'EMP-1001' ||
@@ -799,6 +870,8 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         if (numA != numB) return numA.compareTo(numB);
         return a.employeeId.compareTo(b.employeeId);
       });
+      _cachedEmployees = List.unmodifiable(list);
+      _cachedEmployeesTimestamp = DateTime.now();
       return List.unmodifiable(list);
     }
     final result = <Employee>[];
@@ -876,8 +949,13 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
       _memoryEmployees.clear();
       _memoryEmployees.addAll(result);
+      _cachedEmployees = List.unmodifiable(result);
+      _cachedEmployeesTimestamp = DateTime.now();
     } catch (e) {
       debugPrint('Firebase getAllEmployees error: $e');
+      if (result.isEmpty && _cachedEmployees != null && _cachedEmployees!.isNotEmpty) {
+        return List.unmodifiable(_cachedEmployees!);
+      }
       if (result.isEmpty && _memoryEmployees.isNotEmpty) {
         return List.unmodifiable(_memoryEmployees);
       }

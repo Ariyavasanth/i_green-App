@@ -22,10 +22,14 @@ Future<void> main() async {
     );
     // Enable offline persistence so Firestore serves data from local cache
     // immediately on subsequent loads — dramatically reduces perceived load time.
-    FirebaseFirestore.instance.settings = const Settings(
-      persistenceEnabled: true,
-      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
-    );
+    try {
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: true,
+        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      );
+    } catch (settingsNotice) {
+      debugPrint('Firestore settings notice: $settingsNotice');
+    }
   } catch (e) {
     debugPrint('Firebase initializeApp notice: $e');
   }

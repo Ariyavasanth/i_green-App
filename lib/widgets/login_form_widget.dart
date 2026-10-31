@@ -56,13 +56,8 @@ class _LoginFormWidgetState extends ConsumerState<LoginFormWidget> {
         ref.read(currentUserEmailProvider.notifier).state = userEmail;
         await ref.read(authSessionStorageProvider).writeUserEmail(userEmail);
         
-        // Invalidate cached state so the newly logged-in user gets fresh data from Firestore
-        ref.invalidate(employeesProvider);
-        ref.invalidate(allEmployeesProvider);
+        // Refresh employee state for the authenticated user
         ref.invalidate(currentEmployeeProvider);
-        ref.invalidate(organizationsProvider);
-        ref.invalidate(departmentsProvider);
-        ref.invalidate(allDesignationsProvider);
         
         if (mounted) context.go('/module-dashboard');
       } else {
