@@ -2888,7 +2888,20 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
   List<AttendanceRecord> _filterStaticRecords(List<AttendanceRecord> records, List<Employee> employees) {
     return records.where((r) {
       if (_selectedEmployeeId != null && r.employeeId != _selectedEmployeeId) return false;
-      if (_selectedStatus != 'All' && r.status.toLowerCase() != _selectedStatus.toLowerCase()) return false;
+      if (_selectedStatus != 'All') {
+        final selLower = _selectedStatus.toLowerCase();
+        if (selLower == 'on duty' || selLower == 'od') {
+          final isOd = r.status.toLowerCase().contains('on duty') ||
+              r.status.toLowerCase() == 'od' ||
+              (r.notes ?? '').toLowerCase().contains('on duty') ||
+              r.verificationStatus.toLowerCase().contains('od') ||
+              r.checkInVerificationStatus.toLowerCase().contains('od') ||
+              r.sessions.any((s) => s.isOd);
+          if (!isOd) return false;
+        } else if (r.status.toLowerCase() != selLower) {
+          return false;
+        }
+      }
       if (_searchQuery.isNotEmpty) {
         final empName = r.employeeName.toLowerCase();
         final notes = (r.notes ?? '').toLowerCase();

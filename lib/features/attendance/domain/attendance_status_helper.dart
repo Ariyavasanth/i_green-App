@@ -148,9 +148,39 @@ class AttendanceStatusHelper {
         }
         return AttendanceStatusInfo.late;
       }
+      final hasOdSession = effectiveRecord.sessions.any((s) => s.isOd);
+      final hasOdVerification = effectiveRecord.verificationStatus.toLowerCase().contains('od') ||
+          effectiveRecord.checkInVerificationStatus.toLowerCase().contains('od');
+
+      // Check if employee has an active on-duty assignment for this date
+      bool hasActiveOdAssignment = false;
+      if (onDutyAssignments != null && onDutyAssignments.isNotEmpty) {
+        for (final od in onDutyAssignments) {
+          final isEmpMatch = od.employeeId == employee.id ||
+              (curNum > 0 && od.employeeId > 0 && curNum == od.employeeId) ||
+              (od.employeeName.trim().isNotEmpty &&
+                  employee.fullName.trim().isNotEmpty &&
+                  od.employeeName.trim().toLowerCase() == employee.fullName.trim().toLowerCase());
+          if (isEmpMatch &&
+              od.status.toUpperCase() != 'CANCELLED' &&
+              od.status.toUpperCase() != 'REJECTED') {
+            final odParsedDate = _parseDate(od.date);
+            if (od.date.trim() == dateStr ||
+                (odParsedDate != null &&
+                    DateTime(odParsedDate.year, odParsedDate.month, odParsedDate.day) == targetDate)) {
+              hasActiveOdAssignment = true;
+              break;
+            }
+          }
+        }
+      }
+
       if (stLower.contains('on duty') ||
           stLower == 'od' ||
-          effectiveRecord.notes.toLowerCase().contains('on duty')) {
+          effectiveRecord.notes.toLowerCase().contains('on duty') ||
+          hasOdSession ||
+          hasOdVerification ||
+          hasActiveOdAssignment) {
         return AttendanceStatusInfo.onDuty;
       }
       if (stLower == 'present' || stLower == 'completed' || stLower == 'checked out') {

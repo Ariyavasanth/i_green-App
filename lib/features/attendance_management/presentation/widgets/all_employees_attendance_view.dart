@@ -312,10 +312,15 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
     required DateTime date,
   }) {
     // 1. On Duty Check
+    final hasOdSession = officeRecord != null &&
+        (officeRecord.sessions.any((s) => s.isOd) ||
+         officeRecord.verificationStatus.toLowerCase().contains('od') ||
+         officeRecord.checkInVerificationStatus.toLowerCase().contains('od'));
     final isOdRecord = officeRecord != null &&
         (officeRecord.status.toLowerCase().contains('on duty') ||
          officeRecord.status.toLowerCase() == 'od' ||
-         officeRecord.notes.toLowerCase().contains('on duty'));
+         officeRecord.notes.toLowerCase().contains('on duty') ||
+         hasOdSession);
     final isOnDuty = statusInfo == AttendanceStatusInfo.onDuty || isOdRecord;
 
     if (isOnDuty) {

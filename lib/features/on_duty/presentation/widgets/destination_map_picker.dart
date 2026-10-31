@@ -85,7 +85,9 @@ class DestinationMapPicker extends StatefulWidget {
 class _DestinationMapPickerState extends State<DestinationMapPicker> with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  Timer? _debounceTimer;
+  Timer? _searchDebounceTimer;
+  Timer? _mapIdleDebounceTimer;
+  int _geocodeRequestId = 0;
 
   bool _isSearching = false;
   bool _isLocatingUser = false;
@@ -200,14 +202,15 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
   @override
   void dispose() {
     _zoomAnimationController.dispose();
-    _debounceTimer?.cancel();
+    _searchDebounceTimer?.cancel();
+    _mapIdleDebounceTimer?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
   }
 
   void _onSearchChanged(String query) {
-    _debounceTimer?.cancel();
+    _searchDebounceTimer?.cancel();
     _isPlaceSelected = false;
     if (query.trim().isEmpty) {
       setState(() {
@@ -218,7 +221,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
       return;
     }
 
-    _debounceTimer = Timer(const Duration(milliseconds: 350), () {
+    _searchDebounceTimer = Timer(const Duration(milliseconds: 350), () {
       _performPlaceSearch(query.trim());
     });
   }
@@ -717,7 +720,8 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
     }
   }
 
-  Future<void> _applyGpsCoordinates(double lat, double lng) async {
+  Future<void> _applyGpsCoordinates(double lat, double lng, {bool isUserDrag = false}) async {
+    final int currentReqId = ++_geocodeRequestId;
     String name = 'Current Location';
     String addr = 'Lat: ${lat.toStringAsFixed(6)}, Lng: ${lng.toStringAsFixed(6)}';
 
@@ -735,9 +739,17 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
             if (results.isNotEmpty) {
               final formattedAddr = (results.first['formatted_address'] ?? '').toString();
               final cleaned = _cleanFormattedAddress(formattedAddr);
-              final parts = cleaned.split(',');
-              name = parts.isNotEmpty ? parts.first.trim() : 'Current Location';
-              addr = parts.length > 1 ? parts.sublist(1).join(',').trim() : cleaned;
+              final parts = cleaned.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+
+              // Filter out administrative boundaries (e.g., "Ward 150", "Zone 11", Plus Codes)
+              final isWardOrZone = RegExp(r'^(ward\s*\d+|zone\s*\d+|[a-z0-9\+]+\+[a-z0-9]+)', caseSensitive: false);
+              int nameIndex = 0;
+              while (nameIndex < parts.length - 1 && isWardOrZone.hasMatch(parts[nameIndex])) {
+                nameIndex++;
+              }
+
+              name = parts.isNotEmpty ? parts[nameIndex] : 'Current Location';
+              addr = (parts.length > nameIndex + 1) ? parts.sublist(nameIndex + 1).join(', ') : cleaned;
             }
           } else {
             debugPrint('[Reverse Geocode] Google Geocoding status: ${data['status']} - ${data['error_message']}');
@@ -765,21 +777,29 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
           final nomData = jsonDecode(nomResp.body);
           final displayName = (nomData['display_name'] ?? '').toString();
           if (displayName.isNotEmpty) {
-            final parts = displayName.split(',');
-            name = parts.isNotEmpty ? parts.first.trim() : 'Current Location';
-            addr = parts.length > 1 ? parts.sublist(1).join(',').trim() : displayName;
+            final parts = displayName.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+            name = parts.isNotEmpty ? parts.first : 'Current Location';
+            addr = parts.length > 1 ? parts.sublist(1).join(', ') : displayName;
           }
         }
       } catch (_) {}
     }
 
+    // Ignore stale responses from older panning gestures
+    if (!mounted || currentReqId != _geocodeRequestId) return;
+
     if (mounted) {
       setState(() {
-        _selectedLat = lat;
-        _selectedLng = lng;
-        _selectedName = name;
+        if (!isUserDrag) {
+          _selectedLat = lat;
+          _selectedLng = lng;
+        }
+        // If a verified place was selected from search, retain the place name
+        if (!_isPlaceSelected || _selectedName.isEmpty) {
+          _selectedName = name;
+        }
         _selectedAddress = addr;
-        if (!_searchFocusNode.hasFocus) {
+        if (!_searchFocusNode.hasFocus && !_isPlaceSelected && !isUserDrag) {
           _searchController.text = name;
         }
         _isApplied = false;
@@ -1320,9 +1340,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
               radius: _selectedRadius,
               primaryColor: widget.primaryColor,
               onUserInteraction: () {
-                if (_isPlaceSelected) {
-                  setState(() => _isPlaceSelected = false);
-                }
+                // Keep verified place identity intact during pin fine-tuning adjustments
               },
               onCameraMoved: (newLat, newLng, newZoom) {
                 setState(() {
@@ -1332,15 +1350,10 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
                 });
               },
               onCameraIdle: () {
-                _debounceTimer?.cancel();
-                if (_isPlaceSelected) {
-                  // Specific place was selected from Google Places search suggestions.
-                  // Preserve Google's clean verified place name & address rather than overwriting with boundary reverse geocoding.
-                  return;
-                }
-                _debounceTimer = Timer(const Duration(milliseconds: 300), () {
-                  if (mounted && _selectedLat != null && _selectedLng != null && !_isPlaceSelected) {
-                    _applyGpsCoordinates(_selectedLat!, _selectedLng!);
+                _mapIdleDebounceTimer?.cancel();
+                _mapIdleDebounceTimer = Timer(const Duration(milliseconds: 550), () {
+                  if (mounted && _selectedLat != null && _selectedLng != null) {
+                    _applyGpsCoordinates(_selectedLat!, _selectedLng!, isUserDrag: true);
                   }
                 });
               },

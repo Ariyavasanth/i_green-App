@@ -92,11 +92,20 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
     return true;
   }
 
-  bool _matchesStatus(String recordStatus, String? statusFilter) {
+  bool _matchesStatus(AttendanceRecord record, String? statusFilter) {
     if (statusFilter == null || statusFilter.isEmpty || statusFilter.toLowerCase() == 'all') {
       return true;
     }
-    return recordStatus.trim().toLowerCase() == statusFilter.trim().toLowerCase();
+    final filter = statusFilter.trim().toLowerCase();
+    if (filter == 'on duty' || filter == 'od') {
+      return record.status.trim().toLowerCase() == 'on duty' ||
+          record.status.trim().toLowerCase() == 'od' ||
+          record.notes.toLowerCase().contains('on duty') ||
+          record.verificationStatus.toLowerCase().contains('od') ||
+          record.checkInVerificationStatus.toLowerCase().contains('od') ||
+          record.sessions.any((s) => s.isOd);
+    }
+    return record.status.trim().toLowerCase() == filter;
   }
 
   static String _extractDocEmpCode(Map<String, dynamic> data) {
@@ -193,7 +202,7 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
     }
 
     if (statusFilter != null && statusFilter.isNotEmpty) {
-      list = list.where((r) => _matchesStatus(r.status, statusFilter)).toList();
+      list = list.where((r) => _matchesStatus(r, statusFilter)).toList();
     }
 
     list.sort((a, b) => b.date.compareTo(a.date));
@@ -255,7 +264,7 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
       }
 
       if (statusFilter != null && statusFilter.isNotEmpty) {
-        list = list.where((r) => _matchesStatus(r.status, statusFilter)).toList();
+        list = list.where((r) => _matchesStatus(r, statusFilter)).toList();
       }
 
       list.sort((a, b) => b.date.compareTo(a.date));
