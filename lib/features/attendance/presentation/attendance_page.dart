@@ -51,6 +51,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
   bool _isCheckOutReminderDialogOpen = false;
   String? _checkOutReminderShownDate;
   DateTime? _checkOutReminderSnoozedUntil;
+  final Set<String> _recalculatedDateKeys = {};
 
   @override
   void initState() {
@@ -62,7 +63,14 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     _liveClockTimer?.cancel();
     _liveClockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
-        setState(() {});
+        final currentEmp = ref.read(currentEmployeeProvider);
+        if (currentEmp != null && currentEmp.id > 0) {
+          final todayRec = ref.read(todayAttendanceRecordProvider(currentEmp.id)).valueOrNull;
+          final hasActiveCheckIn = todayRec != null && todayRec.effectiveCheckInTime.isNotEmpty && todayRec.checkOutTime.isEmpty;
+          if (hasActiveCheckIn) {
+            setState(() {});
+          }
+        }
         _checkScheduledCheckOutReminder();
       }
     });
@@ -3760,13 +3768,17 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         final needsRecalculation = (hasCheckedIn && (todayRecord.status.toLowerCase() == 'late' || todayRecord.status.toLowerCase() == 'absent') && hasApprovedPermission) ||
             (hasCheckedIn && !hasCheckedOut && todayRecord.status.toLowerCase() == 'insufficient hours');
 
-        if (needsRecalculation) {
+        final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+        final recalcKey = '${employee.id}_$todayStr';
+        if (needsRecalculation && !_recalculatedDateKeys.contains(recalcKey)) {
+          _recalculatedDateKeys.add(recalcKey);
           WidgetsBinding.instance.addPostFrameCallback((_) async {
-            final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
             await ref.read(attendanceRepositoryProvider).recalculateAttendanceForDate(employee.id, todayStr);
-            ref.invalidate(todayAttendanceRecordProvider(employee.id));
-            ref.invalidate(attendanceRecordsProvider(employee.id));
-            ref.invalidate(allAttendanceRecordsProvider);
+            if (mounted) {
+              ref.invalidate(todayAttendanceRecordProvider(employee.id));
+              ref.invalidate(attendanceRecordsProvider(employee.id));
+              ref.invalidate(allAttendanceRecordsProvider);
+            }
           });
         }
 

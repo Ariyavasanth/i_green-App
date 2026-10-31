@@ -82,6 +82,7 @@ class AttendanceLocationService {
         try {
           position = await Geolocator.getCurrentPosition(
             desiredAccuracy: LocationAccuracy.high,
+            timeLimit: const Duration(seconds: 5),
           );
         } catch (e) {
           locationAvailable = false;

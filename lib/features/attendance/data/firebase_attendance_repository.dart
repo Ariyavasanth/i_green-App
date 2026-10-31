@@ -545,13 +545,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       if (empCode.isNotEmpty) ...[
         '${empCode}_${normDate.replaceAll('-', '')}',
         '${empCode}_$normDate',
-        '${empCode}_$dmyDate',
-        '${empCode}_$date',
       ],
       '${employeeId}_${normDate.replaceAll('-', '')}',
       '${employeeId}_$normDate',
-      '${employeeId}_$dmyDate',
-      '${employeeId}_$date',
     ];
 
     try {
@@ -635,6 +631,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         }
       }
 
+      AttendanceRecord? matchedRecord;
       for (final doc in empDocs) {
         final data = doc.data();
         final docEmpIdNum = _extractDocEmpId(data);
@@ -649,8 +646,24 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
             (employeeId != 0 && docEmpIdNum == employeeId && (docEmpCode.isEmpty || docEmpCode == empCode)) ||
             (employeeId == 0);
 
+        if (!matchesEmp) continue;
+
         final docDate = (data['date'] ?? '').toString();
         final normDocDate = _normalizeDateKey(docDate);
+        final rec = AttendanceRecord.fromMap(data);
+
+        // Pre-populate local cache for all retrieved records of this employee
+        if (docEmpCode.isNotEmpty) {
+          _localMemoryCache['${docEmpCode}_$normDocDate'] = rec;
+          _localMemoryCache['${docEmpCode}_${rec.date}'] = rec;
+          _localMemoryCache['${docEmpCode}_$docDate'] = rec;
+        }
+        if (docEmpIdNum != 0) {
+          _localMemoryCache['${docEmpIdNum}_$normDocDate'] = rec;
+          _localMemoryCache['${docEmpIdNum}_${rec.date}'] = rec;
+          _localMemoryCache['${docEmpIdNum}_$docDate'] = rec;
+        }
+
         final matchesDate = docDate == date ||
             docDate.replaceAll('-', '') == date.replaceAll('-', '') ||
             normDocDate == normDate ||
@@ -658,18 +671,13 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
             doc.id.contains(normDate.replaceAll('-', '')) ||
             doc.id.contains(dmyDate);
 
-        if (matchesEmp && matchesDate) {
-          final foundRec = AttendanceRecord.fromMap(data);
-          if (empCode.isNotEmpty) {
-            _localMemoryCache['${empCode}_$normDate'] = foundRec;
-            _localMemoryCache['${empCode}_${foundRec.date}'] = foundRec;
-            _localMemoryCache['${empCode}_$date'] = foundRec;
-          }
-          _localMemoryCache['${foundRec.employeeId}_$normDate'] = foundRec;
-          _localMemoryCache['${foundRec.employeeId}_${foundRec.date}'] = foundRec;
-          _localMemoryCache['${foundRec.employeeId}_$date'] = foundRec;
-          return foundRec;
+        if (matchesDate && matchedRecord == null) {
+          matchedRecord = rec;
         }
+      }
+
+      if (matchedRecord != null) {
+        return matchedRecord;
       }
     } catch (_) {}
     if (empCode.isNotEmpty) {
@@ -3160,8 +3168,20 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       // Find all existing matching Firestore documents for this employee & date to update them all
       final matchingDocs = <DocumentReference<Map<String, dynamic>>>[];
       try {
-        final allDocsSnap = await _recordsRef.get();
-        for (final d in allDocsSnap.docs) {
+        final List<QueryDocumentSnapshot<Map<String, dynamic>>> empSnapDocs = [];
+        if (employeeId != 0) {
+          final idSnap = await _recordsRef.where('employee_id', isEqualTo: employeeId).get();
+          empSnapDocs.addAll(idSnap.docs);
+        }
+        if (empCode.isNotEmpty) {
+          final codeSnap = await _recordsRef.where('employee_code', isEqualTo: empCode).get();
+          for (final cd in codeSnap.docs) {
+            if (!empSnapDocs.any((d) => d.id == cd.id)) {
+              empSnapDocs.add(cd);
+            }
+          }
+        }
+        for (final d in empSnapDocs) {
           final dData = d.data();
           final dEmpId = _extractDocEmpId(dData);
           final dEmpCode = _extractDocEmpCode(dData);
