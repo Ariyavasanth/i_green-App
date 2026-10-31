@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/attendance_record.dart';
+import '../domain/attendance_repository.dart';
 import '../providers/attendance_providers.dart';
 import 'attendance_foreground_handler.dart';
 
@@ -88,7 +89,13 @@ class AttendanceLocationService {
         }
       }
 
-      final attendanceRepo = ref.read(attendanceRepositoryProvider);
+      final AttendanceRepository attendanceRepo;
+      try {
+        attendanceRepo = ref.read(attendanceRepositoryProvider);
+      } catch (_) {
+        _isChecking = false;
+        return false;
+      }
 
       // --- 1. Detect location services becoming unavailable during active session ---
       if (!locationAvailable) {
@@ -152,9 +159,11 @@ class AttendanceLocationService {
 
           if (didAutoCheckOut) {
             await stopBackgroundMonitoring();
-            ref.invalidate(todayAttendanceRecordProvider(employeeId));
-            ref.invalidate(attendanceRecordsProvider(employeeId));
-            ref.invalidate(allAttendanceRecordsProvider);
+            try {
+              ref.invalidate(todayAttendanceRecordProvider(employeeId));
+              ref.invalidate(attendanceRecordsProvider(employeeId));
+              ref.invalidate(allAttendanceRecordsProvider);
+            } catch (_) {}
           }
           _isChecking = false;
           return didAutoCheckOut;
@@ -176,9 +185,11 @@ class AttendanceLocationService {
 
         if (didAutoCheckOut) {
           await stopBackgroundMonitoring();
-          ref.invalidate(todayAttendanceRecordProvider(employeeId));
-          ref.invalidate(attendanceRecordsProvider(employeeId));
-          ref.invalidate(allAttendanceRecordsProvider);
+          try {
+            ref.invalidate(todayAttendanceRecordProvider(employeeId));
+            ref.invalidate(attendanceRecordsProvider(employeeId));
+            ref.invalidate(allAttendanceRecordsProvider);
+          } catch (_) {}
         }
 
         _isChecking = false;
@@ -205,13 +216,29 @@ class AttendanceLocationService {
   bool _isForegroundTaskInitialized = false;
   WidgetRef? _activeRef;
 
+  WidgetRef? get activeRef => _activeRef;
+
+  void updateActiveRef(WidgetRef ref) {
+    _activeRef = ref;
+  }
+
+  void clearActiveRef([WidgetRef? ref]) {
+    if (ref == null || _activeRef == ref) {
+      _activeRef = null;
+    }
+  }
+
   void _onReceiveTaskData(Object data) {
     if (data is Map && data['action'] == 'auto_checkout') {
       final empId = (data['employeeId'] as num?)?.toInt() ?? _monitoredEmployeeId;
       if (empId != null && empId > 0 && _activeRef != null) {
-        _activeRef!.invalidate(todayAttendanceRecordProvider(empId));
-        _activeRef!.invalidate(attendanceRecordsProvider(empId));
-        _activeRef!.invalidate(allAttendanceRecordsProvider);
+        try {
+          _activeRef!.invalidate(todayAttendanceRecordProvider(empId));
+          _activeRef!.invalidate(attendanceRecordsProvider(empId));
+          _activeRef!.invalidate(allAttendanceRecordsProvider);
+        } catch (_) {
+          _activeRef = null;
+        }
       }
     }
   }
@@ -304,53 +331,64 @@ class AttendanceLocationService {
     initForegroundTask();
 
     _pollingTimer = Timer.periodic(interval, (_) async {
-      _activeRef = ref;
-      final todayRec = ref.read(todayAttendanceRecordProvider(employeeId)).valueOrNull;
-      final bool hasActiveSession = todayRec != null &&
-          (todayRec.sessions.any((s) => s.isActive) ||
-           (todayRec.effectiveCheckInTime.isNotEmpty && todayRec.checkOutTime.isEmpty));
+      final currentRef = _activeRef ?? ref;
+      try {
+        final todayRec = currentRef.read(todayAttendanceRecordProvider(employeeId)).valueOrNull;
+        final bool hasActiveSession = todayRec != null &&
+            (todayRec.sessions.any((s) => s.isActive) ||
+             (todayRec.effectiveCheckInTime.isNotEmpty && todayRec.checkOutTime.isEmpty));
 
-      if (todayRec != null && hasActiveSession) {
-        final activeSession = todayRec.sessions.where((s) => s.isActive).firstOrNull;
+        if (todayRec != null && hasActiveSession) {
+          final activeSession = todayRec.sessions.where((s) => s.isActive).firstOrNull;
 
-        // 1. Exemption: Active Time Clocking (Lunch, Break, Meeting, etc.)
-        final bool isTimeClockingActive = activeSession != null &&
-            (activeSession.isLunch ||
-             activeSession.isTeaBreak ||
-             activeSession.isMeetingOrOther ||
-             activeSession.type.toLowerCase().contains('lunch') ||
-             activeSession.type.toLowerCase().contains('break') ||
-             activeSession.type.toLowerCase().contains('meeting') ||
-             activeSession.type.toLowerCase().contains('task'));
-        if (isTimeClockingActive) {
+          // 1. Exemption: Active Time Clocking (Lunch, Break, Meeting, etc.)
+          final bool isTimeClockingActive = activeSession != null &&
+              (activeSession.isLunch ||
+               activeSession.isTeaBreak ||
+               activeSession.isMeetingOrOther ||
+               activeSession.type.toLowerCase().contains('lunch') ||
+               activeSession.type.toLowerCase().contains('break') ||
+               activeSession.type.toLowerCase().contains('meeting') ||
+               activeSession.type.toLowerCase().contains('task'));
+          if (isTimeClockingActive) {
+            unawaited(stopBackgroundMonitoring());
+            return;
+          }
+
+          // 2. Exemption: Active OD session
+          final bool isOdActive = activeSession != null && activeSession.isOd;
+          if (isOdActive) {
+            unawaited(stopBackgroundMonitoring());
+            return;
+          }
+
+          // 3. Exemption: Started from Home
+          final bool isStartedFromHome = activeSession != null &&
+              (activeSession.checkInMethod.toLowerCase().contains('home') ||
+               activeSession.checkInVerificationStatus.toLowerCase().contains('home') ||
+               activeSession.notes.toLowerCase().contains('starts from home'));
+          if (isStartedFromHome) {
+            unawaited(stopBackgroundMonitoring());
+            return;
+          }
+
+          // 4. Regular Office Session -> Keep Android background service active for screen locked
+          unawaited(startBackgroundMonitoring(employeeId));
+
+          // 5. Check geofence boundary & auto check-out if outside radius while app is active
+          await checkGeofenceAndAutoCheckOut(ref: currentRef, employeeId: employeeId);
+        } else if (todayRec != null && !hasActiveSession && (todayRec.checkOutTime.isNotEmpty || todayRec.status == 'Checked Out')) {
           unawaited(stopBackgroundMonitoring());
-          return;
         }
-
-        // 2. Exemption: Active OD session
-        final bool isOdActive = activeSession != null && activeSession.isOd;
-        if (isOdActive) {
-          unawaited(stopBackgroundMonitoring());
-          return;
+      } catch (e) {
+        if (e.toString().contains('disposed') || e is StateError) {
+          debugPrint('AttendanceLocationService: ref is disposed, clearing active ref.');
+          if (_activeRef == currentRef) {
+            _activeRef = null;
+          }
+        } else {
+          debugPrint('AttendanceLocationService periodic monitoring notice: $e');
         }
-
-        // 3. Exemption: Started from Home
-        final bool isStartedFromHome = activeSession != null &&
-            (activeSession.checkInMethod.toLowerCase().contains('home') ||
-             activeSession.checkInVerificationStatus.toLowerCase().contains('home') ||
-             activeSession.notes.toLowerCase().contains('starts from home'));
-        if (isStartedFromHome) {
-          unawaited(stopBackgroundMonitoring());
-          return;
-        }
-
-        // 4. Regular Office Session -> Keep Android background service active for screen locked
-        unawaited(startBackgroundMonitoring(employeeId));
-
-        // 5. Check geofence boundary & auto check-out if outside radius while app is active
-        await checkGeofenceAndAutoCheckOut(ref: ref, employeeId: employeeId);
-      } else if (todayRec != null && !hasActiveSession && (todayRec.checkOutTime.isNotEmpty || todayRec.status == 'Checked Out')) {
-        unawaited(stopBackgroundMonitoring());
       }
     });
   }

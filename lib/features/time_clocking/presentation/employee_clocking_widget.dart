@@ -397,7 +397,13 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
         final serviceEnabled = await Geolocator.isLocationServiceEnabled();
         if (!serviceEnabled) {
           if (context.mounted) {
-            _showGeofenceDialog(context, 'Location services are turned off on this device. Please enable GPS.');
+            _showGeofenceDialog(
+              context,
+              'Location services (GPS) are turned off on this device. Please turn on GPS.',
+              title: 'GPS Disabled',
+              actionLabel: 'Open Location Settings',
+              onAction: () => Geolocator.openLocationSettings(),
+            );
           }
           return false;
         }
@@ -407,9 +413,25 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      if (permission == LocationPermission.deniedForever) {
         if (context.mounted) {
-          _showGeofenceDialog(context, 'Location permission is required to verify office premises.');
+          _showGeofenceDialog(
+            context,
+            'Location permission is permanently denied. Please allow location access in your device settings to verify office premises.',
+            title: 'Permission Denied',
+            actionLabel: 'Open App Settings',
+            onAction: () => Geolocator.openAppSettings(),
+          );
+        }
+        return false;
+      }
+      if (permission == LocationPermission.denied) {
+        if (context.mounted) {
+          _showGeofenceDialog(
+            context,
+            'Location permission is required to verify office premises.',
+            title: 'Permission Required',
+          );
         }
         return false;
       }
@@ -437,19 +459,25 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
     }
   }
 
-  void _showGeofenceDialog(BuildContext context, String message) {
+  void _showGeofenceDialog(
+    BuildContext context,
+    String message, {
+    String title = 'Lunch Break',
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.location_off_rounded, color: Colors.orange, size: 24),
-            SizedBox(width: 8),
+            const Icon(Icons.location_off_rounded, color: Colors.orange, size: 24),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Lunch Break',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                title,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
               ),
             ),
           ],
@@ -459,15 +487,33 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
           style: const TextStyle(fontSize: 14, color: Color(0xFF334155)),
         ),
         actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF9CC70A),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          if (actionLabel != null && onAction != null) ...[
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: Color(0xFF414A51))),
             ),
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF9CC70A),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                onAction();
+              },
+              child: Text(actionLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ] else
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF9CC70A),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
         ],
       ),
     );

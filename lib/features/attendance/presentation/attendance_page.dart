@@ -7,6 +7,8 @@ import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/utils/location_permission_helper.dart';
+
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/time_formatter.dart';
 import '../domain/attendance_record.dart';
@@ -224,6 +226,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
   void dispose() {
     _liveClockTimer?.cancel();
     _reasonController.dispose();
+    AttendanceLocationService.instance.clearActiveRef(ref);
     super.dispose();
   }
 
@@ -5253,12 +5256,14 @@ class AttendanceVerificationDialog extends ConsumerStatefulWidget {
   ConsumerState<AttendanceVerificationDialog> createState() => _AttendanceVerificationDialogState();
 }
 
-class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerificationDialog> {
+class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerificationDialog>
+    with WidgetsBindingObserver {
   bool _verifying = false;
   bool _isFetchingLocation = true;
   String? _message;
   bool? _withinAllowedRadius;
   String? _locationMessage;
+  LocationAccessStatus _locationAccessStatus = LocationAccessStatus.granted;
   static const double _maxAllowedGpsAccuracyMeters = 200;
 
   String _formatKey(DateTime date) =>
@@ -5267,12 +5272,21 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _refreshLocationGate();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      _refreshLocationGate();
+    }
   }
 
   Future<void> _refreshLocationGate() async {
@@ -5325,47 +5339,62 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
         setState(() {
           _isFetchingLocation = false;
           _withinAllowedRadius = true;
+          _locationAccessStatus = LocationAccessStatus.granted;
           _locationMessage = null;
         });
         return;
       }
 
-      if (!kIsWeb) {
-        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-        if (!serviceEnabled) {
-          if (!mounted) return;
-          setState(() {
-            _isFetchingLocation = false;
-            _withinAllowedRadius = false;
-            _locationMessage = 'Location services are turned off on this device.';
-          });
-          return;
-        }
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied) {
+      var accessStatus = await LocationPermissionHelper.checkLocationStatus();
+      if (accessStatus == LocationAccessStatus.serviceDisabled) {
         if (!mounted) return;
         setState(() {
           _isFetchingLocation = false;
           _withinAllowedRadius = false;
-          _locationMessage = 'Location permission was denied.';
-        });
-        return;
-      }
-      if (permission == LocationPermission.deniedForever) {
-        if (!mounted) return;
-        setState(() {
-          _isFetchingLocation = false;
-          _withinAllowedRadius = false;
-          _locationMessage = 'Location permission is permanently denied. Enable it in system settings.';
+          _locationAccessStatus = LocationAccessStatus.serviceDisabled;
+          _locationMessage = 'Location services (GPS) are turned off on this device. Please turn on GPS to verify your attendance.';
         });
         return;
       }
 
+      if (accessStatus == LocationAccessStatus.denied) {
+        accessStatus = await LocationPermissionHelper.requestLocationPermission();
+      }
+
+      if (accessStatus == LocationAccessStatus.serviceDisabled) {
+        if (!mounted) return;
+        setState(() {
+          _isFetchingLocation = false;
+          _withinAllowedRadius = false;
+          _locationAccessStatus = LocationAccessStatus.serviceDisabled;
+          _locationMessage = 'Location services (GPS) are turned off on this device. Please turn on GPS to verify your attendance.';
+        });
+        return;
+      }
+
+      if (accessStatus == LocationAccessStatus.denied) {
+        if (!mounted) return;
+        setState(() {
+          _isFetchingLocation = false;
+          _withinAllowedRadius = false;
+          _locationAccessStatus = LocationAccessStatus.denied;
+          _locationMessage = 'Location access is required to confirm you are within the workplace premises.';
+        });
+        return;
+      }
+
+      if (accessStatus == LocationAccessStatus.deniedForever) {
+        if (!mounted) return;
+        setState(() {
+          _isFetchingLocation = false;
+          _withinAllowedRadius = false;
+          _locationAccessStatus = LocationAccessStatus.deniedForever;
+          _locationMessage = 'Location permission is permanently denied. Please allow location access in your device settings to check in.';
+        });
+        return;
+      }
+
+      _locationAccessStatus = LocationAccessStatus.granted;
       final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
       final distance = Geolocator.distanceBetween(
         targetLat,
@@ -5669,6 +5698,64 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
                         ? const Color(0xFF2E7D32)
                         : const Color(0xFFE53935),
                   ),
+                ),
+              ],
+              if (_locationAccessStatus == LocationAccessStatus.serviceDisabled) ...[
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF9CC70A),
+                    side: const BorderSide(color: Color(0xFF9CC70A)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () async {
+                    await LocationPermissionHelper.openLocationSettings();
+                  },
+                  icon: const Icon(Icons.location_on_outlined, size: 16),
+                  label: const Text('Open Location Settings', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ] else if (_locationAccessStatus == LocationAccessStatus.deniedForever) ...[
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF414A51),
+                    side: const BorderSide(color: Color(0xFF414A51)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () async {
+                    await LocationPermissionHelper.openAppSettings();
+                  },
+                  icon: const Icon(Icons.settings_outlined, size: 16),
+                  label: const Text('Open App Settings', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ] else if (_locationAccessStatus == LocationAccessStatus.denied) ...[
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF9CC70A),
+                    side: const BorderSide(color: Color(0xFF9CC70A)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () async {
+                    final res = await LocationPermissionHelper.requestLocationPermission();
+                    if (res == LocationAccessStatus.granted) {
+                      _refreshLocationGate();
+                    } else {
+                      if (!mounted) return;
+                      setState(() {
+                        _locationAccessStatus = res;
+                        if (res == LocationAccessStatus.deniedForever) {
+                          _locationMessage = 'Location permission is permanently denied. Please allow location access in your device settings to check in.';
+                        } else if (res == LocationAccessStatus.serviceDisabled) {
+                          _locationMessage = 'Location services (GPS) are turned off on this device. Please turn on GPS to verify your attendance.';
+                        } else {
+                          _locationMessage = 'Location access is required to confirm you are within the workplace premises.';
+                        }
+                      });
+                    }
+                  },
+                  icon: const Icon(Icons.verified_user_outlined, size: 16),
+                  label: const Text('Grant Location Permission', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 ),
               ],
             ],
