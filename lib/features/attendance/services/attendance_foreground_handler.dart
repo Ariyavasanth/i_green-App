@@ -104,8 +104,32 @@ class AttendanceTaskHandler extends TaskHandler {
           prefs: prefs,
           employeeId: employeeId,
         );
+        // Restore standard notification text
+        await FlutterForegroundTask.updateService(
+          notificationTitle: 'I-Green Attendance Active',
+          notificationText: 'Shift active • Workplace departure monitored',
+        );
+        // Inform UI that employee is inside
+        FlutterForegroundTask.sendDataToMain({
+          'action': 'returned_inside',
+          'employeeId': employeeId,
+        });
       } else {
-        // Employee detected outside geofence -> debounce to prevent GPS bounce false exits
+        // Employee detected outside geofence -> update notification with warning banner
+        await FlutterForegroundTask.updateService(
+          notificationTitle: '⚠️ Workplace Border Crossed!',
+          notificationText: 'Return within workplace boundary or shift will auto-checkout.',
+        );
+
+        // Inform UI to raise 10-second countdown pop-up if app is currently open
+        FlutterForegroundTask.sendDataToMain({
+          'action': 'border_crossed',
+          'employeeId': employeeId,
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+        });
+
+        // Debounce to prevent GPS bounce false exits
         final isConfirmed = await GeofenceExitValidator.recordExitObservationAsync(
           prefs: prefs,
           employeeId: employeeId,

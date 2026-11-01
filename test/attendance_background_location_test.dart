@@ -1,6 +1,9 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_1/features/attendance/services/geofence_exit_validator.dart';
+import 'package:flutter_application_1/features/attendance/services/attendance_location_service.dart';
+import 'package:flutter_application_1/features/attendance/presentation/widgets/geofence_exit_warning_dialog.dart';
 
 void main() {
   group('Android Background Location Service Sanity & Safeguard Tests', () {
@@ -136,6 +139,48 @@ void main() {
       await GeofenceExitValidator.resetCandidateAsync(prefs: prefs, employeeId: employeeId);
       final afterReset = await GeofenceExitValidator.getFirstExitTimeAsync(prefs: prefs, employeeId: employeeId);
       expect(afterReset, isNull);
+    });
+
+    test('6. 10-second countdown gate: cancelExitCountdown dismisses countdown and restores state when returning inside border', () {
+      final service = AttendanceLocationService.instance;
+      service.cancelExitCountdown();
+      expect(service.exitCountdownNotifier.value, isNull);
+
+      // Simulate countdown active at 10 seconds
+      service.exitCountdownNotifier.value = 10;
+      expect(service.exitCountdownNotifier.value, equals(10));
+
+      // Employee walks back inside workplace boundary -> cancelExitCountdown is called
+      service.cancelExitCountdown(42);
+      expect(service.exitCountdownNotifier.value, isNull);
+      expect(service.exitCountdownSeconds, isNull);
+      expect(GeofenceExitValidator.getConsecutiveExitCount(42), equals(0));
+    });
+
+    testWidgets('7. GeofenceExitWarningDialog widget renders circular timer and reacts to countdown changes', (tester) async {
+      final service = AttendanceLocationService.instance;
+      service.exitCountdownNotifier.value = 10;
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: GeofenceExitWarningDialog(),
+          ),
+        ),
+      );
+
+      // Verify UI elements
+      expect(find.text('Workplace Border Crossed'), findsOneWidget);
+      expect(find.text('10'), findsOneWidget);
+      expect(find.text('Step back inside the workplace boundary to automatically cancel checkout and resume shift.'), findsOneWidget);
+
+      // Countdown tick to 7
+      service.exitCountdownNotifier.value = 7;
+      await tester.pump();
+      expect(find.text('7'), findsOneWidget);
+
+      // Cleanup
+      service.cancelExitCountdown();
     });
   });
 }

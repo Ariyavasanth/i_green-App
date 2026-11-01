@@ -31,11 +31,25 @@ class AttendanceLocationService {
   /// Notifier for the timestamp when location service interruption began.
   final ValueNotifier<String?> interruptionStartTimeNotifier = ValueNotifier<String?>(null);
 
+  /// Notifier for the 10-second exit countdown popup (10..0, or null when inactive).
+  final ValueNotifier<int?> exitCountdownNotifier = ValueNotifier<int?>(null);
+
+  Timer? _countdownTimer;
+  StreamSubscription<Position>? _positionStreamSub;
+  bool _isRecheckingLocation = false;
+  int _countdownSeconds = 10;
+  WidgetRef? _pendingRef;
+  int? _pendingEmployeeId;
+  double? _pendingLatitude;
+  double? _pendingLongitude;
+  String? _pendingExitTime;
+
   bool _isLocationUnavailable = false;
   String? _interruptionStartTime;
 
   bool get isLocationUnavailable => _isLocationUnavailable;
   String? get interruptionStartTime => _interruptionStartTime;
+  int? get exitCountdownSeconds => exitCountdownNotifier.value;
 
   /// Checks if the employee is currently outside the office geofence.
   /// If an active office session exists and the employee has stepped outside the office radius,
@@ -206,46 +220,28 @@ class AttendanceLocationService {
         );
 
         if (isInside) {
-          // Employee is safely inside geofence -> reset candidate exit tracking
+          // Employee is safely inside geofence -> cancel any active countdown & reset candidate
+          cancelExitCountdown(employeeId);
           GeofenceExitValidator.resetCandidate(employeeId);
           _isChecking = false;
           return false;
         }
 
-        // Employee detected outside office perimeter -> debounce to prevent GPS bounce false exits
-        final isConfirmed = GeofenceExitValidator.recordExitObservation(
-          employeeId: employeeId,
-          timestamp: now,
-        );
-
-        if (!isConfirmed) {
-          debugPrint('[Geofence] Exit candidate detected for employee $employeeId, awaiting confirmation...');
-          _isChecking = false;
-          return false;
-        }
-
-        // Valid geofence exit is confirmed -> connect to existing checkout mechanism
+        // Employee detected outside office perimeter -> start 10-second countdown warning popup
         final firstExitTime = GeofenceExitValidator.getFirstExitTime(employeeId) ?? exitTime ?? nowFormattedTime;
-        final didAutoCheckOut = await attendanceRepo.handleGeofenceExitAutoCheckOut(
-          employeeId: employeeId,
-          currentLatitude: position.latitude,
-          currentLongitude: position.longitude,
-          exitTime: firstExitTime,
-        );
 
-        GeofenceExitValidator.resetCandidate(employeeId);
-
-        if (didAutoCheckOut) {
-          await stopBackgroundMonitoring();
-          try {
-            ref.invalidate(todayAttendanceRecordProvider(employeeId));
-            ref.invalidate(attendanceRecordsProvider(employeeId));
-            ref.invalidate(allAttendanceRecordsProvider);
-          } catch (_) {}
+        if (exitCountdownNotifier.value == null) {
+          startExitCountdown(
+            ref: ref,
+            employeeId: employeeId,
+            currentLatitude: position.latitude,
+            currentLongitude: position.longitude,
+            firstExitTime: firstExitTime,
+          );
         }
 
         _isChecking = false;
-        return didAutoCheckOut;
+        return false;
       }
 
       _isChecking = false;
@@ -264,6 +260,170 @@ class AttendanceLocationService {
     return checkGeofenceAndAutoCheckOut(ref: ref, employeeId: employeeId);
   }
 
+  /// Starts the 10-second countdown gate when an employee crosses the workplace boundary.
+  /// If the employee returns inside before countdown reaches 0, the checkout is aborted immediately.
+  void startExitCountdown({
+    required WidgetRef ref,
+    required int employeeId,
+    required double currentLatitude,
+    required double currentLongitude,
+    required String firstExitTime,
+  }) {
+    if (_countdownTimer != null) return;
+    _pendingRef = ref;
+    _pendingEmployeeId = employeeId;
+    _pendingLatitude = currentLatitude;
+    _pendingLongitude = currentLongitude;
+    _pendingExitTime = firstExitTime;
+
+    _countdownSeconds = 10;
+    exitCountdownNotifier.value = 10;
+
+    // Start live continuous location stream for instant re-entry detection without competing GPS locks
+    try {
+      _positionStreamSub?.cancel();
+      _positionStreamSub = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 0,
+        ),
+      ).listen((pos) async {
+        if (_isRecheckingLocation) return;
+        _isRecheckingLocation = true;
+        try {
+          final currentR = _pendingRef ?? _activeRef;
+          if (currentR != null) {
+            final attendanceRepo = currentR.read(attendanceRepositoryProvider);
+            final isInside = await attendanceRepo.verifyLocationWithinGeofence(
+              employeeId: employeeId,
+              latitude: pos.latitude,
+              longitude: pos.longitude,
+            );
+            if (isInside) {
+              // Employee stepped back inside boundary! Cancel countdown immediately & close popup
+              cancelExitCountdown(employeeId);
+            }
+          }
+        } catch (_) {
+        } finally {
+          _isRecheckingLocation = false;
+        }
+      });
+    } catch (_) {}
+
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+      _countdownSeconds--;
+      if (_countdownSeconds > 0) {
+        exitCountdownNotifier.value = _countdownSeconds;
+
+        // Fallback non-blocking check on each tick using last known fix
+        if (!_isRecheckingLocation) {
+          _isRecheckingLocation = true;
+          try {
+            final pos = await Geolocator.getLastKnownPosition();
+            if (pos != null) {
+              final currentR = _pendingRef ?? _activeRef;
+              if (currentR != null) {
+                final attendanceRepo = currentR.read(attendanceRepositoryProvider);
+                final isInside = await attendanceRepo.verifyLocationWithinGeofence(
+                  employeeId: employeeId,
+                  latitude: pos.latitude,
+                  longitude: pos.longitude,
+                );
+                if (isInside) {
+                  cancelExitCountdown(employeeId);
+                  return;
+                }
+              }
+            }
+          } catch (_) {
+          } finally {
+            _isRecheckingLocation = false;
+          }
+        }
+      } else {
+        // Countdown reached 0 and employee remained outside -> trigger confirmed auto-checkout!
+        timer.cancel();
+        _countdownTimer = null;
+        _positionStreamSub?.cancel();
+        _positionStreamSub = null;
+        exitCountdownNotifier.value = null;
+
+        try {
+          final currentR = _pendingRef ?? _activeRef;
+          if (currentR == null) return;
+          final attendanceRepo = currentR.read(attendanceRepositoryProvider);
+          final didAutoCheckOut = await attendanceRepo.handleGeofenceExitAutoCheckOut(
+            employeeId: employeeId,
+            currentLatitude: _pendingLatitude ?? currentLatitude,
+            currentLongitude: _pendingLongitude ?? currentLongitude,
+            exitTime: _pendingExitTime ?? firstExitTime,
+          );
+
+          GeofenceExitValidator.resetCandidate(employeeId);
+
+          if (didAutoCheckOut) {
+            await stopBackgroundMonitoring();
+            try {
+              currentR.invalidate(todayAttendanceRecordProvider(employeeId));
+              currentR.invalidate(attendanceRecordsProvider(employeeId));
+              currentR.invalidate(allAttendanceRecordsProvider);
+            } catch (_) {}
+          }
+        } catch (_) {}
+      }
+    });
+  }
+
+  /// Cancels the 10-second exit countdown immediately (e.g. employee stepped back inside office).
+  void cancelExitCountdown([int? employeeId]) {
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+    _positionStreamSub?.cancel();
+    _positionStreamSub = null;
+    _isRecheckingLocation = false;
+    exitCountdownNotifier.value = null;
+    _pendingRef = null;
+    _pendingEmployeeId = null;
+    _pendingLatitude = null;
+    _pendingLongitude = null;
+    _pendingExitTime = null;
+    if (employeeId != null) {
+      GeofenceExitValidator.resetCandidate(employeeId);
+    }
+  }
+
+  /// Confirms exit immediately (e.g. user pressed "Check Out Now" on warning popup).
+  Future<void> confirmExitImmediately() async {
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+    exitCountdownNotifier.value = null;
+
+    final ref = _pendingRef ?? _activeRef;
+    final empId = _pendingEmployeeId ?? _monitoredEmployeeId;
+    if (ref != null && empId != null && empId > 0) {
+      try {
+        final attendanceRepo = ref.read(attendanceRepositoryProvider);
+        final didAutoCheckOut = await attendanceRepo.handleGeofenceExitAutoCheckOut(
+          employeeId: empId,
+          currentLatitude: _pendingLatitude ?? 0.0,
+          currentLongitude: _pendingLongitude ?? 0.0,
+          exitTime: _pendingExitTime,
+        );
+        GeofenceExitValidator.resetCandidate(empId);
+        if (didAutoCheckOut) {
+          await stopBackgroundMonitoring();
+          try {
+            ref.invalidate(todayAttendanceRecordProvider(empId));
+            ref.invalidate(attendanceRecordsProvider(empId));
+            ref.invalidate(allAttendanceRecordsProvider);
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
+    cancelExitCountdown();
+  }
+
   int? _monitoredEmployeeId;
   bool _isForegroundTaskInitialized = false;
   WidgetRef? _activeRef;
@@ -279,20 +439,40 @@ class AttendanceLocationService {
       _activeRef = null;
       _pollingTimer?.cancel();
       _pollingTimer = null;
+      cancelExitCountdown();
     }
   }
 
   void _onReceiveTaskData(Object data) {
-    if (data is Map && data['action'] == 'auto_checkout') {
-      final empId = (data['employeeId'] as num?)?.toInt() ?? _monitoredEmployeeId;
-      if (empId != null && empId > 0 && _activeRef != null) {
-        try {
-          _activeRef!.invalidate(todayAttendanceRecordProvider(empId));
-          _activeRef!.invalidate(attendanceRecordsProvider(empId));
-          _activeRef!.invalidate(allAttendanceRecordsProvider);
-        } catch (_) {
-          _activeRef = null;
+    if (data is Map) {
+      final action = data['action'];
+      if (action == 'auto_checkout') {
+        cancelExitCountdown();
+        final empId = (data['employeeId'] as num?)?.toInt() ?? _monitoredEmployeeId;
+        if (empId != null && empId > 0 && _activeRef != null) {
+          try {
+            _activeRef!.invalidate(todayAttendanceRecordProvider(empId));
+            _activeRef!.invalidate(attendanceRecordsProvider(empId));
+            _activeRef!.invalidate(allAttendanceRecordsProvider);
+          } catch (_) {
+            _activeRef = null;
+          }
         }
+      } else if (action == 'border_crossed') {
+        final empId = (data['employeeId'] as num?)?.toInt() ?? _monitoredEmployeeId;
+        final lat = (data['latitude'] as num?)?.toDouble() ?? 0.0;
+        final lng = (data['longitude'] as num?)?.toDouble() ?? 0.0;
+        if (empId != null && empId > 0 && _activeRef != null) {
+          startExitCountdown(
+            ref: _activeRef!,
+            employeeId: empId,
+            currentLatitude: lat,
+            currentLongitude: lng,
+            firstExitTime: DateFormat('hh:mm:ss a').format(DateTime.now()),
+          );
+        }
+      } else if (action == 'returned_inside') {
+        cancelExitCountdown(_monitoredEmployeeId);
       }
     }
   }
@@ -306,8 +486,8 @@ class AttendanceLocationService {
         channelId: 'igreen_attendance_geofence',
         channelName: 'I-Green Attendance Monitoring',
         channelDescription: 'Monitors office boundary to automatically complete checkout upon exit.',
-        channelImportance: NotificationChannelImportance.LOW,
-        priority: NotificationPriority.LOW,
+        channelImportance: NotificationChannelImportance.DEFAULT,
+        priority: NotificationPriority.DEFAULT,
       ),
       iosNotificationOptions: const IOSNotificationOptions(
         showNotification: false,
@@ -451,9 +631,7 @@ class AttendanceLocationService {
   void stopPeriodicGeofenceMonitoring() {
     _pollingTimer?.cancel();
     _pollingTimer = null;
-    if (_monitoredEmployeeId != null) {
-      GeofenceExitValidator.resetCandidate(_monitoredEmployeeId!);
-    }
+    cancelExitCountdown(_monitoredEmployeeId);
     _monitoredEmployeeId = null;
     unawaited(stopBackgroundMonitoring());
   }

@@ -34,6 +34,7 @@ import '../services/attendance_location_service.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../providers/attendance_correction_providers.dart';
 import 'widgets/request_accidental_checkout_dialog.dart';
+import 'widgets/geofence_exit_warning_dialog.dart';
 
 class AttendancePage extends ConsumerStatefulWidget {
   const AttendancePage({super.key});
@@ -49,6 +50,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
   Timer? _liveClockTimer;
   int? _monitoredEmployeeId;
   bool _isCheckOutReminderDialogOpen = false;
+  bool _isExitWarningDialogOpen = false;
   String? _checkOutReminderShownDate;
   DateTime? _checkOutReminderSnoozedUntil;
   final Set<String> _recalculatedDateKeys = {};
@@ -57,6 +59,22 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
   void initState() {
     super.initState();
     _startLiveClockTimer();
+    AttendanceLocationService.instance.exitCountdownNotifier.addListener(_onExitCountdownChanged);
+  }
+
+  void _onExitCountdownChanged() {
+    final remaining = AttendanceLocationService.instance.exitCountdownNotifier.value;
+    if (remaining != null && mounted) {
+      if (!_isExitWarningDialogOpen) {
+        _isExitWarningDialogOpen = true;
+        GeofenceExitWarningDialog.show(context).then((_) {
+          _isExitWarningDialogOpen = false;
+        });
+      }
+    } else if (remaining == null && _isExitWarningDialogOpen && mounted) {
+      _isExitWarningDialogOpen = false;
+      Navigator.of(context, rootNavigator: true).pop();
+    }
   }
 
   void _startLiveClockTimer() {
@@ -234,6 +252,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
   void dispose() {
     _liveClockTimer?.cancel();
     _reasonController.dispose();
+    AttendanceLocationService.instance.exitCountdownNotifier.removeListener(_onExitCountdownChanged);
     AttendanceLocationService.instance.clearActiveRef(ref);
     super.dispose();
   }
