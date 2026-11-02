@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../domain/on_duty_assignment.dart';
 import '../domain/on_duty_repository.dart';
@@ -361,5 +361,142 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
 
       await updateAssignment(updated);
     } catch (_) {}
+  }
+
+  @override
+  Future<void> cancelAssignment({
+    required int id,
+    required String reason,
+    required String photoUrl,
+    double? latitude,
+    double? longitude,
+  }) async {
+    final docRef = _collection.doc(id.toString());
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists || snapshot.data() == null) {
+        throw Exception('Assignment #$id does not exist');
+      }
+      final data = snapshot.data()!;
+      final currentStatus = (data['status'] ?? '').toString().toUpperCase();
+      if (currentStatus == 'CANCELLED') {
+        throw Exception('Assignment is already cancelled');
+      }
+      if (currentStatus == 'COMPLETED') {
+        throw Exception('Cannot cancel an already completed assignment');
+      }
+
+      final nowIso = DateTime.now().toIso8601String();
+      final nowTimeStr = DateFormat('hh:mm a').format(DateTime.now());
+      final existingNotes = data['notes']?.toString() ?? '';
+      final updatedNotes = existingNotes.isNotEmpty
+          ? '$existingNotes | Cancellation Reason: $reason'
+          : 'Cancellation Reason: $reason';
+
+      transaction.update(docRef, {
+        'status': 'CANCELLED',
+        'cancellation_reason': reason,
+        'cancellation_photo': photoUrl,
+        'cancelled_at': nowIso,
+        'actual_end_time': nowTimeStr,
+        if (latitude != null) 'cancelled_latitude': latitude,
+        if (longitude != null) 'cancelled_longitude': longitude,
+        'is_paused': false,
+        'notes': updatedNotes,
+      });
+    });
+  }
+
+  @override
+  Future<void> pauseAssignment({
+    required int id,
+    required String reason,
+    required String photoUrl,
+  }) async {
+    final docRef = _collection.doc(id.toString());
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists || snapshot.data() == null) {
+        throw Exception('Assignment #$id does not exist');
+      }
+      final data = snapshot.data()!;
+      final currentStatus = (data['status'] ?? '').toString().toUpperCase();
+      if (currentStatus == 'CANCELLED' || currentStatus == 'COMPLETED') {
+        throw Exception('Cannot pause an assignment in $currentStatus state');
+      }
+      final alreadyPaused = data['is_paused'] == true;
+      if (alreadyPaused) {
+        throw Exception('Assignment is already paused');
+      }
+
+      final nowIso = DateTime.now().toIso8601String();
+      transaction.update(docRef, {
+        'is_paused': true,
+        'paused_at': nowIso,
+        'pause_reason': reason,
+        'pause_photo': photoUrl,
+      });
+    });
+  }
+
+  @override
+  Future<void> resumeAssignment({
+    required int id,
+    required String photoUrl,
+  }) async {
+    final docRef = _collection.doc(id.toString());
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists || snapshot.data() == null) {
+        throw Exception('Assignment #$id does not exist');
+      }
+      final data = snapshot.data()!;
+      final currentStatus = (data['status'] ?? '').toString().toUpperCase();
+      if (currentStatus == 'CANCELLED' || currentStatus == 'COMPLETED') {
+        throw Exception('Cannot resume an assignment in $currentStatus state');
+      }
+      final isPaused = data['is_paused'] == true;
+      if (!isPaused) {
+        throw Exception('Assignment is not currently paused');
+      }
+
+      final now = DateTime.now();
+      final nowIso = now.toIso8601String();
+      final pausedAtStr = data['paused_at']?.toString();
+      int addedSeconds = 0;
+      if (pausedAtStr != null && pausedAtStr.isNotEmpty) {
+        try {
+          final pausedAtDt = DateTime.parse(pausedAtStr);
+          addedSeconds = now.difference(pausedAtDt).inSeconds;
+          if (addedSeconds < 0) addedSeconds = 0;
+        } catch (_) {}
+      }
+
+      final currentTotalSeconds = (data['total_paused_seconds'] as num?)?.toInt() ?? 0;
+      final newTotalSeconds = currentTotalSeconds + addedSeconds;
+
+      final existingIntervals = (data['pause_intervals'] is List)
+          ? List<Map<String, dynamic>>.from(
+              (data['pause_intervals'] as List).whereType<Map>().map((m) => Map<String, dynamic>.from(m)))
+          : <Map<String, dynamic>>[];
+
+      existingIntervals.add({
+        'paused_at': pausedAtStr ?? nowIso,
+        'resumed_at': nowIso,
+        'pause_reason': data['pause_reason']?.toString() ?? '',
+        'pause_photo': data['pause_photo']?.toString() ?? '',
+        'resume_photo': photoUrl,
+        'duration_seconds': addedSeconds,
+      });
+
+      transaction.update(docRef, {
+        'is_paused': false,
+        'paused_at': null,
+        'pause_reason': null,
+        'pause_photo': null,
+        'total_paused_seconds': newTotalSeconds,
+        'pause_intervals': existingIntervals,
+      });
+    });
   }
 }

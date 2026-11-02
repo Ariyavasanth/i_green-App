@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../domain/on_duty_assignment.dart';
 import '../domain/on_duty_site.dart';
+import '../data/on_duty_storage_service.dart';
 import '../providers/on_duty_providers.dart';
 import 'assign_on_duty_dialog.dart';
 import 'widgets/on_duty_camera_page.dart';
@@ -171,14 +172,28 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
       startTime = _parseTimeString(activeSite?.travelStartTime ?? _assignment.travelStartTime ?? _assignment.actualStartTime);
     }
 
-    _activeElapsed = DateTime.now().difference(startTime);
-    if (_activeElapsed.isNegative) _activeElapsed = Duration.zero;
+    final totalPausedSecs = _assignment.totalPausedSeconds;
+
+    if (_assignment.isPaused && _assignment.pausedAt != null) {
+      DateTime pausedTime;
+      try {
+        pausedTime = DateTime.parse(_assignment.pausedAt!);
+      } catch (_) {
+        pausedTime = DateTime.now();
+      }
+      final rawDiff = pausedTime.difference(startTime).inSeconds - totalPausedSecs;
+      _activeElapsed = Duration(seconds: rawDiff > 0 ? rawDiff : 0);
+      return; // Frozen while paused
+    }
+
+    final rawDiff = DateTime.now().difference(startTime).inSeconds - totalPausedSecs;
+    _activeElapsed = Duration(seconds: rawDiff > 0 ? rawDiff : 0);
 
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
         setState(() {
-          final diff = DateTime.now().difference(startTime);
-          _activeElapsed = diff.isNegative ? Duration.zero : diff;
+          final diffSecs = DateTime.now().difference(startTime).inSeconds - totalPausedSecs;
+          _activeElapsed = Duration(seconds: diffSecs > 0 ? diffSecs : 0);
         });
       }
     });
@@ -342,6 +357,602 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
   }
 
   // =========================================================================
+  
+  // CANCEL, PAUSE & RESUME OD HANDLERS
+  // =========================================================================
+
+  Future<void> _handleCancelOd() async {
+    if (_isActionLoading) return;
+
+    final reasons = [
+      'Client Meeting Cancelled',
+      'Heavy Rain / Extreme Weather',
+      'Vehicle Breakdown / Traffic Issue',
+      'Emergency Return to Office',
+      'Started by Mistake',
+      'Other',
+    ];
+    String selectedReason = reasons.first;
+    final otherController = TextEditingController();
+    String? proofPhoto;
+    bool weatherSafeException = false;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final isRain = selectedReason.contains('Heavy Rain');
+            final canConfirm = (proofPhoto != null && proofPhoto!.isNotEmpty) ||
+                (isRain && weatherSafeException);
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.cancel_outlined, color: Color(0xFFDC2626), size: 24),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Cancel On-Duty Trip',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Select cancellation reason:',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      value: selectedReason,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      items: reasons.map((r) => DropdownMenuItem(value: r, child: Text(r, style: const TextStyle(fontSize: 13)))).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() {
+                            selectedReason = val;
+                          });
+                        }
+                      },
+                    ),
+                    if (selectedReason == 'Other') ...[
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: otherController,
+                        decoration: InputDecoration(
+                          hintText: 'Enter specific reason...',
+                          hintStyle: const TextStyle(fontSize: 12),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Mandatory Image Proof:',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                    ),
+                    const SizedBox(height: 6),
+                    if (proofPhoto != null && proofPhoto!.isNotEmpty) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: SizedBox(
+                          height: 120,
+                          width: double.infinity,
+                          child: _buildThumbnailImage(proofPhoto!),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: () async {
+                            final retake = await _captureLivePhoto(title: 'Cancellation Proof');
+                            if (retake != null) {
+                              setDialogState(() => proofPhoto = retake);
+                            }
+                          },
+                          icon: const Icon(Icons.refresh, size: 14),
+                          label: const Text('Retake Photo', style: TextStyle(fontSize: 12)),
+                        ),
+                      ),
+                    ] else ...[
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 42),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          side: const BorderSide(color: Color(0xFFDC2626)),
+                        ),
+                        onPressed: () async {
+                          final photo = await _captureLivePhoto(title: 'Cancellation Proof');
+                          if (photo != null) {
+                            setDialogState(() => proofPhoto = photo);
+                          }
+                        },
+                        icon: const Icon(Icons.camera_alt, color: Color(0xFFDC2626), size: 18),
+                        label: const Text('Capture Live Proof Photo', style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                    if (isRain) ...[
+                      const SizedBox(height: 8),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        title: const Text(
+                          'Outdoor camera unsafe due to storm (Verified by GPS)',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFFB45309)),
+                        ),
+                        value: weatherSafeException,
+                        onChanged: (val) {
+                          setDialogState(() => weatherSafeException = val == true);
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Keep Active'),
+                ),
+                ElevatedButton(
+                  onPressed: canConfirm ? () => Navigator.pop(ctx, true) : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFDC2626),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey.shade300,
+                  ),
+                  child: const Text('Confirm Cancellation', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    final effectiveReason = selectedReason == 'Other' && otherController.text.trim().isNotEmpty
+        ? otherController.text.trim()
+        : (weatherSafeException ? '$selectedReason [Storm Safety Exception]' : selectedReason);
+
+    setState(() => _isActionLoading = true);
+    try {
+      final position = await _getGpsPosition();
+      final storageService = ref.read(onDutyStorageServiceProvider);
+      String photoUrl = '';
+      if (proofPhoto != null && proofPhoto!.isNotEmpty) {
+        photoUrl = await storageService.uploadOdProof(
+          assignmentId: _assignment.id,
+          action: 'cancel',
+          photoData: proofPhoto!,
+        );
+      } else if (weatherSafeException) {
+        photoUrl = 'WEATHER_STORM_SAFETY_VERIFIED';
+      }
+
+      final repo = ref.read(onDutyRepositoryProvider);
+      await repo.cancelAssignment(
+        id: _assignment.id,
+        reason: effectiveReason,
+        photoUrl: photoUrl,
+        latitude: position?.latitude,
+        longitude: position?.longitude,
+      );
+
+      // Gracefully close active OD attendance session
+      try {
+        final attendanceRepo = ref.read(attendanceRepositoryProvider);
+        final empIdInt = _assignment.employeeId > 0 ? _assignment.employeeId : 1;
+        final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+        final nowTime24 = '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:${DateTime.now().second.toString().padLeft(2, '0')}';
+        await attendanceRepo.completeOdAttendanceSession(
+          employeeId: empIdInt,
+          employeeName: _assignment.employeeName,
+          date: todayStr,
+          time: nowTime24,
+          assignmentId: _assignment.id,
+          latitude: position?.latitude,
+          longitude: position?.longitude,
+          afterCompletionOption: 'RETURN_TO_OFFICE',
+        );
+      } catch (_) {}
+
+      _timer?.cancel();
+      _gpsCheckTimer?.cancel();
+      _invalidateProviders();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('On-Duty trip cancelled and attendance updated ✓'),
+            backgroundColor: Color(0xFFDC2626),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to cancel On-Duty: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isActionLoading = false);
+    }
+  }
+
+  Future<void> _handlePauseOd() async {
+    if (_isActionLoading) return;
+
+    final reasons = [
+      'Heavy Rain / Weather Disruption',
+      'Waiting for Client / Site Access',
+      'Vehicle Breakdown / Traffic Block',
+      'Personal Break / Lunch',
+      'Other',
+    ];
+    String selectedReason = reasons.first;
+    final otherController = TextEditingController();
+    String? proofPhoto;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final canConfirm = proofPhoto != null && proofPhoto!.isNotEmpty;
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.pause_circle_filled, color: Color(0xFFF59E0B), size: 24),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Pause On-Duty Timer',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Select pause reason:',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      value: selectedReason,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      items: reasons.map((r) => DropdownMenuItem(value: r, child: Text(r, style: const TextStyle(fontSize: 13)))).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() => selectedReason = val);
+                        }
+                      },
+                    ),
+                    if (selectedReason == 'Other') ...[
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: otherController,
+                        decoration: InputDecoration(
+                          hintText: 'Enter reason details...',
+                          hintStyle: const TextStyle(fontSize: 12),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Mandatory Condition Photo Proof:',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                    ),
+                    const SizedBox(height: 6),
+                    if (proofPhoto != null && proofPhoto!.isNotEmpty) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: SizedBox(
+                          height: 120,
+                          width: double.infinity,
+                          child: _buildThumbnailImage(proofPhoto!),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: () async {
+                            final retake = await _captureLivePhoto(title: 'Pause Proof');
+                            if (retake != null) {
+                              setDialogState(() => proofPhoto = retake);
+                            }
+                          },
+                          icon: const Icon(Icons.refresh, size: 14),
+                          label: const Text('Retake Photo', style: TextStyle(fontSize: 12)),
+                        ),
+                      ),
+                    ] else ...[
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 42),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          side: const BorderSide(color: Color(0xFFF59E0B)),
+                        ),
+                        onPressed: () async {
+                          final photo = await _captureLivePhoto(title: 'Pause Proof');
+                          if (photo != null) {
+                            setDialogState(() => proofPhoto = photo);
+                          }
+                        },
+                        icon: const Icon(Icons.camera_alt, color: Color(0xFFF59E0B), size: 18),
+                        label: const Text('Capture Live Proof Photo', style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: canConfirm ? () => Navigator.pop(ctx, true) : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF59E0B),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey.shade300,
+                  ),
+                  child: const Text('Pause Timer', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed != true || proofPhoto == null) return;
+
+    final effectiveReason = selectedReason == 'Other' && otherController.text.trim().isNotEmpty
+        ? otherController.text.trim()
+        : selectedReason;
+
+    setState(() => _isActionLoading = true);
+    try {
+      final storageService = ref.read(onDutyStorageServiceProvider);
+      final photoUrl = await storageService.uploadOdProof(
+        assignmentId: _assignment.id,
+        action: 'pause',
+        photoData: proofPhoto!,
+      );
+
+      final repo = ref.read(onDutyRepositoryProvider);
+      await repo.pauseAssignment(
+        id: _assignment.id,
+        reason: effectiveReason,
+        photoUrl: photoUrl,
+      );
+
+      _timer?.cancel();
+      _localAssignment = _assignment.copyWith(
+        isPaused: true,
+        pausedAt: DateTime.now().toIso8601String(),
+        pauseReason: effectiveReason,
+        pausePhoto: photoUrl,
+      );
+      _invalidateProviders();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('On-Duty paused: $effectiveReason'),
+            backgroundColor: const Color(0xFFF59E0B),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to pause On-Duty: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isActionLoading = false);
+    }
+  }
+
+  Future<void> _handleResumeOd() async {
+    if (_isActionLoading) return;
+
+    String? proofPhoto;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final canConfirm = proofPhoto != null && proofPhoto!.isNotEmpty;
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.play_circle_filled, color: Color(0xFF16A34A), size: 24),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Resume On-Duty',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Paused Reason: ${_assignment.pauseReason ?? "Weather / Interruption"}',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Mandatory Restart Photo Proof:',
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Capture proof that work/travel can safely restart.',
+                    style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                  ),
+                  const SizedBox(height: 8),
+                  if (proofPhoto != null && proofPhoto!.isNotEmpty) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        height: 120,
+                        width: double.infinity,
+                        child: _buildThumbnailImage(proofPhoto!),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () async {
+                          final retake = await _captureLivePhoto(title: 'Resume Proof');
+                          if (retake != null) {
+                            setDialogState(() => proofPhoto = retake);
+                          }
+                        },
+                        icon: const Icon(Icons.refresh, size: 14),
+                        label: const Text('Retake Photo', style: TextStyle(fontSize: 12)),
+                      ),
+                    ),
+                  ] else ...[
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 42),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        side: const BorderSide(color: Color(0xFF16A34A)),
+                      ),
+                      onPressed: () async {
+                        final photo = await _captureLivePhoto(title: 'Resume Proof');
+                        if (photo != null) {
+                          setDialogState(() => proofPhoto = photo);
+                        }
+                      },
+                      icon: const Icon(Icons.camera_alt, color: Color(0xFF16A34A), size: 18),
+                      label: const Text('Capture Live Proof Photo', style: TextStyle(color: Color(0xFF16A34A), fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: canConfirm ? () => Navigator.pop(ctx, true) : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF16A34A),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey.shade300,
+                  ),
+                  child: const Text('Resume Timer & Work', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed != true || proofPhoto == null) return;
+
+    setState(() => _isActionLoading = true);
+    try {
+      final storageService = ref.read(onDutyStorageServiceProvider);
+      final photoUrl = await storageService.uploadOdProof(
+        assignmentId: _assignment.id,
+        action: 'resume',
+        photoData: proofPhoto!,
+      );
+
+      final repo = ref.read(onDutyRepositoryProvider);
+      await repo.resumeAssignment(
+        id: _assignment.id,
+        photoUrl: photoUrl,
+      );
+
+      final now = DateTime.now();
+      int addedSecs = 0;
+      if (_assignment.pausedAt != null) {
+        try {
+          addedSecs = now.difference(DateTime.parse(_assignment.pausedAt!)).inSeconds;
+          if (addedSecs < 0) addedSecs = 0;
+        } catch (_) {}
+      }
+
+      _localAssignment = _assignment.copyWith(
+        isPaused: false,
+        pausedAt: null,
+        pauseReason: null,
+        pausePhoto: null,
+        totalPausedSeconds: _assignment.totalPausedSeconds + addedSecs,
+      );
+
+      _invalidateProviders();
+      _startLiveTimer();
+      _startPeriodicGpsCheck();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('On-Duty resumed successfully ✓'),
+            backgroundColor: Color(0xFF16A34A),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to resume On-Duty: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isActionLoading = false);
+    }
+  }
+
   // MULTI-SITE SEQUENTIAL HANDLERS
   // =========================================================================
 
@@ -1319,7 +1930,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
     if (status == 'COMPLETED') {
       return _buildCompletedCard();
     }
-    if (status == 'NOT_COMPLETED') {
+    if (status == 'NOT_COMPLETED' || status == 'CANCELLED') {
       return _buildNotCompletedCard();
     }
 
@@ -1407,30 +2018,91 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                     ),
                   ),
                   if (assignment.isOngoing && !assignment.isAssigned) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: (allDone && !isReturnPhase)
-                          ? const Text(
-                              'Step 4 of 5',
-                              style: TextStyle(color: Color(0xFF9CC70A), fontWeight: FontWeight.bold, fontSize: 11),
-                            )
-                          : Row(
-                              children: [
-                                const Icon(Icons.timer_outlined, size: 13, color: Colors.white),
-                                const SizedBox(width: 4),
-                                Text(
-                                  _formatTimerDisplay(_activeElapsed),
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                                ),
-                              ],
+                    if (assignment.isPaused) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.pause, size: 13, color: Colors.white),
+                            const SizedBox(width: 4),
+                            Text(
+                              'PAUSED (${_formatTimerDisplay(_activeElapsed)})',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                             ),
+                          ],
+                        ),
+                      ),
+                    ] else ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: (allDone && !isReturnPhase)
+                            ? const Text(
+                                'Step 4 of 5',
+                                style: TextStyle(color: Color(0xFF9CC70A), fontWeight: FontWeight.bold, fontSize: 11),
+                              )
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.timer_outlined, size: 13, color: Colors.white),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _formatTimerDisplay(_activeElapsed),
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                  ),
+                                ],
+                              ),
+                      ),
+                      const SizedBox(width: 6),
+                      InkWell(
+                        onTap: _isActionLoading ? null : _handlePauseOd,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B).withValues(alpha: 0.85),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.pause, size: 12, color: Colors.white),
+                              SizedBox(width: 2),
+                              Text('Pause', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(width: 6),
+                    InkWell(
+                      onTap: _isActionLoading ? null : _handleCancelOd,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDC2626).withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.close, size: 12, color: Colors.white),
+                            SizedBox(width: 2),
+                            Text('Cancel', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5)),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
-                ],
               ),
             );
           }(),
@@ -1614,6 +2286,68 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                                     site.status == 'IN_PROGRESS' ||
                                     assignment.status == 'TRAVELING_TO_DESTINATION';
 
+                                if (assignment.isPaused) {
+                                  return Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFEF3C7),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: const Color(0xFFFDE68A)),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.pause_circle_filled, color: Color(0xFFB45309), size: 18),
+                                            const SizedBox(width: 6),
+                                            Expanded(
+                                              child: Text(
+                                                'OD is currently PAUSED (${assignment.pauseReason ?? "Weather / Interruption"})',
+                                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              flex: 3,
+                                              child: ElevatedButton.icon(
+                                                onPressed: _isActionLoading ? null : _handleResumeOd,
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: const Color(0xFF16A34A),
+                                                  foregroundColor: Colors.white,
+                                                  minimumSize: const Size(0, 40),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                  elevation: 0,
+                                                ),
+                                                icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                                                label: const Text('Resume OD (Photo Proof)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              flex: 2,
+                                              child: OutlinedButton.icon(
+                                                onPressed: _isActionLoading ? null : _handleCancelOd,
+                                                style: OutlinedButton.styleFrom(
+                                                  foregroundColor: const Color(0xFFDC2626),
+                                                  side: const BorderSide(color: Color(0xFFEF4444)),
+                                                  minimumSize: const Size(0, 40),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                ),
+                                                icon: const Icon(Icons.cancel_outlined, size: 15),
+                                                label: const Text('Cancel OD', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
+
                                 if (isSiteReached) {
                                   return Row(
                                     children: [
@@ -1690,7 +2424,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                                       Expanded(
                                         flex: 2,
                                         child: OutlinedButton.icon(
-                                          onPressed: _isActionLoading ? null : () => _handleNotCompletedSiteWork(index),
+                                          onPressed: _isActionLoading ? null : _handleCancelOd,
                                           style: OutlinedButton.styleFrom(
                                             foregroundColor: const Color(0xFFDC2626),
                                             minimumSize: const Size(0, 44),
@@ -1700,7 +2434,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                                           ),
                                           icon: const Icon(Icons.cancel_outlined, size: 15),
                                           label: const Text(
-                                            'Not Completed',
+                                            'Cancel OD',
                                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
                                             textAlign: TextAlign.center,
                                             maxLines: 1,
@@ -2043,7 +2777,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '${assignment.odType} - NOT COMPLETED',
+                    assignment.isCancelled ? '${assignment.odType} - CANCELLED' : '${assignment.odType} - NOT COMPLETED',
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF991B1B)),
                   ),
                 ),
@@ -2076,7 +2810,10 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                 ),
               ),
             ],
-            if (assignment.notCompletedReason != null && assignment.notCompletedReason!.isNotEmpty) ...[
+            final displayReason = assignment.isCancelled
+                ? (assignment.cancellationReason ?? assignment.notCompletedReason)
+                : assignment.notCompletedReason;
+            if (displayReason != null && displayReason.isNotEmpty) ...[
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
@@ -2089,19 +2826,36 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Reason for Non-Completion:',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF991B1B)),
+                    Text(
+                      assignment.isCancelled ? 'Reason for Cancellation:' : 'Reason for Non-Completion:',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF991B1B)),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      assignment.notCompletedReason!,
+                      displayReason,
                       style: const TextStyle(fontSize: 13, color: Color(0xFF475569)),
                     ),
+                    if (assignment.cancellationPhoto != null && assignment.cancellationPhoto!.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Cancellation Proof Photo:',
+                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                      ),
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: SizedBox(
+                          height: 100,
+                          width: 140,
+                          child: _buildThumbnailImage(assignment.cancellationPhoto!),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-            ],
+            ]
+            ,
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,

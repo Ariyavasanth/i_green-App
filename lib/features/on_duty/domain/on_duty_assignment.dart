@@ -47,6 +47,17 @@ class OnDutyAssignment {
     this.onSiteWorkDurationMinutes = 0,
     this.returnTravelDurationMinutes = 0,
     required this.status,
+    this.cancellationReason,
+    this.cancellationPhoto,
+    this.cancelledAt,
+    this.cancelledLatitude,
+    this.cancelledLongitude,
+    this.isPaused = false,
+    this.pausedAt,
+    this.pauseReason,
+    this.pausePhoto,
+    this.totalPausedSeconds = 0,
+    this.pauseIntervals = const [],
     this.notes = '',
     this.voiceNoteText,
     this.originalVoiceText,
@@ -115,6 +126,17 @@ class OnDutyAssignment {
   final int returnTravelDurationMinutes;
 
   final String status; // 'ASSIGNED', 'TRAVELING_TO_DESTINATION', 'IN_PROGRESS', 'REACHED_DESTINATION', 'WORK_COMPLETED', 'RETURNING_TO_OFFICE', 'COMPLETED', 'CANCELLED'
+  final String? cancellationReason;
+  final String? cancellationPhoto;
+  final String? cancelledAt;
+  final double? cancelledLatitude;
+  final double? cancelledLongitude;
+  final bool isPaused;
+  final String? pausedAt;
+  final String? pauseReason;
+  final String? pausePhoto;
+  final int totalPausedSeconds;
+  final List<Map<String, dynamic>> pauseIntervals;
   final String notes;
   final String? voiceNoteText;
   final String? originalVoiceText;
@@ -331,6 +353,17 @@ class OnDutyAssignment {
         'on_site_work_duration_minutes': onSiteWorkDurationMinutes,
         'return_travel_duration_minutes': returnTravelDurationMinutes,
         'status': status,
+        if (cancellationReason != null && cancellationReason!.isNotEmpty) 'cancellation_reason': cancellationReason,
+        if (cancellationPhoto != null && cancellationPhoto!.isNotEmpty) 'cancellation_photo': cancellationPhoto,
+        if (cancelledAt != null && cancelledAt!.isNotEmpty) 'cancelled_at': cancelledAt,
+        if (cancelledLatitude != null) 'cancelled_latitude': cancelledLatitude,
+        if (cancelledLongitude != null) 'cancelled_longitude': cancelledLongitude,
+        'is_paused': isPaused,
+        if (pausedAt != null && pausedAt!.isNotEmpty) 'paused_at': pausedAt,
+        if (pauseReason != null && pauseReason!.isNotEmpty) 'pause_reason': pauseReason,
+        if (pausePhoto != null && pausePhoto!.isNotEmpty) 'pause_photo': pausePhoto,
+        'total_paused_seconds': totalPausedSeconds,
+        if (pauseIntervals.isNotEmpty) 'pause_intervals': pauseIntervals,
         'notes': notes,
         if (voiceNoteText != null && voiceNoteText!.isNotEmpty) 'voice_note_text': voiceNoteText,
         if (originalVoiceText != null && originalVoiceText!.isNotEmpty) 'original_voice_text': originalVoiceText,
@@ -502,6 +535,22 @@ class OnDutyAssignment {
       onSiteWorkDurationMinutes: parseId(map['on_site_work_duration_minutes']),
       returnTravelDurationMinutes: parseId(map['return_travel_duration_minutes']),
       status: rawStatus,
+      cancellationReason: map['cancellation_reason']?.toString(),
+      cancellationPhoto: map['cancellation_photo']?.toString(),
+      cancelledAt: map['cancelled_at']?.toString(),
+      cancelledLatitude: (map['cancelled_latitude'] as num?)?.toDouble(),
+      cancelledLongitude: (map['cancelled_longitude'] as num?)?.toDouble(),
+      isPaused: map['is_paused'] == true,
+      pausedAt: map['paused_at']?.toString(),
+      pauseReason: map['pause_reason']?.toString(),
+      pausePhoto: map['pause_photo']?.toString(),
+      totalPausedSeconds: parseId(map['total_paused_seconds']),
+      pauseIntervals: (map['pause_intervals'] is List)
+          ? (map['pause_intervals'] as List)
+              .whereType<Map>()
+              .map((it) => Map<String, dynamic>.from(it))
+              .toList()
+          : const [],
       notes: map['notes']?.toString() ?? map['instructions']?.toString() ?? '',
       voiceNoteText: map['voice_note_text']?.toString(),
       originalVoiceText: map['original_voice_text']?.toString(),
@@ -562,6 +611,17 @@ class OnDutyAssignment {
     int? onSiteWorkDurationMinutes,
     int? returnTravelDurationMinutes,
     String? status,
+    String? cancellationReason,
+    String? cancellationPhoto,
+    String? cancelledAt,
+    double? cancelledLatitude,
+    double? cancelledLongitude,
+    bool? isPaused,
+    String? pausedAt,
+    String? pauseReason,
+    String? pausePhoto,
+    int? totalPausedSeconds,
+    List<Map<String, dynamic>>? pauseIntervals,
     String? notes,
     String? voiceNoteText,
     String? originalVoiceText,
@@ -622,6 +682,17 @@ class OnDutyAssignment {
       onSiteWorkDurationMinutes: onSiteWorkDurationMinutes ?? this.onSiteWorkDurationMinutes,
       returnTravelDurationMinutes: returnTravelDurationMinutes ?? this.returnTravelDurationMinutes,
       status: status ?? this.status,
+      cancellationReason: cancellationReason ?? this.cancellationReason,
+      cancellationPhoto: cancellationPhoto ?? this.cancellationPhoto,
+      cancelledAt: cancelledAt ?? this.cancelledAt,
+      cancelledLatitude: cancelledLatitude ?? this.cancelledLatitude,
+      cancelledLongitude: cancelledLongitude ?? this.cancelledLongitude,
+      isPaused: isPaused ?? this.isPaused,
+      pausedAt: pausedAt ?? this.pausedAt,
+      pauseReason: pauseReason ?? this.pauseReason,
+      pausePhoto: pausePhoto ?? this.pausePhoto,
+      totalPausedSeconds: totalPausedSeconds ?? this.totalPausedSeconds,
+      pauseIntervals: pauseIntervals ?? this.pauseIntervals,
       notes: notes ?? this.notes,
       voiceNoteText: voiceNoteText ?? this.voiceNoteText,
       originalVoiceText: originalVoiceText ?? this.originalVoiceText,

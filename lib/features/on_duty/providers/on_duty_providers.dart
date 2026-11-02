@@ -1,11 +1,16 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/firebase_on_duty_repository.dart';
+import '../data/on_duty_storage_service.dart';
 import '../domain/on_duty_assignment.dart';
 import '../domain/on_duty_repository.dart';
 
 final onDutyRepositoryProvider = Provider<OnDutyRepository>((ref) {
   return FirebaseOnDutyRepository();
+});
+
+final onDutyStorageServiceProvider = Provider<OnDutyStorageService>((ref) {
+  return OnDutyStorageService();
 });
 
 final activeOnDutyAssignmentProvider =

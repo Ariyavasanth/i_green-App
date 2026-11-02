@@ -54,4 +54,23 @@ abstract class OnDutyRepository {
     double? latitude,
     double? longitude,
   });
+
+  Future<void> cancelAssignment({
+    required int id,
+    required String reason,
+    required String photoUrl,
+    double? latitude,
+    double? longitude,
+  });
+
+  Future<void> pauseAssignment({
+    required int id,
+    required String reason,
+    required String photoUrl,
+  });
+
+  Future<void> resumeAssignment({
+    required int id,
+    required String photoUrl,
+  });
 }
