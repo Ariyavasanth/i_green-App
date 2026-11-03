@@ -2103,6 +2103,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                       ),
                     ),
                   ],
+                ],
               ),
             );
           }(),
@@ -2758,6 +2759,9 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
 
   Widget _buildNotCompletedCard() {
     final assignment = widget.assignment;
+    final displayReason = assignment.isCancelled
+        ? (assignment.cancellationReason ?? assignment.notCompletedReason)
+        : assignment.notCompletedReason;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -2810,9 +2814,6 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                 ),
               ),
             ],
-            final displayReason = assignment.isCancelled
-                ? (assignment.cancellationReason ?? assignment.notCompletedReason)
-                : assignment.notCompletedReason;
             if (displayReason != null && displayReason.isNotEmpty) ...[
               const SizedBox(height: 8),
               Container(
@@ -2854,8 +2855,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                   ],
                 ),
               ),
-            ]
-            ,
+            ],
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
