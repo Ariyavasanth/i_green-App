@@ -89,7 +89,7 @@ class ProjectCodeGenerator {
     return '$clientPart-$modePart-$monthYear-$sequenceNumber-$stateCode-$districtPart-$areaPart';
   }
 
-  static String _sanitizeCode(String text, {required String defaultCode, int maxLength = 3}) {
+  static String sanitizeCode(String text, {required String defaultCode, int maxLength = 3}) {
     final clean = text
         .trim()
         .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')

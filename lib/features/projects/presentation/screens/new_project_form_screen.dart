@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/location_data.dart';
@@ -19,6 +18,7 @@ import '../../providers/project_providers.dart';
 import '../dialogs/add_client_dialog.dart';
 import '../../../tenders/domain/models/tender.dart';
 import '../../../tenders/presentation/screens/tender_form_screen.dart';
+import '../../../tenders/presentation/screens/update_tender_result_dialog.dart';
 import '../../../tenders/providers/tender_providers.dart';
 
 class NewProjectFormScreen extends ConsumerStatefulWidget {
@@ -55,8 +55,11 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
   final _generalCodeController = TextEditingController();
 
   // SECTION 2 — PROJECT CODE
+  String _isMappedToTender = 'No';
+  bool _showOnlyWonTenders = true;
   String _subOrOwn = 'Main';
   String _selectedTenderId = '';
+  final _tenderRefNoController = TextEditingController();
   final _wrpoRemarkController = TextEditingController();
   final List<PlatformFile> _wrpoFiles = [];
   List<ProjectDocument> _existingWrpoDocs = [];
@@ -132,21 +135,62 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     }
   }
 
-  void _populateFromTender(Tender t) {
+  void _populateFromTender(Tender t, [List<Customer>? availableCustomers]) {
+    _isMappedToTender = 'Yes';
     _selectedTenderId = t.tenderId;
-    _generalDetailsController.text = t.title;
+    _tenderRefNoController.text = t.tenderRefNo;
+    if (_generalDetailsController.text.trim().isEmpty) {
+      _generalDetailsController.text = t.title;
+    }
     _selectedTenderType = t.tenderType.toLowerCase().contains('close')
         ? 'Close'
         : 'Open';
     _selectedQualified = t.qualified.isNotEmpty ? t.qualified : 'Yes';
-    final amount = t.awardedValue > 0 ? t.awardedValue : t.tenderAmount;
-    if (amount > 0) {
-      _tenderAmountController.text = (amount % 1 == 0
-          ? amount.toInt().toString()
-          : amount.toString());
-      _approximateProjectValueController.text = _tenderAmountController.text;
-      _actualProjectValueController.text = _tenderAmountController.text;
+
+    // Original tender value from tender record
+    if (t.tenderAmount > 0) {
+      _tenderAmountController.text = (t.tenderAmount % 1 == 0
+          ? t.tenderAmount.toInt().toString()
+          : t.tenderAmount.toString());
+      if (_approximateProjectValueController.text.trim().isEmpty) {
+        _approximateProjectValueController.text = _tenderAmountController.text;
+      }
     }
+
+    // Project Value represents final value from Work Order / Contract
+    if (t.awardedValue > 0) {
+      _actualProjectValueController.text = (t.awardedValue % 1 == 0
+          ? t.awardedValue.toInt().toString()
+          : t.awardedValue.toString());
+    }
+
+    // Auto-match Client / Department
+    if (t.clientName.isNotEmpty) {
+      final custList = availableCustomers ??
+          ref.read(activeCustomersProvider).valueOrNull ??
+          const [];
+      final match = custList.cast<Customer?>().firstWhere(
+        (c) =>
+            c != null &&
+            (c.displayName.trim().toLowerCase() ==
+                    t.clientName.trim().toLowerCase() ||
+                c.companyName.trim().toLowerCase() ==
+                    t.clientName.trim().toLowerCase()),
+        orElse: () => null,
+      );
+      if (match != null) {
+        _selectedClient = match;
+      } else {
+        _selectedClient = Customer(
+          id: null,
+          displayName: t.clientName,
+          companyName: t.clientName,
+          gstTreatment: 'Consumer',
+          placeOfSupply: _selectedState,
+        );
+      }
+    }
+
     _tenderSpecRemarkController.text = t.tenderSpecRemark;
     _existingTenderSpecDocs = List.from(t.tenderSpecDocuments);
     _openingDate = t.openingDate;
@@ -164,7 +208,11 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     _placeController.text = p.place;
     _generalCodeController.text = p.generalCode;
     _subOrOwn = p.subOrOwn.toUpperCase() == 'SUB' ? 'Sub' : 'Main';
+    _isMappedToTender = p.isMappedToTender.isNotEmpty
+        ? p.isMappedToTender
+        : (p.tenderId.isNotEmpty ? 'Yes' : 'No');
     _selectedTenderId = p.tenderId;
+    _tenderRefNoController.text = p.tenderRefNo;
     _wrpoRemarkController.text = p.wrpoRemark;
     _existingWrpoDocs = List.from(p.wrpoDocuments);
     _selectedState = p.state.isNotEmpty ? p.state : 'Tamil Nadu';
@@ -212,6 +260,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     _generalDetailsController.dispose();
     _placeController.dispose();
     _generalCodeController.dispose();
+    _tenderRefNoController.dispose();
     _areaController.dispose();
     _wrpoRemarkController.dispose();
     _projectCodeController.dispose();
@@ -384,6 +433,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
       _projectCodeController.text = code;
     });
 
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Generated Project Code: $code'),
@@ -435,46 +485,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     );
   }
 
-  Future<void> _pickDate({required bool isOpening}) async {
-    final now = DateTime.now();
-    final initial = isOpening
-        ? (_openingDate ?? now)
-        : (_closingDate ?? _openingDate ?? now);
 
-    final first = isOpening ? DateTime(2020) : (_openingDate ?? DateTime(2020));
-
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: first,
-      lastDate: DateTime(2035),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF9CC70A),
-              onPrimary: Colors.white,
-              onSurface: Color(0xFF414A51),
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-
-    if (picked != null) {
-      setState(() {
-        if (isOpening) {
-          _openingDate = picked;
-          if (_closingDate != null && _closingDate!.isBefore(picked)) {
-            _closingDate = null;
-          }
-        } else {
-          _closingDate = picked;
-        }
-      });
-    }
-  }
 
   Future<void> _openAddClientDialog() async {
     final createdCustomer = await showDialog<Customer>(
@@ -503,6 +514,11 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
 
     if (_selectedClient == null) {
       _showToast('Please select a Client *');
+      return;
+    }
+
+    if (_isMappedToTender == 'Yes' && _selectedTenderId.trim().isEmpty) {
+      _showToast('Please select a Tender ID *');
       return;
     }
 
@@ -582,7 +598,9 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
           place: _placeController.text.trim(),
           generalCode: _generalCodeController.text.trim(),
           subOrOwn: _subOrOwn,
-          tenderId: _selectedTenderId,
+          isMappedToTender: _isMappedToTender,
+          tenderId: _isMappedToTender == 'Yes' ? _selectedTenderId : '',
+          tenderRefNo: _tenderRefNoController.text.trim(),
           wrpoRemark: _wrpoRemarkController.text.trim(),
           wrpoDocuments: _existingWrpoDocs,
           state: _selectedState,
@@ -657,12 +675,14 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
           employeeName: _selectedCreatorEmployee!.fullName,
           employeeId: _selectedCreatorEmployee!.employeeId,
           clientName: clientName,
-          clientId: _selectedClient!.id,
+          clientId: _selectedClient?.id,
           generalDetails: _generalDetailsController.text.trim(),
           place: _placeController.text.trim(),
           generalCode: _generalCodeController.text.trim(),
           subOrOwn: _subOrOwn,
-          tenderId: _selectedTenderId,
+          isMappedToTender: _isMappedToTender,
+          tenderId: _isMappedToTender == 'Yes' ? _selectedTenderId : '',
+          tenderRefNo: _tenderRefNoController.text.trim(),
           wrpoRemark: _wrpoRemarkController.text.trim(),
           wrpoDocuments: _existingWrpoDocs,
           state: _selectedState,
@@ -956,8 +976,8 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                               controller: _generalDetailsController,
                               maxLines: 2,
                               decoration: const InputDecoration(
-                                labelText: 'Details',
-                                hintText: 'Enter general project details...',
+                                labelText: 'Project Name / Details *',
+                                hintText: 'Enter project name or general details...',
                                 border: OutlineInputBorder(),
                               ),
                             ),
@@ -980,8 +1000,8 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                                     controller: _generalDetailsController,
                                     maxLines: 2,
                                     decoration: const InputDecoration(
-                                      labelText: 'Details',
-                                      hintText: 'Enter general project details...',
+                                      labelText: 'Project Name / Details *',
+                                      hintText: 'Enter project name or general details...',
                                       border: OutlineInputBorder(),
                                     ),
                                   ),
@@ -1021,6 +1041,13 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Mapped to Tender (Yes / No)
+                          _buildMappedToTenderToggle(),
+                          if (_isMappedToTender == 'Yes') ...[
+                            const SizedBox(height: 14),
+                            _buildTenderMappingDropdown(customers),
+                          ],
+                          const SizedBox(height: 14),
                           if (isMobile) ...[
                             _buildClientDisplayOrSelect(customers),
                             const SizedBox(height: 14),
@@ -1034,10 +1061,6 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                                 Expanded(child: _buildSubOrOwnDropdown()),
                               ],
                             ),
-                          if (_subOrOwn == 'Main') ...[
-                            const SizedBox(height: 14),
-                            _buildTenderMappingDropdown(),
-                          ],
                           const SizedBox(height: 14),
                           // Location Hierarchy: State -> District -> Area
                           if (isMobile) ...[
@@ -1091,63 +1114,77 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                     ],
                     const SizedBox(height: 18),
 
-                    // SECTION 3 — TENDER TYPE
+                    // SECTION 3 — TENDER TYPE & DETAILS
                     _buildSectionCard(
                       sectionNumber: 'SECTION 3',
-                      sectionTitle: 'TENDER TYPE',
+                      sectionTitle: 'TENDER TYPE & DETAILS',
                       icon: Icons.assignment_outlined,
-                      child: isMobile
-                          ? Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                AppSearchableDropdown<String>(
-                                  label: 'Tender Type',
-                                  value: _tenderTypeOptions.contains(_selectedTenderType)
-                                      ? _selectedTenderType
-                                      : 'Open',
-                                  items: _tenderTypeOptions,
-                                  searchHint: 'Search tender type...',
-                                  placeholder: 'Select Tender Type',
-                                  onChanged: (val) {
-                                    if (val != null) setState(() => _selectedTenderType = val);
-                                  },
-                                ),
-                                const SizedBox(height: 14),
-                                _buildQualifiedDropdown(),
-                                const SizedBox(height: 14),
-                                _buildTenderAmountField(),
-                              ],
-                            )
-                          : Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  flex: 3,
-                                  child: AppSearchableDropdown<String>(
-                                    label: 'Tender Type',
-                                    value: _tenderTypeOptions.contains(_selectedTenderType)
-                                        ? _selectedTenderType
-                                        : 'Open',
-                                    items: _tenderTypeOptions,
-                                    searchHint: 'Search tender type...',
-                                    placeholder: 'Select Tender Type',
-                                    onChanged: (val) {
-                                      if (val != null) setState(() => _selectedTenderType = val);
-                                    },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (_isMappedToTender == 'Yes' &&
+                              _selectedTenderId.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              margin: const EdgeInsets.only(bottom: 14),
+                              decoration: BoxDecoration(
+                                color:
+                                    const Color(0xFF9CC70A).withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                    color: const Color(0xFF9CC70A)
+                                        .withValues(alpha: 0.3)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.verified_rounded,
+                                      size: 16, color: Color(0xFF9CC70A)),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Auto-filled from Won Tender "$_selectedTenderId" | Ref: ${_tenderRefNoController.text.isNotEmpty ? _tenderRefNoController.text : "N/A"}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF414A51),
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          if (isMobile) ...[
+                            _buildTenderRefNoField(),
+                            const SizedBox(height: 14),
+                            _buildTenderTypeDropdown(tenderTypes),
+                            const SizedBox(height: 14),
+                            _buildQualifiedDropdown(),
+                            const SizedBox(height: 14),
+                            _buildTenderAmountField(),
+                          ] else
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                    flex: 3,
+                                    child: _buildTenderRefNoField()),
                                 const SizedBox(width: 14),
                                 Expanded(
-                                  flex: 2,
-                                  child: _buildQualifiedDropdown(),
-                                ),
+                                    flex: 3,
+                                    child:
+                                        _buildTenderTypeDropdown(tenderTypes)),
                                 const SizedBox(width: 14),
                                 Expanded(
-                                  flex: 3,
-                                  child: _buildTenderAmountField(),
-                                ),
+                                    flex: 2, child: _buildQualifiedDropdown()),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                    flex: 3, child: _buildTenderAmountField()),
                               ],
                             ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 18),
 
@@ -1185,116 +1222,6 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                       sectionTitle: 'ASSIGNED TO',
                       icon: Icons.person_pin_circle_outlined,
                       child: _buildMultipleEmployeeSelectField(allEmployees),
-                    ),
-                    const SizedBox(height: 18),
-
-                    // SECTION 6 — OPENING DATE
-                    _buildSectionCard(
-                      sectionNumber: 'SECTION 6',
-                      sectionTitle: 'OPENING DATE',
-                      icon: Icons.calendar_today_outlined,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextFormField(
-                            controller: _openingDateRemarkController,
-                            decoration: const InputDecoration(
-                              labelText: 'Remark Text',
-                              hintText: 'Opening date notes/remarks...',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          _buildDatePickerWidget(
-                            label: 'Opening Date',
-                            selectedDate: _openingDate,
-                            onTap: () => _pickDate(isOpening: true),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-
-                    // SECTION 7 — CLOSING DATE
-                    _buildSectionCard(
-                      sectionNumber: 'SECTION 7',
-                      sectionTitle: 'CLOSING DATE',
-                      icon: Icons.event_busy_outlined,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextFormField(
-                            controller: _closingDateRemarkController,
-                            decoration: const InputDecoration(
-                              labelText: 'Remark Text',
-                              hintText: 'Closing date notes/remarks...',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          _buildDatePickerWidget(
-                            label: 'Closing Date',
-                            selectedDate: _closingDate,
-                            onTap: () => _pickDate(isOpening: false),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-
-                    // SECTION 8 — BQR
-                    _buildSectionCard(
-                      sectionNumber: 'SECTION 8',
-                      sectionTitle: 'BQR',
-                      icon: Icons.fact_check_outlined,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextFormField(
-                            controller: _bqrRemarkController,
-                            maxLines: 2,
-                            decoration: const InputDecoration(
-                              labelText: 'Remark Text',
-                              hintText: 'BQR (Bidder Qualification Requirement) remarks...',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          _buildFileUploadWidget(
-                            label: 'BQR Documents',
-                            files: _bqrFiles,
-                            existingDocs: _existingBqrDocs,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-
-                    // SECTION 9 — EMD / EMD EXEMPTION
-                    _buildSectionCard(
-                      sectionNumber: 'SECTION 9',
-                      sectionTitle: 'EMD / EMD EXEMPTION',
-                      icon: Icons.account_balance_wallet_outlined,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextFormField(
-                            controller: _emdRemarkController,
-                            maxLines: 2,
-                            decoration: const InputDecoration(
-                              labelText: 'Remark Text',
-                              hintText: 'EMD amount, exemption details, bank guarantee...',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          _buildFileUploadWidget(
-                            label: 'EMD Documents',
-                            files: _emdFiles,
-                            existingDocs: _existingEmdDocs,
-                          ),
-                        ],
-                      ),
                     ),
                     const SizedBox(height: 28),
 
@@ -2047,11 +1974,11 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
 
   Widget _buildSubOrOwnDropdown() {
     return AppSearchableDropdown<String>(
-      label: 'Sub Or Main',
+      label: 'Sub Division (Main / Sub)',
       value: _subOrOwn,
       items: const ['Main', 'Sub'],
       searchHint: 'Search Main or Sub...',
-      placeholder: 'Select Main or Sub',
+      placeholder: 'Select Sub Division',
       onChanged: (val) {
         if (val != null) {
           setState(() {
@@ -2063,27 +1990,179 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     );
   }
 
-  Widget _buildTenderMappingDropdown() {
+  Widget _buildMappedToTenderToggle() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Mapped to Tender *',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF414A51),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _buildRadioChip(
+              label: 'Yes (From Won Tender)',
+              isSelected: _isMappedToTender == 'Yes',
+              onTap: () {
+                if (_isMappedToTender != 'Yes') {
+                  setState(() => _isMappedToTender = 'Yes');
+                }
+              },
+            ),
+            const SizedBox(width: 12),
+            _buildRadioChip(
+              label: 'No (Manual Project)',
+              isSelected: _isMappedToTender == 'No',
+              onTap: () {
+                if (_isMappedToTender != 'No') {
+                  setState(() {
+                    _isMappedToTender = 'No';
+                    _selectedTenderId = '';
+                    _tenderRefNoController.clear();
+                  });
+                }
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRadioChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color(0xFF9CC70A).withValues(alpha: 0.12)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFF9CC70A)
+                : const Color(0xFFCBD2DA),
+            width: isSelected ? 1.6 : 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+              size: 16,
+              color: isSelected ? const Color(0xFF9CC70A) : const Color(0xFF8C95A0),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? const Color(0xFF2E3840) : const Color(0xFF6B7280),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTenderMappingDropdown(List<Customer> customers) {
     final tendersAsync = ref.watch(tendersStreamProvider);
     return tendersAsync.when(
       data: (tenders) {
-        final tenderIdOptions = tenders.map((t) => t.tenderId).toList();
+        final wonTenders =
+            tenders.where((t) => t.status.trim().toLowerCase() == 'won').toList();
+
+        // If won tenders exist, respect filter; if none exist, show all tenders so user is not blocked
+        final hasWon = wonTenders.isNotEmpty;
+        final displayTenders =
+            (_showOnlyWonTenders && hasWon) ? wonTenders : tenders;
+        final tenderIdOptions = displayTenders.map((t) => t.tenderId).toList();
+
         final selectedVal = tenderIdOptions.contains(_selectedTenderId)
             ? _selectedTenderId
-            : (_selectedTenderId.isNotEmpty ? _selectedTenderId : null);
+            : (_selectedTenderId.isNotEmpty &&
+                    displayTenders.any((t) => t.tenderId == _selectedTenderId)
+                ? _selectedTenderId
+                : null);
+
+        final selectedTender = tenders.cast<Tender?>().firstWhere(
+              (t) => t?.tenderId == _selectedTenderId,
+              orElse: () => null,
+            );
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (hasWon) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Select Tender',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF414A51),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      setState(() => _showOnlyWonTenders = !_showOnlyWonTenders);
+                    },
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _showOnlyWonTenders
+                                ? Icons.check_box_rounded
+                                : Icons.check_box_outline_blank_rounded,
+                            size: 16,
+                            color: const Color(0xFF9CC70A),
+                          ),
+                          const SizedBox(width: 4),
+                          const Text(
+                            'Only Won Tenders',
+                            style: TextStyle(
+                                fontSize: 11.5, color: Color(0xFF414A51)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+            ],
             Row(
               children: [
                 Expanded(
                   child: AppSearchableDropdown<String>(
-                    label: 'Map Tender ID *',
+                    label: hasWon && _showOnlyWonTenders
+                        ? 'Tender ID (Won Tenders only) *'
+                        : 'Tender ID *',
                     value: selectedVal,
                     items: tenderIdOptions,
                     itemLabel: (id) {
-                      final match = tenders.firstWhere(
+                      final match = displayTenders.firstWhere(
                         (t) => t.tenderId == id,
                         orElse: () => Tender(
                           tenderId: id,
@@ -2091,17 +2170,35 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                           updatedAt: DateTime.now(),
                         ),
                       );
+                      final statusBadge = match.status.isNotEmpty
+                          ? ' [${match.status}]'
+                          : '';
+                      final refSnippet = match.tenderRefNo.isNotEmpty
+                          ? ' (Ref: ${match.tenderRefNo})'
+                          : '';
                       return match.title.isNotEmpty
-                          ? '$id (${match.title})'
+                          ? '$id$statusBadge - ${match.title}$refSnippet'
                           : id;
                     },
-                    searchHint: 'Search Tender ID...',
-                    placeholder: tenders.isEmpty
+                    searchHint: 'Search Tender by ID, status or title...',
+                    placeholder: displayTenders.isEmpty
                         ? 'No Tenders Available'
                         : 'Select Tender ID',
                     onChanged: (val) {
                       if (val != null) {
-                        setState(() => _selectedTenderId = val);
+                        final match = displayTenders.firstWhere(
+                          (t) => t.tenderId == val,
+                          orElse: () => Tender(
+                            tenderId: val,
+                            createdAt: DateTime.now(),
+                            updatedAt: DateTime.now(),
+                          ),
+                        );
+                        setState(() {
+                          _selectedTenderId = val;
+                          _populateFromTender(match, customers);
+                          _generateProjectCodeAction();
+                        });
                       }
                     },
                   ),
@@ -2126,18 +2223,146 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                 ),
               ],
             ),
-            if (tenders.isEmpty) ...[
-              const SizedBox(height: 4),
-              const Text(
-                'No tenders found. Click "+" to create a tender first.',
-                style: TextStyle(fontSize: 11, color: Colors.orange),
+            if (!hasWon && tenders.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline,
+                        size: 16, color: Color(0xFF166534)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Showing ${tenders.length} available tender(s) (including "Submitted"). You can select your tender to map it now.',
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFF166534)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (selectedTender != null &&
+                selectedTender.status.toLowerCase() != 'won') ...[
+              const SizedBox(height: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFBEB),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded,
+                        size: 16, color: Color(0xFFB45309)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Tender "${selectedTender.tenderId}" is "${selectedTender.status}". To record the Work Order / Contract award details in Tender Management, click Update.',
+                        style: const TextStyle(
+                            fontSize: 11.5, color: Color(0xFF92400E)),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    TextButton.icon(
+                      onPressed: () async {
+                        await UpdateTenderResultDialog.show(
+                            context, selectedTender);
+                      },
+                      icon: const Icon(Icons.military_tech_rounded, size: 14),
+                      label: const Text('Update to Won',
+                          style: TextStyle(fontSize: 11)),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF9CC70A),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ],
         );
       },
       loading: () => const LinearProgressIndicator(color: Color(0xFF9CC70A)),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (err, stack) => const SizedBox.shrink(),
+    );
+  }
+
+  Widget _buildTenderRefNoField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Tender Reference No',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 5),
+        SizedBox(
+          height: 38,
+          child: TextFormField(
+            controller: _tenderRefNoController,
+            readOnly: _isMappedToTender == 'Yes',
+            style: TextStyle(
+              fontSize: 12,
+              color: _isMappedToTender == 'Yes'
+                  ? const Color(0xFF414A51)
+                  : Colors.black87,
+              fontWeight: _isMappedToTender == 'Yes'
+                  ? FontWeight.w600
+                  : FontWeight.normal,
+            ),
+            decoration: InputDecoration(
+              hintText: 'e.g. TR-2024-001',
+              filled: _isMappedToTender == 'Yes',
+              fillColor:
+                  _isMappedToTender == 'Yes' ? const Color(0xFFF9FAFB) : null,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTenderTypeDropdown(List<String> tenderTypes) {
+    final options = <String>{
+      ..._tenderTypeOptions,
+      ...tenderTypes,
+      if (_selectedTenderType.isNotEmpty) _selectedTenderType,
+    }.toList();
+
+    return AppSearchableDropdown<String>(
+      label: 'Tender Type',
+      value: options.contains(_selectedTenderType)
+          ? _selectedTenderType
+          : options.first,
+      items: options,
+      searchHint: 'Search tender type...',
+      placeholder: 'Select Tender Type',
+      onChanged: (val) {
+        if (val != null) setState(() => _selectedTenderType = val);
+      },
     );
   }
 
@@ -2312,11 +2537,11 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         const Text(
-          'Actual Project Value',
+          'Actual Project Value (Work Order / Contract) *',
           style: TextStyle(
             fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF414A51),
           ),
         ),
         const SizedBox(height: 5),
@@ -2330,7 +2555,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
             ],
             style: const TextStyle(fontSize: 12, color: Colors.black87),
             decoration: InputDecoration(
-              hintText: 'e.g. 2000000',
+              hintText: 'Final value from Work Order / Contract',
               prefixText: '₹ ',
               prefixStyle: const TextStyle(
                   fontSize: 12,
@@ -2493,37 +2718,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     );
   }
 
-  Widget _buildDatePickerWidget({
-    required String label,
-    required DateTime? selectedDate,
-    required VoidCallback onTap,
-  }) {
-    final formatted = selectedDate != null
-        ? DateFormat('dd-MM-yyyy').format(selectedDate)
-        : 'Select Date';
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          suffixIcon: const Icon(Icons.calendar_today_rounded, size: 18),
-        ),
-        child: Text(
-          formatted,
-          style: TextStyle(
-            fontSize: 14,
-            color: selectedDate != null
-                ? AppColors.textPrimary
-                : AppColors.textSecondary,
-            fontWeight: selectedDate != null ? FontWeight.w600 : FontWeight.w400,
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildFileUploadWidget({
     required String label,

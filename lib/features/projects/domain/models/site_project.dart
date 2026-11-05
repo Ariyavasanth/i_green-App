@@ -13,7 +13,9 @@ class SiteProject {
     this.place = '',
     required this.generalCode,
     this.subOrOwn = 'Main',
+    this.isMappedToTender = 'No',
     this.tenderId = '',
+    this.tenderRefNo = '',
     this.wrpoRemark = '',
     this.wrpoDocuments = const [],
     this.state = '',
@@ -140,7 +142,9 @@ class SiteProject {
 
   // Section 2 – Project Code
   final String subOrOwn;
+  final String isMappedToTender;
   final String tenderId;
+  final String tenderRefNo;
   final String wrpoRemark;
   final List<ProjectDocument> wrpoDocuments;
   final String state;
@@ -285,7 +289,9 @@ class SiteProject {
         'place': place,
         'general_code': generalCode,
         'sub_or_own': subOrOwn,
+        'is_mapped_to_tender': isMappedToTender,
         'tender_id': tenderId,
+        'tender_ref_no': tenderRefNo,
         'wrpo_remark': wrpoRemark,
         'wrpo_documents': wrpoDocuments.map((d) => d.toJson()).toList(),
         'state': state,
@@ -466,7 +472,10 @@ class SiteProject {
       place: json['place'] as String? ?? '',
       generalCode: json['general_code'] as String? ?? '',
       subOrOwn: json['sub_or_own'] as String? ?? 'Main',
+      isMappedToTender: json['is_mapped_to_tender'] as String? ??
+          ((json['tender_id'] as String? ?? '').isNotEmpty ? 'Yes' : 'No'),
       tenderId: json['tender_id'] as String? ?? '',
+      tenderRefNo: json['tender_ref_no'] as String? ?? '',
       wrpoRemark: json['wrpo_remark'] as String? ?? '',
       wrpoDocuments: parseDocList(json['wrpo_documents']),
       state: json['state'] as String? ?? '',
@@ -614,7 +623,9 @@ class SiteProject {
     String? place,
     String? generalCode,
     String? subOrOwn,
+    String? isMappedToTender,
     String? tenderId,
+    String? tenderRefNo,
     String? wrpoRemark,
     List<ProjectDocument>? wrpoDocuments,
     String? state,
@@ -730,7 +741,9 @@ class SiteProject {
       place: place ?? this.place,
       generalCode: generalCode ?? this.generalCode,
       subOrOwn: subOrOwn ?? this.subOrOwn,
+      isMappedToTender: isMappedToTender ?? this.isMappedToTender,
       tenderId: tenderId ?? this.tenderId,
+      tenderRefNo: tenderRefNo ?? this.tenderRefNo,
       wrpoRemark: wrpoRemark ?? this.wrpoRemark,
       wrpoDocuments: wrpoDocuments ?? this.wrpoDocuments,
       state: state ?? this.state,
