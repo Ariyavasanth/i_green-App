@@ -66,14 +66,14 @@ class ProjectCodeGenerator {
   /// Example output: `TNEB-SUB-OCT/2026-124-AS-West Karbi Anglong-pallavaram`
   static String generateProjectCode({
     required String clientName,
-    String subOrOwn = 'Own',
+    String subOrOwn = 'Main',
     String state = '',
     String district = '',
     String area = '',
     int sequenceNumber = 1,
   }) {
     final clientPart = clientName.trim().isEmpty ? 'CLI' : clientName.trim();
-    final modePart = subOrOwn.trim().toUpperCase() == 'SUB' ? 'SUB' : 'OWN';
+    final modePart = subOrOwn.trim().toUpperCase() == 'SUB' ? 'SUB' : 'MAIN';
 
     const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     final now = DateTime.now();

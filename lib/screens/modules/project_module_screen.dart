@@ -51,6 +51,12 @@ class ProjectModuleScreen extends ConsumerStatefulWidget {
         '/fund-management',
         Color(0xFF0D9488),
       ),
+      _SubModule(
+        'TENDER',
+        Icons.assignment_outlined,
+        '/projects/tenders',
+        Color(0xFFE91E63),
+      ),
     ],
   };
 

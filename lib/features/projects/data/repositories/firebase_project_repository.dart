@@ -67,6 +67,8 @@ class FirebaseProjectRepository implements ProjectRepository {
       final emdRetentionDocs = List<ProjectDocument>.from(project.emdRetentionDocuments);
       final sdRetentionDocs = List<ProjectDocument>.from(project.sdRetentionDocuments);
       final otherRetentionDocs = List<ProjectDocument>.from(project.otherRetentionDocuments);
+      final wrpoDocs = List<ProjectDocument>.from(project.wrpoDocuments);
+      final tenderLostDocs = List<ProjectDocument>.from(project.tenderLostDocuments);
 
       if (filesByCategory != null) {
         Future<void> uploadCategory(String key, List<ProjectDocument> target) async {
@@ -91,6 +93,9 @@ class FirebaseProjectRepository implements ProjectRepository {
         await uploadCategory('emd_retention', emdRetentionDocs);
         await uploadCategory('sd_retention', sdRetentionDocs);
         await uploadCategory('other_retention', otherRetentionDocs);
+        await uploadCategory('wrpo', wrpoDocs);
+        await uploadCategory('purchase_order', wrpoDocs);
+        await uploadCategory('tender_lost', tenderLostDocs);
       }
 
       // 3. Assemble final project
@@ -110,6 +115,8 @@ class FirebaseProjectRepository implements ProjectRepository {
         emdRetentionDocuments: emdRetentionDocs,
         sdRetentionDocuments: sdRetentionDocs,
         otherRetentionDocuments: otherRetentionDocs,
+        wrpoDocuments: wrpoDocs,
+        tenderLostDocuments: tenderLostDocs,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -284,6 +291,8 @@ class FirebaseProjectRepository implements ProjectRepository {
       final emdRetentionDocs = List<ProjectDocument>.from(project.emdRetentionDocuments);
       final sdRetentionDocs = List<ProjectDocument>.from(project.sdRetentionDocuments);
       final otherRetentionDocs = List<ProjectDocument>.from(project.otherRetentionDocuments);
+      final wrpoDocs = List<ProjectDocument>.from(project.wrpoDocuments);
+      final tenderLostDocs = List<ProjectDocument>.from(project.tenderLostDocuments);
 
       if (filesByCategory != null) {
         Future<void> uploadCategory(String key, List<ProjectDocument> target) async {
@@ -308,6 +317,9 @@ class FirebaseProjectRepository implements ProjectRepository {
         await uploadCategory('emd_retention', emdRetentionDocs);
         await uploadCategory('sd_retention', sdRetentionDocs);
         await uploadCategory('other_retention', otherRetentionDocs);
+        await uploadCategory('wrpo', wrpoDocs);
+        await uploadCategory('purchase_order', wrpoDocs);
+        await uploadCategory('tender_lost', tenderLostDocs);
       }
 
       final finalProject = project.copyWith(
@@ -325,6 +337,8 @@ class FirebaseProjectRepository implements ProjectRepository {
         emdRetentionDocuments: emdRetentionDocs,
         sdRetentionDocuments: sdRetentionDocs,
         otherRetentionDocuments: otherRetentionDocs,
+        wrpoDocuments: wrpoDocs,
+        tenderLostDocuments: tenderLostDocs,
         updatedAt: DateTime.now(),
       );
 

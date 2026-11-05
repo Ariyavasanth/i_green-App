@@ -12,7 +12,10 @@ class SiteProject {
     this.generalDetails = '',
     this.place = '',
     required this.generalCode,
-    this.subOrOwn = 'Own',
+    this.subOrOwn = 'Main',
+    this.tenderId = '',
+    this.wrpoRemark = '',
+    this.wrpoDocuments = const [],
     this.state = '',
     this.district = '',
     this.area = '',
@@ -51,6 +54,7 @@ class SiteProject {
     this.tenderLostStatus = '',
     this.competitorName = '',
     this.quotedAmount = 0.0,
+    this.tenderLostDocuments = const [],
     // Section 11 – SD Date / Bank Guarantee / Bill Deduction
     this.sdDateRemark = '',
     this.sdDateDocuments = const [],
@@ -136,6 +140,9 @@ class SiteProject {
 
   // Section 2 – Project Code
   final String subOrOwn;
+  final String tenderId;
+  final String wrpoRemark;
+  final List<ProjectDocument> wrpoDocuments;
   final String state;
   final String district;
   final String area;
@@ -186,6 +193,7 @@ class SiteProject {
   final String tenderLostStatus;
   final String competitorName;
   final double quotedAmount;
+  final List<ProjectDocument> tenderLostDocuments;
 
   // Section 11 – SD Date / Bank Guarantee / Bill Deduction
   final String sdDateRemark;
@@ -277,6 +285,9 @@ class SiteProject {
         'place': place,
         'general_code': generalCode,
         'sub_or_own': subOrOwn,
+        'tender_id': tenderId,
+        'wrpo_remark': wrpoRemark,
+        'wrpo_documents': wrpoDocuments.map((d) => d.toJson()).toList(),
         'state': state,
         'district': district,
         'area': area,
@@ -317,6 +328,8 @@ class SiteProject {
         'tender_lost_status': tenderLostStatus,
         'competitor_name': competitorName,
         'quoted_amount': quotedAmount,
+        'tender_lost_documents':
+            tenderLostDocuments.map((d) => d.toJson()).toList(),
         // SD Date
         'sd_date_remark': sdDateRemark,
         'sd_date_documents': sdDateDocuments.map((d) => d.toJson()).toList(),
@@ -452,7 +465,10 @@ class SiteProject {
       generalDetails: json['general_details'] as String? ?? '',
       place: json['place'] as String? ?? '',
       generalCode: json['general_code'] as String? ?? '',
-      subOrOwn: json['sub_or_own'] as String? ?? 'Own',
+      subOrOwn: json['sub_or_own'] as String? ?? 'Main',
+      tenderId: json['tender_id'] as String? ?? '',
+      wrpoRemark: json['wrpo_remark'] as String? ?? '',
+      wrpoDocuments: parseDocList(json['wrpo_documents']),
       state: json['state'] as String? ?? '',
       district: json['district'] as String? ?? '',
       area: json['area'] as String? ?? '',
@@ -499,6 +515,7 @@ class SiteProject {
       tenderLostStatus: json['tender_lost_status'] as String? ?? '',
       competitorName: json['competitor_name'] as String? ?? '',
       quotedAmount: (json['quoted_amount'] as num?)?.toDouble() ?? 0.0,
+      tenderLostDocuments: parseDocList(json['tender_lost_documents']),
       // SD Date
       sdDateRemark: json['sd_date_remark'] as String? ?? '',
       sdDateDocuments: parseDocList(json['sd_date_documents']),
@@ -597,6 +614,9 @@ class SiteProject {
     String? place,
     String? generalCode,
     String? subOrOwn,
+    String? tenderId,
+    String? wrpoRemark,
+    List<ProjectDocument>? wrpoDocuments,
     String? state,
     String? district,
     String? area,
@@ -635,6 +655,7 @@ class SiteProject {
     String? tenderLostStatus,
     String? competitorName,
     double? quotedAmount,
+    List<ProjectDocument>? tenderLostDocuments,
     // SD Date
     String? sdDateRemark,
     List<ProjectDocument>? sdDateDocuments,
@@ -709,6 +730,9 @@ class SiteProject {
       place: place ?? this.place,
       generalCode: generalCode ?? this.generalCode,
       subOrOwn: subOrOwn ?? this.subOrOwn,
+      tenderId: tenderId ?? this.tenderId,
+      wrpoRemark: wrpoRemark ?? this.wrpoRemark,
+      wrpoDocuments: wrpoDocuments ?? this.wrpoDocuments,
       state: state ?? this.state,
       district: district ?? this.district,
       area: area ?? this.area,
@@ -742,6 +766,7 @@ class SiteProject {
       tenderLostStatus: tenderLostStatus ?? this.tenderLostStatus,
       competitorName: competitorName ?? this.competitorName,
       quotedAmount: quotedAmount ?? this.quotedAmount,
+      tenderLostDocuments: tenderLostDocuments ?? this.tenderLostDocuments,
       sdDateRemark: sdDateRemark ?? this.sdDateRemark,
       sdDateDocuments: sdDateDocuments ?? this.sdDateDocuments,
       boqRemark: boqRemark ?? this.boqRemark,

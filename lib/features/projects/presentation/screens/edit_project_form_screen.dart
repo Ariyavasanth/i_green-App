@@ -102,6 +102,8 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
   String _tenderLostStatus = '';
   final _competitorNameCtrl = TextEditingController();
   final _quotedAmountCtrl = TextEditingController();
+  final List<PlatformFile> _tenderLostFiles = [];
+  List<ProjectDocument> _existingTenderLostDocs = [];
 
   // ─── Section 3: Technical Execution & Specs ───
   final _sdDateRemarkCtrl = TextEditingController();
@@ -271,6 +273,7 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
     _competitorNameCtrl.text = p.competitorName;
     _quotedAmountCtrl.text =
         p.quotedAmount > 0 ? p.quotedAmount.toString() : '';
+    _existingTenderLostDocs = List.from(p.tenderLostDocuments);
 
     _sdDateRemarkCtrl.text = p.sdDateRemark;
     _existingSdDateDocs = List.from(p.sdDateDocuments);
@@ -681,6 +684,7 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
         competitorName: _competitorNameCtrl.text.trim(),
         quotedAmount:
             double.tryParse(_quotedAmountCtrl.text.trim()) ?? 0.0,
+        tenderLostDocuments: _existingTenderLostDocs,
         sdDateRemark: _sdDateRemarkCtrl.text.trim(),
         sdDateDocuments: _existingSdDateDocs,
         boqRemark: _boqRemarkCtrl.text.trim(),
@@ -735,6 +739,7 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
         'tender_spec': _tenderSpecFiles,
         'bqr': _bqrFiles,
         'emd': _emdFiles,
+        'tender_lost': _tenderLostFiles,
         'sd_date': _sdDateFiles,
         'boq': _boqFiles,
         'project_details': _projectDetailsFiles,
@@ -2866,8 +2871,11 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       padding: const EdgeInsets.all(12),
-      child: _isMobile
-          ? Column(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _isMobile
+              ? Column(
               children: [
                 Row(
                   children: [
@@ -2911,6 +2919,27 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
                   controller: _tenderLostRemarkCtrl,
                   style: const TextStyle(fontSize: 12.5),
                   decoration: _inputDeco('Tender Lost Remarks'),
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF414A51),
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                      backgroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+                    ),
+                    onPressed: () => _pickFiles(_tenderLostFiles, existing: _existingTenderLostDocs),
+                    icon: const Icon(Icons.attach_file_rounded, size: 16),
+                    label: Text(
+                      (_existingTenderLostDocs.length + _tenderLostFiles.length) == 0
+                          ? 'Attach Documents'
+                          : 'Files (${_existingTenderLostDocs.length + _tenderLostFiles.length})',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ),
                 ),
               ],
             )
@@ -2960,8 +2989,59 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
                     decoration: _inputDeco('Tender Lost Remarks'),
                   ),
                 ),
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF414A51),
+                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    backgroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+                  ),
+                  onPressed: () => _pickFiles(_tenderLostFiles, existing: _existingTenderLostDocs),
+                  icon: const Icon(Icons.attach_file_rounded, size: 18),
+                  label: Text(
+                    (_existingTenderLostDocs.length + _tenderLostFiles.length) == 0
+                        ? 'Attach Documents'
+                        : 'Files (${_existingTenderLostDocs.length + _tenderLostFiles.length})',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
               ],
             ),
+          if ((_existingTenderLostDocs.length + _tenderLostFiles.length) > 0) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                ..._existingTenderLostDocs.map((doc) => _buildDocChip(
+                      name: doc.name,
+                      isExisting: true,
+                      onRemove: () => setState(() => _existingTenderLostDocs.remove(doc)),
+                      onView: () => _previewFile(
+                        name: doc.name,
+                        url: doc.downloadUrl,
+                        size: doc.size,
+                        isLocal: false,
+                      ),
+                    )),
+                ..._tenderLostFiles.map((file) => _buildDocChip(
+                      name: file.name,
+                      isExisting: false,
+                      onRemove: () => setState(() => _tenderLostFiles.remove(file)),
+                      onView: () => _previewFile(
+                        name: file.name,
+                        bytes: file.bytes,
+                        size: file.size,
+                        isLocal: true,
+                      ),
+                    )),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 

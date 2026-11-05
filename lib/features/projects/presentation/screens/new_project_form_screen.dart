@@ -17,6 +17,9 @@ import '../../domain/models/site_project.dart';
 import '../../domain/services/project_code_generator.dart';
 import '../../providers/project_providers.dart';
 import '../dialogs/add_client_dialog.dart';
+import '../../../tenders/domain/models/tender.dart';
+import '../../../tenders/presentation/screens/tender_form_screen.dart';
+import '../../../tenders/providers/tender_providers.dart';
 
 class NewProjectFormScreen extends ConsumerStatefulWidget {
   const NewProjectFormScreen({
@@ -50,7 +53,11 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
   final _generalCodeController = TextEditingController();
 
   // SECTION 2 — PROJECT CODE
-  String _subOrOwn = 'Own';
+  String _subOrOwn = 'Main';
+  String _selectedTenderId = '';
+  final _wrpoRemarkController = TextEditingController();
+  final List<PlatformFile> _wrpoFiles = [];
+  List<ProjectDocument> _existingWrpoDocs = [];
   String _selectedState = 'Tamil Nadu';
   String _selectedDistrict = 'Chennai';
   final _areaController = TextEditingController();
@@ -124,7 +131,10 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     _generalDetailsController.text = p.generalDetails;
     _placeController.text = p.place;
     _generalCodeController.text = p.generalCode;
-    _subOrOwn = p.subOrOwn.isNotEmpty ? p.subOrOwn : 'Own';
+    _subOrOwn = p.subOrOwn.toUpperCase() == 'SUB' ? 'Sub' : 'Main';
+    _selectedTenderId = p.tenderId;
+    _wrpoRemarkController.text = p.wrpoRemark;
+    _existingWrpoDocs = List.from(p.wrpoDocuments);
     _selectedState = p.state.isNotEmpty ? p.state : 'Tamil Nadu';
     _updateDistrictsForState(_selectedState);
     _selectedDistrict =
@@ -171,6 +181,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     _placeController.dispose();
     _generalCodeController.dispose();
     _areaController.dispose();
+    _wrpoRemarkController.dispose();
     _projectCodeController.dispose();
     _approximateProjectValueController.dispose();
     _actualProjectValueController.dispose();
@@ -526,6 +537,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
         'tender_spec': _tenderSpecFiles,
         'bqr': _bqrFiles,
         'emd': _emdFiles,
+        'wrpo': _wrpoFiles,
       };
 
       if (_isEditMode && _loadedProject != null) {
@@ -538,6 +550,9 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
           place: _placeController.text.trim(),
           generalCode: _generalCodeController.text.trim(),
           subOrOwn: _subOrOwn,
+          tenderId: _selectedTenderId,
+          wrpoRemark: _wrpoRemarkController.text.trim(),
+          wrpoDocuments: _existingWrpoDocs,
           state: _selectedState,
           district: _selectedDistrict,
           area: _areaController.text.trim(),
@@ -615,6 +630,9 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
           place: _placeController.text.trim(),
           generalCode: _generalCodeController.text.trim(),
           subOrOwn: _subOrOwn,
+          tenderId: _selectedTenderId,
+          wrpoRemark: _wrpoRemarkController.text.trim(),
+          wrpoDocuments: _existingWrpoDocs,
           state: _selectedState,
           district: _selectedDistrict,
           area: _areaController.text.trim(),
@@ -984,6 +1002,10 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                                 Expanded(child: _buildSubOrOwnDropdown()),
                               ],
                             ),
+                          if (_subOrOwn == 'Main') ...[
+                            const SizedBox(height: 14),
+                            _buildTenderMappingDropdown(),
+                          ],
                           const SizedBox(height: 14),
                           // Location Hierarchy: State -> District -> Area
                           if (isMobile) ...[
@@ -1031,6 +1053,10 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                         ],
                       ),
                     ),
+                    if (_subOrOwn == 'Sub') ...[
+                      const SizedBox(height: 18),
+                      _buildWrpoSection(),
+                    ],
                     const SizedBox(height: 18),
 
                     // SECTION 3 — TENDER TYPE
@@ -1989,14 +2015,125 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
 
   Widget _buildSubOrOwnDropdown() {
     return AppSearchableDropdown<String>(
-      label: 'Sub Or Own',
+      label: 'Sub Or Main',
       value: _subOrOwn,
-      items: const ['Own', 'Sub'],
-      searchHint: 'Search Sub or Own...',
-      placeholder: 'Select Sub or Own',
+      items: const ['Main', 'Sub'],
+      searchHint: 'Search Main or Sub...',
+      placeholder: 'Select Main or Sub',
       onChanged: (val) {
-        if (val != null) setState(() => _subOrOwn = val);
+        if (val != null) {
+          setState(() {
+            _subOrOwn = val;
+            _generateProjectCodeAction();
+          });
+        }
       },
+    );
+  }
+
+  Widget _buildTenderMappingDropdown() {
+    final tendersAsync = ref.watch(tendersStreamProvider);
+    return tendersAsync.when(
+      data: (tenders) {
+        final tenderIdOptions = tenders.map((t) => t.tenderId).toList();
+        final selectedVal = tenderIdOptions.contains(_selectedTenderId)
+            ? _selectedTenderId
+            : (_selectedTenderId.isNotEmpty ? _selectedTenderId : null);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: AppSearchableDropdown<String>(
+                    label: 'Map Tender ID *',
+                    value: selectedVal,
+                    items: tenderIdOptions,
+                    itemLabel: (id) {
+                      final match = tenders.firstWhere(
+                        (t) => t.tenderId == id,
+                        orElse: () => Tender(
+                          tenderId: id,
+                          createdAt: DateTime.now(),
+                          updatedAt: DateTime.now(),
+                        ),
+                      );
+                      return match.title.isNotEmpty
+                          ? '$id (${match.title})'
+                          : id;
+                    },
+                    searchHint: 'Search Tender ID...',
+                    placeholder: tenders.isEmpty
+                        ? 'No Tenders Available'
+                        : 'Select Tender ID',
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() => _selectedTenderId = val);
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Padding(
+                  padding: const EdgeInsets.only(top: 22),
+                  child: Tooltip(
+                    message: 'Create New Tender',
+                    child: IconButton(
+                      icon: const Icon(Icons.add_circle_outline,
+                          color: Color(0xFF9CC70A)),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const TenderFormScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (tenders.isEmpty) ...[
+              const SizedBox(height: 4),
+              const Text(
+                'No tenders found. Click "+" to create a tender first.',
+                style: TextStyle(fontSize: 11, color: Colors.orange),
+              ),
+            ],
+          ],
+        );
+      },
+      loading: () => const LinearProgressIndicator(color: Color(0xFF9CC70A)),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+
+  Widget _buildWrpoSection() {
+    return _buildSectionCard(
+      sectionNumber: 'SUB CONTRACT DETAILS',
+      sectionTitle: 'PURCHASE ORDER / WRPO',
+      icon: Icons.receipt_long_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextFormField(
+            controller: _wrpoRemarkController,
+            maxLines: 2,
+            decoration: const InputDecoration(
+              labelText: 'Purchase Order / WRPO Remark Text',
+              hintText: 'Enter purchase order or work order remarks...',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 14),
+          _buildFileUploadWidget(
+            label: 'PO / WRPO Documents',
+            files: _wrpoFiles,
+            existingDocs: _existingWrpoDocs,
+          ),
+        ],
+      ),
     );
   }
 

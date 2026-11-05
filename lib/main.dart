@@ -14,7 +14,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initAuthSessionStorage();
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-    FlutterForegroundTask.initCommunicationPort();
+    try {
+      FlutterForegroundTask.initCommunicationPort();
+    } catch (e) {
+      debugPrint('Foreground task port init notice: $e');
+    }
   }
   try {
     await Firebase.initializeApp(

@@ -14,6 +14,8 @@ import '../../features/projects/presentation/screens/new_project_form_screen.dar
 import '../../features/projects/presentation/screens/assigned_projects_screen.dart';
 import '../../features/projects/presentation/screens/edit_project_form_screen.dart';
 import '../../features/projects/domain/models/site_project.dart';
+import '../../features/tenders/presentation/screens/tender_list_screen.dart';
+import '../../features/tenders/presentation/screens/tender_form_screen.dart';
 
 import '../../features/app_shell/presentation/app_shell.dart';
 import '../../features/app_shell/presentation/section_page.dart';
@@ -291,6 +293,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/project/fund-request', builder: (_, _) => const FundRequesterPage()),
       GoRoute(path: '/projects/fund-management', builder: (_, _) => const FundManagementPage()),
       GoRoute(path: '/project/fund-management', builder: (_, _) => const FundManagementPage()),
+      GoRoute(path: '/projects/tenders', builder: (_, _) => const TenderListScreen()),
+      GoRoute(path: '/project/tenders', builder: (_, _) => const TenderListScreen()),
+      GoRoute(path: '/projects/tenders/new', builder: (_, _) => const TenderFormScreen()),
+      GoRoute(path: '/project/tenders/new', builder: (_, _) => const TenderFormScreen()),
       GoRoute(path: '/module/factory', builder: (_, _) => const FactoryModuleScreen()),
       GoRoute(
         path: '/employee/register/:linkId',

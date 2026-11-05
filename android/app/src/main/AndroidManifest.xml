@@ -1,6 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
     <uses-permission android:name="android.permission.CAMERA" />
@@ -20,7 +21,10 @@
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:foregroundServiceType="location"
             android:exported="false"
-            android:stopWithTask="false" />
+            android:stopWithTask="true" />
+        <meta-data
+            android:name="com.igreen.tech.notification.ICON"
+            android:resource="@drawable/ic_notification" />
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyAUjhxMMfOFsi6mmwz2mn0ADjfLKnUY4wk"/>

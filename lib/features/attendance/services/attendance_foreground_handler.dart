@@ -50,7 +50,9 @@ class AttendanceTaskHandler extends TaskHandler {
 
       // If no valid employee is assigned to background monitoring, stop the service safely.
       if (employeeId <= 0) {
-        await FlutterForegroundTask.stopService();
+        try {
+          await FlutterForegroundTask.stopService();
+        } catch (_) {}
         return;
       }
 
@@ -105,29 +107,43 @@ class AttendanceTaskHandler extends TaskHandler {
           employeeId: employeeId,
         );
         // Restore standard notification text
-        await FlutterForegroundTask.updateService(
-          notificationTitle: 'I-Green Attendance Active',
-          notificationText: 'Shift active • Workplace departure monitored',
-        );
+        try {
+          await FlutterForegroundTask.updateService(
+            notificationTitle: 'I-Green Attendance Active',
+            notificationText: 'Shift active • Workplace departure monitored',
+            notificationIcon: const NotificationIcon(
+              metaDataName: 'com.igreen.tech.notification.ICON',
+            ),
+          );
+        } catch (_) {}
         // Inform UI that employee is inside
-        FlutterForegroundTask.sendDataToMain({
-          'action': 'returned_inside',
-          'employeeId': employeeId,
-        });
+        try {
+          FlutterForegroundTask.sendDataToMain({
+            'action': 'returned_inside',
+            'employeeId': employeeId,
+          });
+        } catch (_) {}
       } else {
         // Employee detected outside geofence -> update notification with warning banner
-        await FlutterForegroundTask.updateService(
-          notificationTitle: '⚠️ Workplace Border Crossed!',
-          notificationText: 'Return within workplace boundary or shift will auto-checkout.',
-        );
+        try {
+          await FlutterForegroundTask.updateService(
+            notificationTitle: '⚠️ Workplace Border Crossed!',
+            notificationText: 'Return within workplace boundary or shift will auto-checkout.',
+            notificationIcon: const NotificationIcon(
+              metaDataName: 'com.igreen.tech.notification.ICON',
+            ),
+          );
+        } catch (_) {}
 
         // Inform UI to raise 10-second countdown pop-up if app is currently open
-        FlutterForegroundTask.sendDataToMain({
-          'action': 'border_crossed',
-          'employeeId': employeeId,
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-        });
+        try {
+          FlutterForegroundTask.sendDataToMain({
+            'action': 'border_crossed',
+            'employeeId': employeeId,
+            'latitude': position.latitude,
+            'longitude': position.longitude,
+          });
+        } catch (_) {}
 
         // Debounce to prevent GPS bounce false exits
         final isConfirmed = await GeofenceExitValidator.recordExitObservationAsync(
@@ -162,15 +178,19 @@ class AttendanceTaskHandler extends TaskHandler {
         if (didAutoCheckOut) {
           debugPrint('Background Auto-Checkout successful for employee $employeeId at $timestamp');
           // Notify the main UI isolate if alive
-          FlutterForegroundTask.sendDataToMain({
-            'action': 'auto_checkout',
-            'employeeId': employeeId,
-            'time': timestamp.toIso8601String(),
-          });
+          try {
+            FlutterForegroundTask.sendDataToMain({
+              'action': 'auto_checkout',
+              'employeeId': employeeId,
+              'time': timestamp.toIso8601String(),
+            });
+          } catch (_) {}
 
           // Clear monitored ID and stop the foreground service immediately
           await prefs.remove('bg_monitored_employee_id');
-          await FlutterForegroundTask.stopService();
+          try {
+            await FlutterForegroundTask.stopService();
+          } catch (_) {}
           return;
         }
       }
@@ -188,15 +208,22 @@ class AttendanceTaskHandler extends TaskHandler {
           (record.checkOutTime.trim().isNotEmpty || record.status == 'Checked Out')) {
         // Employee checked out manually or via other means -> tear down background monitoring
         await prefs.remove('bg_monitored_employee_id');
-        await FlutterForegroundTask.stopService();
+        try {
+          await FlutterForegroundTask.stopService();
+        } catch (_) {}
         return;
       }
 
       // 7. Normal operation: update notification text
-      await FlutterForegroundTask.updateService(
-        notificationTitle: 'I-Green Attendance Active',
-        notificationText: 'Shift active • Workplace departure monitored',
-      );
+      try {
+        await FlutterForegroundTask.updateService(
+          notificationTitle: 'I-Green Attendance Active',
+          notificationText: 'Shift active • Workplace departure monitored',
+          notificationIcon: const NotificationIcon(
+            metaDataName: 'com.igreen.tech.notification.ICON',
+          ),
+        );
+      } catch (_) {}
     } catch (e) {
       debugPrint('AttendanceTaskHandler onRepeatEvent notice: $e');
     }
@@ -204,12 +231,16 @@ class AttendanceTaskHandler extends TaskHandler {
 
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
-    debugPrint('Attendance Foreground Task stopped at $timestamp (isTimeout: $isTimeout)');
+    try {
+      debugPrint('Attendance Foreground Task stopped at $timestamp (isTimeout: $isTimeout)');
+    } catch (_) {}
   }
 
   @override
   void onReceiveData(Object data) {
-    debugPrint('Attendance Foreground Task received data: $data');
+    try {
+      debugPrint('Attendance Foreground Task received data: $data');
+    } catch (_) {}
   }
 
   @override
@@ -217,7 +248,9 @@ class AttendanceTaskHandler extends TaskHandler {
 
   @override
   void onNotificationPressed() {
-    FlutterForegroundTask.launchApp();
+    try {
+      FlutterForegroundTask.launchApp();
+    } catch (_) {}
   }
 
   @override

@@ -307,7 +307,11 @@ class ProjectDetailsDialog extends StatelessWidget {
                       _buildInfoSection(
                         title: 'LOCATION & CLASSIFICATION',
                         items: [
-                          _InfoPair('Sub or Own', project.subOrOwn),
+                          _InfoPair('Main or Sub', project.subOrOwn),
+                          if (project.tenderId.isNotEmpty)
+                            _InfoPair('Tender ID', project.tenderId),
+                          if (project.wrpoRemark.isNotEmpty)
+                            _InfoPair('WRPO Remark', project.wrpoRemark),
                           _InfoPair('State', project.state.isNotEmpty ? project.state : '—'),
                           _InfoPair('District', project.district.isNotEmpty ? project.district : '—'),
                           _InfoPair('Area', project.area.isNotEmpty ? project.area : '—'),

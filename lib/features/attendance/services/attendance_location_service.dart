@@ -508,15 +508,24 @@ class AttendanceLocationService {
   Future<void> startBackgroundMonitoring(int employeeId) async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android || employeeId <= 0) return;
     try {
+      // 1. Verify location permission before attempting to start foreground service (Android 14 requirement)
+      final locPermission = await Geolocator.checkPermission();
+      if (locPermission == LocationPermission.denied || locPermission == LocationPermission.deniedForever) {
+        debugPrint('startBackgroundMonitoring: Location permission not granted, skipping foreground service');
+        return;
+      }
+
       initForegroundTask();
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('bg_monitored_employee_id', employeeId);
 
-      // Check Notification Permission on Android 13+
-      final notifPermission = await FlutterForegroundTask.checkNotificationPermission();
-      if (notifPermission != NotificationPermission.granted) {
-        await FlutterForegroundTask.requestNotificationPermission();
-      }
+      // 2. Check Notification Permission on Android 13+
+      try {
+        final notifPermission = await FlutterForegroundTask.checkNotificationPermission();
+        if (notifPermission != NotificationPermission.granted) {
+          await FlutterForegroundTask.requestNotificationPermission();
+        }
+      } catch (_) {}
 
       final isRunning = await FlutterForegroundTask.isRunningService;
       if (isRunning) {
@@ -524,8 +533,12 @@ class AttendanceLocationService {
       } else {
         await FlutterForegroundTask.startService(
           serviceId: 256,
+          serviceTypes: [ForegroundServiceTypes.location],
           notificationTitle: 'I-Green Attendance Active',
           notificationText: 'Shift active • Workplace departure monitored',
+          notificationIcon: const NotificationIcon(
+            metaDataName: 'com.igreen.tech.notification.ICON',
+          ),
           callback: attendanceTaskCallback,
         );
       }
