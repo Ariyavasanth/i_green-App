@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io' as io;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -55,9 +56,14 @@ class FirebaseTenderRepository implements TenderRepository {
 
       final storageFolderId = tenderId.replaceAll('/', '_');
 
+      final noticeDocs = List<ProjectDocument>.from(tender.tenderNoticeDocuments);
       final specDocs = List<ProjectDocument>.from(tender.tenderSpecDocuments);
       final bqrDocs = List<ProjectDocument>.from(tender.bqrDocuments);
       final emdDocs = List<ProjectDocument>.from(tender.emdDocuments);
+      final emdExemptionDocs = List<ProjectDocument>.from(tender.emdExemptionDocuments);
+      final awardDocs = List<ProjectDocument>.from(tender.awardDocuments);
+
+      DateTime? noticeUploadedAt = tender.noticeUploadedAt;
 
       if (filesByCategory != null) {
         Future<void> uploadCategory(
@@ -69,18 +75,29 @@ class FirebaseTenderRepository implements TenderRepository {
           }
         }
 
+        if (filesByCategory['tender_notice'] != null &&
+            filesByCategory['tender_notice']!.isNotEmpty) {
+          await uploadCategory('tender_notice', noticeDocs);
+          noticeUploadedAt ??= DateTime.now();
+        }
         await uploadCategory('tender_spec', specDocs);
         await uploadCategory('bqr', bqrDocs);
         await uploadCategory('emd', emdDocs);
+        await uploadCategory('emd_exemption', emdExemptionDocs);
+        await uploadCategory('award_documents', awardDocs);
       }
 
       final now = DateTime.now();
       final finalTender = tender.copyWith(
         id: docId,
         tenderId: tenderId,
+        tenderNoticeDocuments: noticeDocs,
+        noticeUploadedAt: noticeUploadedAt,
         tenderSpecDocuments: specDocs,
         bqrDocuments: bqrDocs,
         emdDocuments: emdDocs,
+        emdExemptionDocuments: emdExemptionDocs,
+        awardDocuments: awardDocs,
         createdAt: now,
         updatedAt: now,
       );
@@ -105,9 +122,14 @@ class FirebaseTenderRepository implements TenderRepository {
               : tender.id)
           .replaceAll('/', '_');
 
+      final noticeDocs = List<ProjectDocument>.from(tender.tenderNoticeDocuments);
       final specDocs = List<ProjectDocument>.from(tender.tenderSpecDocuments);
       final bqrDocs = List<ProjectDocument>.from(tender.bqrDocuments);
       final emdDocs = List<ProjectDocument>.from(tender.emdDocuments);
+      final emdExemptionDocs = List<ProjectDocument>.from(tender.emdExemptionDocuments);
+      final awardDocs = List<ProjectDocument>.from(tender.awardDocuments);
+
+      DateTime? noticeUploadedAt = tender.noticeUploadedAt;
 
       if (filesByCategory != null) {
         Future<void> uploadCategory(
@@ -119,15 +141,26 @@ class FirebaseTenderRepository implements TenderRepository {
           }
         }
 
+        if (filesByCategory['tender_notice'] != null &&
+            filesByCategory['tender_notice']!.isNotEmpty) {
+          await uploadCategory('tender_notice', noticeDocs);
+          noticeUploadedAt ??= DateTime.now();
+        }
         await uploadCategory('tender_spec', specDocs);
         await uploadCategory('bqr', bqrDocs);
         await uploadCategory('emd', emdDocs);
+        await uploadCategory('emd_exemption', emdExemptionDocs);
+        await uploadCategory('award_documents', awardDocs);
       }
 
       final finalTender = tender.copyWith(
+        tenderNoticeDocuments: noticeDocs,
+        noticeUploadedAt: noticeUploadedAt,
         tenderSpecDocuments: specDocs,
         bqrDocuments: bqrDocs,
         emdDocuments: emdDocs,
+        emdExemptionDocuments: emdExemptionDocs,
+        awardDocuments: awardDocs,
         updatedAt: DateTime.now(),
       );
 
@@ -140,6 +173,14 @@ class FirebaseTenderRepository implements TenderRepository {
           name: 'FirebaseTenderRepository', error: e, stackTrace: stack);
       rethrow;
     }
+  }
+
+  @override
+  Future<void> updateTenderResult(
+    Tender tender, {
+    Map<String, List<PlatformFile>>? filesByCategory,
+  }) async {
+    await updateTender(tender, filesByCategory: filesByCategory);
   }
 
   @override
@@ -183,8 +224,9 @@ class FirebaseTenderRepository implements TenderRepository {
     for (final file in files) {
       String downloadUrl = '';
       String storagePath = '';
+      Uint8List? bytes = file.bytes;
+
       try {
-        Uint8List? bytes = file.bytes;
         if (bytes == null && file.path != null && file.path!.isNotEmpty) {
           if (!kIsWeb) {
             final f = io.File(file.path!);
@@ -194,23 +236,35 @@ class FirebaseTenderRepository implements TenderRepository {
           }
         }
 
+        final cleanFileName =
+            file.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        storagePath =
+            'tenders/$tenderId/$category/${timestamp}_$cleanFileName';
+
         if (bytes != null) {
-          final cleanFileName =
-              file.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-          final timestamp = DateTime.now().millisecondsSinceEpoch;
-          storagePath =
-              'tenders/$tenderId/$category/${timestamp}_$cleanFileName';
-          final ref = _storage.ref().child(storagePath);
-          final uploadTask = await ref.putData(
-            bytes,
-            SettableMetadata(contentType: _getContentType(file.extension)),
-          );
-          downloadUrl = await uploadTask.ref.getDownloadURL();
+          final mime = _getContentType(file.extension);
+          try {
+            final ref = _storage.ref().child(storagePath);
+            final uploadTask = await ref.putData(
+              bytes,
+              SettableMetadata(contentType: mime),
+            );
+            downloadUrl = await uploadTask.ref.getDownloadURL();
+          } catch (storageErr) {
+            developer.log(
+              'Firebase Storage putData failed ($storageErr). Saving as data URI fallback.',
+              name: 'FirebaseTenderRepository',
+            );
+            // Fallback when Firebase Storage bucket billing is disabled or unreachable:
+            // Store as base64 data URI so user can view/download on both desktop and mobile
+            final base64Str = base64Encode(bytes);
+            downloadUrl = 'data:$mime;base64,$base64Str';
+          }
         }
       } catch (e) {
         developer.log('Storage upload fallback for ${file.name}: $e',
             name: 'FirebaseTenderRepository');
-        downloadUrl = '';
       }
 
       docs.add(

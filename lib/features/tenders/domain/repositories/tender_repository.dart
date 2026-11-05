@@ -12,6 +12,11 @@ abstract class TenderRepository {
     Map<String, List<PlatformFile>>? filesByCategory,
   });
 
+  Future<void> updateTenderResult(
+    Tender tender, {
+    Map<String, List<PlatformFile>>? filesByCategory,
+  });
+
   Future<void> deleteTender(String id);
 
   Stream<List<Tender>> watchTenders();

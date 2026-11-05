@@ -26,10 +26,12 @@ class NewProjectFormScreen extends ConsumerStatefulWidget {
     super.key,
     this.project,
     this.projectId,
+    this.initialTender,
   });
 
   final SiteProject? project;
   final String? projectId;
+  final Tender? initialTender;
 
   @override
   ConsumerState<NewProjectFormScreen> createState() =>
@@ -122,9 +124,39 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
         }
       });
       _updateDistrictsForState(_selectedState);
+    } else if (widget.initialTender != null) {
+      _updateDistrictsForState(_selectedState);
+      _populateFromTender(widget.initialTender!);
     } else {
       _updateDistrictsForState(_selectedState);
     }
+  }
+
+  void _populateFromTender(Tender t) {
+    _selectedTenderId = t.tenderId;
+    _generalDetailsController.text = t.title;
+    _selectedTenderType = t.tenderType.toLowerCase().contains('close')
+        ? 'Close'
+        : 'Open';
+    _selectedQualified = t.qualified.isNotEmpty ? t.qualified : 'Yes';
+    final amount = t.awardedValue > 0 ? t.awardedValue : t.tenderAmount;
+    if (amount > 0) {
+      _tenderAmountController.text = (amount % 1 == 0
+          ? amount.toInt().toString()
+          : amount.toString());
+      _approximateProjectValueController.text = _tenderAmountController.text;
+      _actualProjectValueController.text = _tenderAmountController.text;
+    }
+    _tenderSpecRemarkController.text = t.tenderSpecRemark;
+    _existingTenderSpecDocs = List.from(t.tenderSpecDocuments);
+    _openingDate = t.openingDate;
+    _openingDateRemarkController.text = t.openingDateRemark;
+    _closingDate = t.closingDate;
+    _closingDateRemarkController.text = t.closingDateRemark;
+    _bqrRemarkController.text = t.bqrRemark;
+    _existingBqrDocs = List.from(t.bqrDocuments);
+    _emdRemarkController.text = t.emdRemark;
+    _existingEmdDocs = List.from(t.emdDocuments);
   }
 
   void _populateFromProject(SiteProject p) {
