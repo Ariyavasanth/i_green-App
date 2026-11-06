@@ -201,6 +201,86 @@ void main() {
       expect(legacyRestored.actualProjectValue, 0.0);
     });
 
+    test('SiteProject serializes and deserializes assignment details correctly', () {
+      final assignedDate = DateTime(2026, 11, 6, 10, 30);
+      final project = SiteProject(
+        id: 'proj_assign',
+        employeeName: 'Admin',
+        clientName: 'Client X',
+        generalDetails: 'Assignment test',
+        place: 'Chennai',
+        generalCode: 'GC-001',
+        subOrOwn: 'Own',
+        state: 'Tamil Nadu',
+        district: 'Chennai',
+        area: 'Guindy',
+        projectCode: 'PRJ-001',
+        tenderType: 'Open',
+        assignedToEmployeeName: 'John Doe',
+        assignedToEmployeeId: 'EMP-1001',
+        assignedToDesignation: 'Project Manager',
+        assignedToContactNumber: '9876543210',
+        assignedToEmail: 'john.doe@example.com',
+        assignedDate: assignedDate,
+      );
+
+      final json = project.toJson();
+      expect(json['assigned_to_employee_name'], 'John Doe');
+      expect(json['assigned_to_employee_id'], 'EMP-1001');
+      expect(json['assigned_to_designation'], 'Project Manager');
+      expect(json['assigned_to_contact_number'], '9876543210');
+      expect(json['assigned_to_email'], 'john.doe@example.com');
+      expect(json['assigned_date'], assignedDate.toIso8601String());
+
+      final restored = SiteProject.fromJson(json, docId: 'proj_assign');
+      expect(restored.assignedToEmployeeName, 'John Doe');
+      expect(restored.assignedToEmployeeId, 'EMP-1001');
+      expect(restored.assignedToDesignation, 'Project Manager');
+      expect(restored.assignedToContactNumber, '9876543210');
+      expect(restored.assignedToEmail, 'john.doe@example.com');
+      expect(restored.assignedDate, assignedDate);
+    });
+
+    test('SiteProject serializes and deserializes workOrderDocuments correctly', () {
+      final now = DateTime(2026, 11, 6);
+      final project = SiteProject(
+        id: 'proj_wo',
+        employeeName: 'Admin',
+        clientName: 'Client Y',
+        generalDetails: 'Work order document test',
+        place: 'Chennai',
+        generalCode: 'GC-002',
+        subOrOwn: 'Main',
+        state: 'Tamil Nadu',
+        district: 'Chennai',
+        area: 'Ambattur',
+        projectCode: 'PRJ-002',
+        tenderType: 'Open',
+        workOrderRemark: 'Approved WO #WO-2026-99',
+        workOrderDocuments: [
+          ProjectDocument(
+            name: 'work_order_contract.pdf',
+            size: 204800,
+            downloadUrl: 'https://storage.googleapis.com/test-bucket/work_order_contract.pdf',
+            category: 'work_order',
+            uploadedAt: now,
+          ),
+        ],
+      );
+
+      final json = project.toJson();
+      expect(json['work_order_remark'], 'Approved WO #WO-2026-99');
+      expect(json['work_order_documents'], hasLength(1));
+      expect(json['work_order_documents'].first['name'], 'work_order_contract.pdf');
+
+      final restored = SiteProject.fromJson(json, docId: 'proj_wo');
+      expect(restored.workOrderRemark, 'Approved WO #WO-2026-99');
+      expect(restored.workOrderDocuments, hasLength(1));
+      expect(restored.workOrderDocuments.first.name, 'work_order_contract.pdf');
+      expect(restored.workOrderDocuments.first.downloadUrl,
+          'https://storage.googleapis.com/test-bucket/work_order_contract.pdf');
+    });
+
     test('ProjectCodeGenerator generates valid General Code', () {
       final code = ProjectCodeGenerator.generateGeneralCode(
         clientName: 'AE POWER',

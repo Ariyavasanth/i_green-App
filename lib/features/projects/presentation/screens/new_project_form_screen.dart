@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/location_data.dart';
@@ -19,6 +20,7 @@ import '../dialogs/add_client_dialog.dart';
 import '../../../tenders/domain/models/tender.dart';
 import '../../../tenders/presentation/screens/tender_form_screen.dart';
 import '../../../tenders/presentation/screens/update_tender_result_dialog.dart';
+import '../../../tenders/presentation/widgets/tender_document_actions.dart';
 import '../../../tenders/providers/tender_providers.dart';
 
 class NewProjectFormScreen extends ConsumerStatefulWidget {
@@ -69,6 +71,8 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
   final _projectCodeController = TextEditingController();
   final _approximateProjectValueController = TextEditingController();
   final _actualProjectValueController = TextEditingController();
+  final List<PlatformFile> _workOrderFiles = [];
+  List<ProjectDocument> _existingWorkOrderDocs = [];
 
   // SECTION 3 — TENDER TYPE
   static const List<String> _tenderTypeOptions = ['Open', 'Close'];
@@ -81,7 +85,13 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
   final List<PlatformFile> _tenderSpecFiles = [];
   List<ProjectDocument> _existingTenderSpecDocs = [];
 
-  // SECTION 5 — ASSIGNED TO (Multiple employees)
+  // SECTION 5 — ASSIGNED TO
+  Employee? _selectedAssignedEmployee;
+  final _assignedDesignationController = TextEditingController();
+  final _assignedContactController = TextEditingController();
+  final _assignedEmailController = TextEditingController();
+  final _assignedDateController = TextEditingController();
+  DateTime? _assignedDate;
   final List<Employee> _selectedAssignedEmployees = [];
   bool _assignedInitialized = false;
 
@@ -109,6 +119,9 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
   @override
   void initState() {
     super.initState();
+    _assignedDate = DateTime.now();
+    _assignedDateController.text =
+        DateFormat('dd-MM-yyyy').format(_assignedDate!);
     if (widget.project != null) {
       _isEditMode = true;
       _loadedProject = widget.project;
@@ -233,6 +246,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
             ? p.actualProjectValue.toInt().toString()
             : p.actualProjectValue.toString())
         : '';
+    _existingWorkOrderDocs = List.from(p.workOrderDocuments);
     _selectedTenderType = p.tenderType.toLowerCase().contains('close')
         ? 'Close'
         : 'Open';
@@ -252,6 +266,12 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     _existingBqrDocs = List.from(p.bqrDocuments);
     _emdRemarkController.text = p.emdRemark;
     _existingEmdDocs = List.from(p.emdDocuments);
+    _assignedDate = p.assignedDate ?? DateTime.now();
+    _assignedDateController.text =
+        DateFormat('dd-MM-yyyy').format(_assignedDate!);
+    _assignedDesignationController.text = p.assignedToDesignation;
+    _assignedContactController.text = p.assignedToContactNumber;
+    _assignedEmailController.text = p.assignedToEmail;
   }
 
   @override
@@ -272,6 +292,10 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     _closingDateRemarkController.dispose();
     _bqrRemarkController.dispose();
     _emdRemarkController.dispose();
+    _assignedDesignationController.dispose();
+    _assignedContactController.dispose();
+    _assignedEmailController.dispose();
+    _assignedDateController.dispose();
     super.dispose();
   }
 
@@ -512,6 +536,11 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
       return;
     }
 
+    if (_generalDetailsController.text.trim().isEmpty) {
+      _showToast('Please enter Project Name / Details *');
+      return;
+    }
+
     if (_selectedClient == null) {
       _showToast('Please select a Client *');
       return;
@@ -527,8 +556,13 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
       return;
     }
 
-    if (_selectedAssignedEmployees.isEmpty) {
-      _showToast('Please assign at least one Employee * in Section 5');
+    if (_selectedAssignedEmployee == null && _selectedAssignedEmployees.isEmpty) {
+      _showToast('Please select Employee Name * in Section 5');
+      return;
+    }
+
+    if (_assignedDate == null) {
+      _showToast('Please select Assigned Date * in Section 5');
       return;
     }
 
@@ -576,6 +610,10 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                   : 'Unknown Client'))
           : (_loadedProject?.clientName ?? 'Unknown Client');
 
+      if (_selectedAssignedEmployee != null &&
+          !_selectedAssignedEmployees.contains(_selectedAssignedEmployee)) {
+        _selectedAssignedEmployees.insert(0, _selectedAssignedEmployee!);
+      }
       final assignedNames =
           _selectedAssignedEmployees.map((e) => e.fullName).toList();
       final assignedIds =
@@ -586,6 +624,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
         'bqr': _bqrFiles,
         'emd': _emdFiles,
         'wrpo': _wrpoFiles,
+        'work_order': _workOrderFiles,
       };
 
       if (_isEditMode && _loadedProject != null) {
@@ -617,12 +656,19 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                   0.0,
           actualProjectValue:
               double.tryParse(_actualProjectValueController.text.trim()) ?? 0.0,
+          workOrderDocuments: _existingWorkOrderDocs,
           tenderSpecRemark: _tenderSpecRemarkController.text.trim(),
           tenderSpecDocuments: _existingTenderSpecDocs,
           assignedToEmployeeNames: assignedNames,
           assignedToEmployeeIds: assignedIds,
-          assignedToEmployeeName: assignedNames.join(', '),
-          assignedToEmployeeId: assignedIds.join(', '),
+          assignedToEmployeeName:
+              _selectedAssignedEmployee?.fullName ?? assignedNames.join(', '),
+          assignedToEmployeeId:
+              _selectedAssignedEmployee?.employeeId ?? assignedIds.join(', '),
+          assignedToDesignation: _assignedDesignationController.text.trim(),
+          assignedToContactNumber: _assignedContactController.text.trim(),
+          assignedToEmail: _assignedEmailController.text.trim(),
+          assignedDate: _assignedDate,
           openingDate: _openingDate,
           openingDateRemark: _openingDateRemarkController.text.trim(),
           closingDate: _closingDate,
@@ -697,11 +743,18 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                   0.0,
           actualProjectValue:
               double.tryParse(_actualProjectValueController.text.trim()) ?? 0.0,
+          workOrderDocuments: _existingWorkOrderDocs,
           tenderSpecRemark: _tenderSpecRemarkController.text.trim(),
           assignedToEmployeeNames: assignedNames,
           assignedToEmployeeIds: assignedIds,
-          assignedToEmployeeName: assignedNames.join(', '),
-          assignedToEmployeeId: assignedIds.join(', '),
+          assignedToEmployeeName:
+              _selectedAssignedEmployee?.fullName ?? assignedNames.join(', '),
+          assignedToEmployeeId:
+              _selectedAssignedEmployee?.employeeId ?? assignedIds.join(', '),
+          assignedToDesignation: _assignedDesignationController.text.trim(),
+          assignedToContactNumber: _assignedContactController.text.trim(),
+          assignedToEmail: _assignedEmailController.text.trim(),
+          assignedDate: _assignedDate,
           openingDate: _openingDate,
           openingDateRemark: _openingDateRemarkController.text.trim(),
           closingDate: _closingDate,
@@ -807,8 +860,35 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
 
         if (matches.isNotEmpty) {
           _selectedAssignedEmployees.addAll(matches);
+          _selectedAssignedEmployee = matches.first;
         } else if (_selectedCreatorEmployee != null) {
           _selectedAssignedEmployees.add(_selectedCreatorEmployee!);
+          _selectedAssignedEmployee = _selectedCreatorEmployee;
+        }
+
+        if (_selectedAssignedEmployee != null) {
+          if (_assignedDesignationController.text.trim().isEmpty) {
+            _assignedDesignationController.text =
+                _loadedProject!.assignedToDesignation.isNotEmpty
+                    ? _loadedProject!.assignedToDesignation
+                    : _selectedAssignedEmployee!.designation;
+          }
+          if (_assignedContactController.text.trim().isEmpty) {
+            final emp = _selectedAssignedEmployee!;
+            final phone = emp.phoneNumber.isNotEmpty
+                ? emp.phoneNumber
+                : (emp.personalMobile.isNotEmpty ? emp.personalMobile : '');
+            _assignedContactController.text =
+                _loadedProject!.assignedToContactNumber.isNotEmpty
+                    ? _loadedProject!.assignedToContactNumber
+                    : phone;
+          }
+          if (_assignedEmailController.text.trim().isEmpty) {
+            _assignedEmailController.text =
+                _loadedProject!.assignedToEmail.isNotEmpty
+                    ? _loadedProject!.assignedToEmail
+                    : _selectedAssignedEmployee!.emailAddress;
+          }
         }
       }
 
@@ -841,11 +921,17 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
 
       if (!_assignedInitialized && allEmployees.isNotEmpty) {
         _assignedInitialized = true;
-        if (_selectedCreatorEmployee != null) {
-          _selectedAssignedEmployees.add(_selectedCreatorEmployee!);
-        } else {
-          _selectedAssignedEmployees.add(allEmployees.first);
-        }
+        final defaultEmp = _selectedCreatorEmployee ?? allEmployees.first;
+        _selectedAssignedEmployee = defaultEmp;
+        _selectedAssignedEmployees.add(defaultEmp);
+        _assignedDesignationController.text = defaultEmp.designation;
+        final phone = defaultEmp.phoneNumber.isNotEmpty
+            ? defaultEmp.phoneNumber
+            : (defaultEmp.personalMobile.isNotEmpty
+                ? defaultEmp.personalMobile
+                : '');
+        _assignedContactController.text = phone;
+        _assignedEmailController.text = defaultEmp.emailAddress;
       }
 
       if (_selectedClient == null && customers.isNotEmpty) {
@@ -975,6 +1061,9 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                             TextFormField(
                               controller: _generalDetailsController,
                               maxLines: 2,
+                              validator: (v) => (v == null || v.trim().isEmpty)
+                                  ? 'Project Name / Details is required'
+                                  : null,
                               decoration: const InputDecoration(
                                 labelText: 'Project Name / Details *',
                                 hintText: 'Enter project name or general details...',
@@ -999,6 +1088,10 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                                   child: TextFormField(
                                     controller: _generalDetailsController,
                                     maxLines: 2,
+                                    validator: (v) =>
+                                        (v == null || v.trim().isEmpty)
+                                            ? 'Project Name / Details is required'
+                                            : null,
                                     decoration: const InputDecoration(
                                       labelText: 'Project Name / Details *',
                                       hintText: 'Enter project name or general details...',
@@ -1097,6 +1190,13 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                                 Expanded(child: _buildActualProjectValueField()),
                               ],
                             ),
+                          const SizedBox(height: 16),
+                          // Work Order / Contract Document Upload
+                          _buildFileUploadWidget(
+                            label: 'Work Order / Contract Document',
+                            files: _workOrderFiles,
+                            existingDocs: _existingWorkOrderDocs,
+                          ),
                           const SizedBox(height: 16),
                           // Project Code Action & Display
                           _buildCodeActionRow(
@@ -1221,7 +1321,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                       sectionNumber: 'SECTION 5',
                       sectionTitle: 'ASSIGNED TO',
                       icon: Icons.person_pin_circle_outlined,
-                      child: _buildMultipleEmployeeSelectField(allEmployees),
+                      child: _buildAssignedToSection(allEmployees, isMobile),
                     ),
                     const SizedBox(height: 28),
 
@@ -1368,172 +1468,402 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     );
   }
 
-  Widget _buildMultipleEmployeeSelectField(List<Employee> allEmployees) {
+  void _onAssignedEmployeeChanged(Employee? emp) {
+    setState(() {
+      _selectedAssignedEmployee = emp;
+      if (emp != null) {
+        if (!_selectedAssignedEmployees.contains(emp)) {
+          _selectedAssignedEmployees.insert(0, emp);
+        }
+        _assignedDesignationController.text = emp.designation;
+        final phone = emp.phoneNumber.isNotEmpty
+            ? emp.phoneNumber
+            : (emp.personalMobile.isNotEmpty ? emp.personalMobile : '');
+        _assignedContactController.text = phone;
+        _assignedEmailController.text = emp.emailAddress;
+        if (_assignedDate == null) {
+          _assignedDate = DateTime.now();
+          _assignedDateController.text =
+              DateFormat('dd-MM-yyyy').format(_assignedDate!);
+        }
+      } else {
+        _assignedDesignationController.clear();
+        _assignedContactController.clear();
+        _assignedEmailController.clear();
+      }
+    });
+  }
+
+  Future<void> _pickAssignedDate() async {
+    final now = DateTime.now();
+    final initial = _assignedDate ?? now;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2050),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF9CC70A),
+              onPrimary: Colors.white,
+              onSurface: Color(0xFF414A51),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _assignedDate = picked;
+        _assignedDateController.text =
+            DateFormat('dd-MM-yyyy').format(picked);
+      });
+    }
+  }
+
+  Widget _buildReadOnlyField({
+    required String label,
+    required TextEditingController controller,
+    required String hintText,
+    IconData? prefixIcon,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            RichText(
-              text: const TextSpan(
-                text: 'Employee Name',
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 5),
+        SizedBox(
+          height: 38,
+          child: TextFormField(
+            controller: controller,
+            readOnly: true,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFF414A51),
+              fontWeight: FontWeight.w600,
+            ),
+            decoration: InputDecoration(
+              hintText: hintText,
+              hintStyle: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFFA0AEC0),
+                fontWeight: FontWeight.normal,
+              ),
+              filled: true,
+              fillColor: const Color(0xFFF9FAFB),
+              prefixIcon: prefixIcon != null
+                  ? Icon(prefixIcon, size: 16, color: const Color(0xFF414A51))
+                  : null,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide:
+                    const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide:
+                    const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAssignedDateField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        RichText(
+          text: const TextSpan(
+            text: 'Assigned Date',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textSecondary,
+            ),
+            children: [
+              TextSpan(
+                text: ' *',
                 style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textSecondary,
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
                 ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 5),
+        SizedBox(
+          height: 38,
+          child: InkWell(
+            onTap: _pickAssignedDate,
+            borderRadius: BorderRadius.circular(6),
+            child: IgnorePointer(
+              child: TextFormField(
+                controller: _assignedDateController,
+                readOnly: true,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF414A51),
+                  fontWeight: FontWeight.w600,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Select Date',
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  suffixIcon: const Icon(
+                    Icons.calendar_today_rounded,
+                    size: 16,
+                    color: Color(0xFF414A51),
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6),
+                    borderSide:
+                        const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6),
+                    borderSide:
+                        const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAssignedToSection(List<Employee> allEmployees, bool isMobile) {
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildEmployeeSelectField(
+            label: 'Employee Name *',
+            employees: allEmployees,
+            selected: _selectedAssignedEmployee,
+            onChanged: _onAssignedEmployeeChanged,
+          ),
+          const SizedBox(height: 14),
+          _buildReadOnlyField(
+            label: 'Designation',
+            controller: _assignedDesignationController,
+            hintText: 'Auto-populated designation',
+            prefixIcon: Icons.badge_outlined,
+          ),
+          const SizedBox(height: 14),
+          _buildReadOnlyField(
+            label: 'Contact Number',
+            controller: _assignedContactController,
+            hintText: 'Auto-populated phone number',
+            prefixIcon: Icons.phone_outlined,
+          ),
+          const SizedBox(height: 14),
+          _buildReadOnlyField(
+            label: 'Email',
+            controller: _assignedEmailController,
+            hintText: 'Auto-populated email',
+            prefixIcon: Icons.email_outlined,
+          ),
+          const SizedBox(height: 14),
+          _buildAssignedDateField(),
+          if (_selectedAssignedEmployees.length > 1) ...[
+            const SizedBox(height: 14),
+            _buildCoAssigneesList(),
+          ],
+          const SizedBox(height: 10),
+          _buildManageTeamButton(allEmployees),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 1,
+              child: _buildEmployeeSelectField(
+                label: 'Employee Name *',
+                employees: allEmployees,
+                selected: _selectedAssignedEmployee,
+                onChanged: _onAssignedEmployeeChanged,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 1,
+              child: _buildReadOnlyField(
+                label: 'Designation',
+                controller: _assignedDesignationController,
+                hintText: 'Auto-populated designation',
+                prefixIcon: Icons.badge_outlined,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 1,
+              child: _buildReadOnlyField(
+                label: 'Contact Number',
+                controller: _assignedContactController,
+                hintText: 'Auto-populated phone number',
+                prefixIcon: Icons.phone_outlined,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 1,
+              child: _buildReadOnlyField(
+                label: 'Email',
+                controller: _assignedEmailController,
+                hintText: 'Auto-populated email',
+                prefixIcon: Icons.email_outlined,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 1,
+              child: _buildAssignedDateField(),
+            ),
+          ],
+        ),
+        if (_selectedAssignedEmployees.length > 1) ...[
+          const SizedBox(height: 14),
+          _buildCoAssigneesList(),
+        ],
+        const SizedBox(height: 10),
+        _buildManageTeamButton(allEmployees),
+      ],
+    );
+  }
+
+  Widget _buildCoAssigneesList() {
+    final coAssignees = _selectedAssignedEmployees
+        .where((emp) =>
+            emp.id != _selectedAssignedEmployee?.id &&
+            emp.employeeId != _selectedAssignedEmployee?.employeeId)
+        .toList();
+
+    if (coAssignees.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Divider(height: 1, color: Color(0xFFF0F2ED)),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            const Icon(Icons.people_outline_rounded,
+                size: 15, color: Color(0xFF414A51)),
+            const SizedBox(width: 6),
+            Text(
+              'Additional Assigned Team Members (${coAssignees.length}):',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF414A51),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: coAssignees.map((emp) {
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF9CC70A).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color(0xFF9CC70A).withValues(alpha: 0.4),
+                  width: 0.8,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextSpan(
-                    text: ' *',
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                  Text(
+                    '${emp.employeeId} - ${emp.fullName}',
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF414A51),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _selectedAssignedEmployees.remove(emp);
+                      });
+                    },
+                    child: const Icon(
+                      Icons.close_rounded,
+                      size: 13,
+                      color: Color(0xFF414A51),
                     ),
                   ),
                 ],
               ),
-            ),
-            if (_selectedAssignedEmployees.isNotEmpty)
-              Text(
-                '${_selectedAssignedEmployees.length} employee(s) assigned',
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF9CC70A),
-                ),
-              ),
-          ],
+            );
+          }).toList(),
         ),
-        const SizedBox(height: 6),
-
-        // Interactive Selector Box
-        InkWell(
-          onTap: () => _openEmployeeMultiSelectDialog(allEmployees),
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8.5),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: _selectedAssignedEmployees.isEmpty
-                    ? Colors.red.shade300
-                    : const Color(0xFFD0D5DD),
-                width: 0.8,
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _selectedAssignedEmployees.isEmpty
-                        ? 'Select one or more employees...'
-                        : _selectedAssignedEmployees
-                            .map((e) => '${e.employeeId} - ${e.fullName}')
-                            .join(', '),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: _selectedAssignedEmployees.isEmpty
-                          ? Colors.black38
-                          : Colors.black87,
-                      fontWeight: _selectedAssignedEmployees.isEmpty
-                          ? FontWeight.normal
-                          : FontWeight.w500,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add_rounded, size: 14, color: Color(0xFF414A51)),
-                      SizedBox(width: 2),
-                      Text(
-                        'Select',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF414A51),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Icon(
-                  Icons.keyboard_arrow_down,
-                  size: 16,
-                  color: Colors.black54,
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        // Selected Employee Chips
-        if (_selectedAssignedEmployees.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _selectedAssignedEmployees.map((emp) {
-              return Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF9CC70A).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: const Color(0xFF9CC70A).withValues(alpha: 0.5),
-                    width: 0.8,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.person_outline_rounded,
-                        size: 14, color: Color(0xFF414A51)),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${emp.employeeId} - ${emp.fullName}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF414A51),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    InkWell(
-                      onTap: () {
-                        setState(() {
-                          _selectedAssignedEmployees.remove(emp);
-                        });
-                      },
-                      child: const Icon(
-                        Icons.close_rounded,
-                        size: 14,
-                        color: Color(0xFF414A51),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ],
       ],
+    );
+  }
+
+  Widget _buildManageTeamButton(List<Employee> allEmployees) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        style: TextButton.styleFrom(
+          foregroundColor: const Color(0xFF414A51),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          visualDensity: VisualDensity.compact,
+        ),
+        onPressed: () => _openEmployeeMultiSelectDialog(allEmployees),
+        icon: const Icon(Icons.group_add_outlined,
+            size: 16, color: Color(0xFF9CC70A)),
+        label: Text(
+          _selectedAssignedEmployees.length > 1
+              ? 'Manage Additional Team Members (${_selectedAssignedEmployees.length})'
+              : '+ Add Additional Team Members',
+          style: const TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF414A51),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1828,6 +2158,17 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                                   _selectedAssignedEmployees.clear();
                                   _selectedAssignedEmployees
                                       .addAll(tempSelected);
+                                  if (_selectedAssignedEmployee == null &&
+                                      tempSelected.isNotEmpty) {
+                                    _onAssignedEmployeeChanged(
+                                        tempSelected.first);
+                                  } else if (_selectedAssignedEmployee !=
+                                          null &&
+                                      !tempSelected.contains(
+                                          _selectedAssignedEmployee)) {
+                                    _selectedAssignedEmployees.insert(
+                                        0, _selectedAssignedEmployee!);
+                                  }
                                 });
                                 Navigator.of(context).pop();
                               },
@@ -2608,7 +2949,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         const Text(
-          'Tender Amount',
+          'Tender Value (Original Bid)',
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w500,
@@ -2729,6 +3070,17 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (label.isNotEmpty) ...[
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF414A51),
+            ),
+          ),
+          const SizedBox(height: 6),
+        ],
         Row(
           children: [
             OutlinedButton.icon(
@@ -2741,7 +3093,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
               ),
               onPressed: () => _pickFiles(files, existingDocs: existingDocs),
               icon: const Icon(Icons.upload_file_rounded, size: 18),
-              label: const Text('Upload Documents'),
+              label: Text('Upload $label'),
             ),
             const SizedBox(width: 12),
             Text(
@@ -2775,11 +3127,19 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                       size: 16, color: Color(0xFF9CC70A)),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      doc.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w500),
+                    child: InkWell(
+                      onTap: () =>
+                          TenderDocumentActions.viewDocument(context, doc),
+                      child: Text(
+                        doc.name,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF414A51),
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
                     ),
                   ),
                   Container(
@@ -2804,6 +3164,22 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                         fontSize: 11, color: AppColors.textSecondary),
                   ),
                   const SizedBox(width: 4),
+                  IconButton(
+                    icon: const Icon(Icons.visibility_outlined,
+                        size: 16, color: Color(0xFF414A51)),
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'View document',
+                    onPressed: () =>
+                        TenderDocumentActions.viewDocument(context, doc),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.download_rounded,
+                        size: 16, color: Color(0xFF414A51)),
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Download document',
+                    onPressed: () =>
+                        TenderDocumentActions.downloadDocument(context, doc),
+                  ),
                   IconButton(
                     icon: const Icon(Icons.close_rounded, size: 16),
                     visualDensity: VisualDensity.compact,

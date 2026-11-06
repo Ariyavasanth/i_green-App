@@ -1,5 +1,6 @@
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -324,6 +325,14 @@ class ProjectDetailsDialog extends StatelessWidget {
                         items: [
                           _InfoPair('Tender Type', project.tenderType.isNotEmpty ? project.tenderType : '—'),
                           _InfoPair('Assigned To', project.assignedToEmployeeName),
+                          if (project.assignedToDesignation.isNotEmpty)
+                            _InfoPair('Designation', project.assignedToDesignation),
+                          if (project.assignedToContactNumber.isNotEmpty)
+                            _InfoPair('Contact Number', project.assignedToContactNumber),
+                          if (project.assignedToEmail.isNotEmpty)
+                            _InfoPair('Email', project.assignedToEmail),
+                          if (project.assignedDate != null)
+                            _InfoPair('Assigned Date', DateFormat('dd-MM-yyyy').format(project.assignedDate!)),
                           _InfoPair('Approximate Project Value',
                               project.approximateProjectValue > 0
                                   ? NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0).format(project.approximateProjectValue)
@@ -334,6 +343,48 @@ class ProjectDetailsDialog extends StatelessWidget {
                                   : '—'),
                           _InfoPair('Opening Date', project.openingDate != null ? DateFormat('dd-MM-yyyy').format(project.openingDate!) : '—'),
                           _InfoPair('Closing Date', project.closingDate != null ? DateFormat('dd-MM-yyyy').format(project.closingDate!) : '—'),
+                        ],
+                        isMobile: isMobile,
+                      ),
+                      const SizedBox(height: 14),
+                      _buildInfoSection(
+                        title: 'PROJECT BREAKDOWN (MATERIALS & SERVICES)',
+                        items: [
+                          _InfoPair('Total Materials (Supplies)',
+                              project.totalMaterialsValue > 0
+                                  ? NumberFormat.currency(locale: 'en_IN', symbol: '₹ ', decimalDigits: 2).format(project.totalMaterialsValue)
+                                  : (project.breakdownMaterials.isNotEmpty ? '${project.breakdownMaterials.length} items' : '0 items')),
+                          _InfoPair('Total Services (Works)',
+                              project.totalServicesValue > 0
+                                  ? NumberFormat.currency(locale: 'en_IN', symbol: '₹ ', decimalDigits: 2).format(project.totalServicesValue)
+                                  : (project.breakdownServices.isNotEmpty ? '${project.breakdownServices.length} items' : '0 items')),
+                          _InfoPair('Total Breakdown Value',
+                              project.totalBreakdownValue > 0
+                                  ? NumberFormat.currency(locale: 'en_IN', symbol: '₹ ', decimalDigits: 2).format(project.totalBreakdownValue)
+                                  : 'Not Added'),
+                        ],
+                        isMobile: isMobile,
+                      ),
+                      const SizedBox(height: 14),
+                      _buildInfoSection(
+                        title: 'PROJECT BUDGET & PROFITABILITY',
+                        items: [
+                          _InfoPair('Sanctioned Budget',
+                              project.budget != null && project.budget!.totalBudget > 0
+                                  ? NumberFormat.currency(locale: 'en_IN', symbol: '₹ ', decimalDigits: 2).format(project.budget!.totalBudget)
+                                  : 'Not Configured'),
+                          _InfoPair('Planned Gross Profit',
+                              project.budget != null && project.budget!.totalBudget > 0
+                                  ? NumberFormat.currency(locale: 'en_IN', symbol: '₹ ', decimalDigits: 2).format(project.budget!.plannedProfit(project.contractValue))
+                                  : '—'),
+                          _InfoPair('Planned Margin',
+                              project.budget != null && project.budget!.totalBudget > 0
+                                  ? '${project.budget!.plannedMarginPercentage(project.contractValue).toStringAsFixed(1)}%'
+                                  : '—'),
+                          _InfoPair('Budget Status',
+                              project.budget != null
+                                  ? project.budget!.status.label
+                                  : 'Draft / Pending'),
                         ],
                         isMobile: isMobile,
                       ),
@@ -348,6 +399,15 @@ class ProjectDetailsDialog extends StatelessWidget {
                               _InfoPair('Closing Date Remark', project.closingDateRemark),
                           ],
                           isMobile: isMobile,
+                        ),
+                      ],
+                      if (project.workOrderDocuments.isNotEmpty || project.workOrderRemark.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        _buildDocsSection(
+                          context,
+                          title: 'WORK ORDER / CONTRACT DOCUMENTS',
+                          remark: project.workOrderRemark,
+                          docs: project.workOrderDocuments,
                         ),
                       ],
                       if (project.tenderSpecRemark.isNotEmpty || project.tenderSpecDocuments.isNotEmpty) ...[
@@ -390,19 +450,49 @@ class ProjectDetailsDialog extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 18),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF414A51),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF414A51),
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      context.push('/projects/breakdown/${project.id}', extra: project);
+                    },
+                    icon: const Icon(Icons.table_chart_outlined, size: 16),
+                    label: const Text('Open Breakdown'),
                   ),
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Close'),
-                ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF414A51),
+                      side: const BorderSide(color: Color(0xFF9CC70A), width: 1.5),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      context.push('/projects/budget/${project.id}', extra: project);
+                    },
+                    icon: const Icon(Icons.pie_chart_outline_rounded, size: 16, color: Color(0xFF9CC70A)),
+                    label: const Text('Open Budget'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF414A51),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Close'),
+                  ),
+                ],
               ),
             ],
           ),

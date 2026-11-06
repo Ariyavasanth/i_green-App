@@ -1,4 +1,6 @@
 import 'deduction_entry.dart';
+import 'project_breakdown_item.dart';
+import 'project_budget.dart';
 import 'project_document.dart';
 import 'tender_description_item.dart';
 
@@ -34,11 +36,20 @@ class SiteProject {
     this.tenderSpecDocuments = const [],
     // Section 4b – Tender Description
     this.tenderDescriptions = const [],
+    // Step 3 – Project Breakdown (Materials & Services)
+    this.breakdownMaterials = const [],
+    this.breakdownServices = const [],
+    // Step 4 – Project Budget
+    this.budget,
     // Section 5 – Assigned To
     List<String>? assignedToEmployeeNames,
     List<String>? assignedToEmployeeIds,
     String? assignedToEmployeeName,
     String? assignedToEmployeeId,
+    this.assignedToDesignation = '',
+    this.assignedToContactNumber = '',
+    this.assignedToEmail = '',
+    this.assignedDate,
     // Section 6 – Opening Date
     this.openingDate,
     this.openingDateRemark = '',
@@ -115,12 +126,14 @@ class SiteProject {
     this.otherRetentionDocumentLabel = '',
     // Metadata
     this.status = 'Active',
-    required this.createdAt,
-    required this.updatedAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
     this.createdBy = '',
     this.updatedBy,
     this.updatedByName,
-  })  : assignedToEmployeeNames = assignedToEmployeeNames ??
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now(),
+        assignedToEmployeeNames = assignedToEmployeeNames ??
             (assignedToEmployeeName != null && assignedToEmployeeName.isNotEmpty
                 ? [assignedToEmployeeName]
                 : const []),
@@ -160,6 +173,9 @@ class SiteProject {
   final double approximateProjectValue;
   final double actualProjectValue;
 
+  double get contractValue =>
+      actualProjectValue > 0 ? actualProjectValue : approximateProjectValue;
+
   // Section 4 – Tender Spec / Enquiry Spec
   final String tenderSpecRemark;
   final List<ProjectDocument> tenderSpecDocuments;
@@ -167,9 +183,26 @@ class SiteProject {
   // Section 4b – Tender Description
   final List<TenderDescriptionItem> tenderDescriptions;
 
-  // Section 5 – Assigned To (Supports Multiple Employees)
+  // Step 3 – Project Breakdown (Materials & Services)
+  final List<ProjectBreakdownItem> breakdownMaterials;
+  final List<ProjectBreakdownItem> breakdownServices;
+
+  double get totalMaterialsValue =>
+      breakdownMaterials.fold(0.0, (sum, item) => sum + item.amount);
+  double get totalServicesValue =>
+      breakdownServices.fold(0.0, (sum, item) => sum + item.amount);
+  double get totalBreakdownValue => totalMaterialsValue + totalServicesValue;
+
+  // Step 4 – Project Budget
+  final ProjectBudget? budget;
+
+  // Section 5 – Assigned To (Supports Multiple Employees & Detailed Assignment)
   final List<String> assignedToEmployeeNames;
   final List<String> assignedToEmployeeIds;
+  final String assignedToDesignation;
+  final String assignedToContactNumber;
+  final String assignedToEmail;
+  final DateTime? assignedDate;
 
   String get assignedToEmployeeName =>
       assignedToEmployeeNames.isNotEmpty ? assignedToEmployeeNames.join(', ') : '';
@@ -312,11 +345,26 @@ class SiteProject {
         // Tender Descriptions
         'tender_descriptions':
             tenderDescriptions.map((t) => t.toJson()).toList(),
+        // Project Breakdown (Materials & Services)
+        'breakdown_materials':
+            breakdownMaterials.map((m) => m.toJson()).toList(),
+        'breakdown_services':
+            breakdownServices.map((s) => s.toJson()).toList(),
+        'total_materials_value': totalMaterialsValue,
+        'total_services_value': totalServicesValue,
+        'total_breakdown_value': totalBreakdownValue,
+        // Project Budget
+        'project_budget': budget?.toJson(contractValue: actualProjectValue),
+        'budget': budget?.toJson(contractValue: actualProjectValue),
         // Assigned To
         'assigned_to_employee_name': assignedToEmployeeName,
         'assigned_to_employee_id': assignedToEmployeeId,
         'assigned_to_employee_names': assignedToEmployeeNames,
         'assigned_to_employee_ids': assignedToEmployeeIds,
+        'assigned_to_designation': assignedToDesignation,
+        'assigned_to_contact_number': assignedToContactNumber,
+        'assigned_to_email': assignedToEmail,
+        'assigned_date': assignedDate?.toIso8601String(),
         // Opening Date
         'opening_date': openingDate?.toIso8601String(),
         'opening_date_remark': openingDateRemark,
@@ -431,6 +479,20 @@ class SiteProject {
       return const [];
     }
 
+    List<ProjectBreakdownItem> parseBreakdown(
+        dynamic raw, BreakdownItemType defaultType) {
+      if (raw is List) {
+        return raw.map((item) {
+          final map = Map<String, dynamic>.from(item as Map);
+          if (!map.containsKey('type')) {
+            map['type'] = defaultType.name;
+          }
+          return ProjectBreakdownItem.fromJson(map);
+        }).toList();
+      }
+      return const [];
+    }
+
     List<DeductionEntry> parseDeductions(dynamic raw) {
       if (raw is List) {
         return raw
@@ -496,6 +558,16 @@ class SiteProject {
       tenderSpecDocuments: parseDocList(json['tender_spec_documents']),
       // Tender Descriptions
       tenderDescriptions: parseTenderDescriptions(json['tender_descriptions']),
+      // Project Breakdown (Materials & Services)
+      breakdownMaterials:
+          parseBreakdown(json['breakdown_materials'], BreakdownItemType.material),
+      breakdownServices:
+          parseBreakdown(json['breakdown_services'], BreakdownItemType.service),
+      // Project Budget
+      budget: (json['project_budget'] ?? json['budget']) != null
+          ? ProjectBudget.fromJson(
+              Map<String, dynamic>.from((json['project_budget'] ?? json['budget']) as Map))
+          : null,
       // Assigned To
       assignedToEmployeeNames: assignedNames,
       assignedToEmployeeIds: assignedIds,
@@ -503,6 +575,15 @@ class SiteProject {
           assignedNames.isNotEmpty ? assignedNames.join(', ') : '',
       assignedToEmployeeId:
           assignedIds.isNotEmpty ? assignedIds.join(', ') : null,
+      assignedToDesignation: json['assigned_to_designation'] as String? ?? '',
+      assignedToContactNumber:
+          (json['assigned_to_contact_number'] ?? json['assigned_to_phone_number'])
+                  as String? ??
+              '',
+      assignedToEmail: json['assigned_to_email'] as String? ?? '',
+      assignedDate: json['assigned_date'] != null
+          ? DateTime.tryParse(json['assigned_date'].toString())
+          : null,
       // Opening Date
       openingDate: json['opening_date'] != null
           ? DateTime.tryParse(json['opening_date'].toString())
@@ -644,11 +725,20 @@ class SiteProject {
     List<ProjectDocument>? tenderSpecDocuments,
     // Tender Descriptions
     List<TenderDescriptionItem>? tenderDescriptions,
+    // Project Breakdown (Materials & Services)
+    List<ProjectBreakdownItem>? breakdownMaterials,
+    List<ProjectBreakdownItem>? breakdownServices,
+    // Step 4 – Project Budget
+    ProjectBudget? budget,
     // Assigned To
     List<String>? assignedToEmployeeNames,
     List<String>? assignedToEmployeeIds,
     String? assignedToEmployeeName,
     String? assignedToEmployeeId,
+    String? assignedToDesignation,
+    String? assignedToContactNumber,
+    String? assignedToEmail,
+    DateTime? assignedDate,
     // Opening Date
     DateTime? openingDate,
     String? openingDateRemark,
@@ -760,6 +850,9 @@ class SiteProject {
       tenderSpecRemark: tenderSpecRemark ?? this.tenderSpecRemark,
       tenderSpecDocuments: tenderSpecDocuments ?? this.tenderSpecDocuments,
       tenderDescriptions: tenderDescriptions ?? this.tenderDescriptions,
+      breakdownMaterials: breakdownMaterials ?? this.breakdownMaterials,
+      breakdownServices: breakdownServices ?? this.breakdownServices,
+      budget: budget ?? this.budget,
       assignedToEmployeeNames:
           assignedToEmployeeNames ?? this.assignedToEmployeeNames,
       assignedToEmployeeIds:
@@ -767,6 +860,12 @@ class SiteProject {
       assignedToEmployeeName:
           assignedToEmployeeName ?? this.assignedToEmployeeName,
       assignedToEmployeeId: assignedToEmployeeId ?? this.assignedToEmployeeId,
+      assignedToDesignation:
+          assignedToDesignation ?? this.assignedToDesignation,
+      assignedToContactNumber:
+          assignedToContactNumber ?? this.assignedToContactNumber,
+      assignedToEmail: assignedToEmail ?? this.assignedToEmail,
+      assignedDate: assignedDate ?? this.assignedDate,
       openingDate: openingDate ?? this.openingDate,
       openingDateRemark: openingDateRemark ?? this.openingDateRemark,
       closingDate: closingDate ?? this.closingDate,

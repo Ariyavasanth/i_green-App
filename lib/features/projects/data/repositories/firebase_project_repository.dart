@@ -6,6 +6,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../domain/models/project_audit_log.dart';
+import '../../domain/models/project_breakdown_item.dart';
+import '../../domain/models/project_budget.dart';
 import '../../domain/models/project_document.dart';
 import '../../domain/models/site_project.dart';
 import '../../domain/repositories/project_repository.dart';
@@ -370,6 +372,118 @@ class FirebaseProjectRepository implements ProjectRepository {
       }
     } catch (e, stack) {
       developer.log('Error updating project ${project.id}: $e',
+          name: 'FirebaseProjectRepository', error: e, stackTrace: stack);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> updateProjectBreakdown({
+    required String projectId,
+    required List<ProjectBreakdownItem> materials,
+    required List<ProjectBreakdownItem> services,
+    String? auditEmployeeId,
+    String? auditEmployeeName,
+    String? auditDesignation,
+    String? auditNote,
+  }) async {
+    try {
+      final totalMaterials =
+          materials.fold(0.0, (acc, item) => acc + item.amount);
+      final totalServices =
+          services.fold(0.0, (acc, item) => acc + item.amount);
+      final totalBreakdown = totalMaterials + totalServices;
+
+      final now = DateTime.now();
+      final data = <String, dynamic>{
+        'breakdown_materials': materials.map((m) => m.toJson()).toList(),
+        'breakdown_services': services.map((s) => s.toJson()).toList(),
+        'total_materials_value': totalMaterials,
+        'total_services_value': totalServices,
+        'total_breakdown_value': totalBreakdown,
+        'breakdown_updated_at': now.toIso8601String(),
+        'updated_at': now.toIso8601String(),
+      };
+
+      if (auditEmployeeId != null && auditEmployeeId.isNotEmpty) {
+        data['updated_by'] = auditEmployeeId;
+      }
+      if (auditEmployeeName != null && auditEmployeeName.isNotEmpty) {
+        data['updated_by_name'] = auditEmployeeName;
+      }
+
+      await _projectsRef.doc(projectId).update(data);
+
+      if ((auditEmployeeId != null && auditEmployeeId.isNotEmpty) ||
+          (auditNote != null && auditNote.isNotEmpty)) {
+        final auditDoc = _auditLogsRef(projectId).doc();
+        final log = ProjectAuditLog(
+          id: auditDoc.id,
+          projectId: projectId,
+          employeeId: auditEmployeeId ?? 'EMP-UNKNOWN',
+          employeeName: auditEmployeeName ?? 'Unknown',
+          designation: auditDesignation ?? 'Staff',
+          changeNote: auditNote ??
+              'Updated Project Breakdown (Materials: ${materials.length}, Services: ${services.length})',
+          timestamp: now,
+        );
+        await auditDoc.set(log.toJson());
+      }
+    } catch (e, stack) {
+      developer.log('Error updating project breakdown for $projectId: $e',
+          name: 'FirebaseProjectRepository', error: e, stackTrace: stack);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> updateProjectBudget({
+    required String projectId,
+    required ProjectBudget budget,
+    double contractValue = 0.0,
+    String? auditEmployeeId,
+    String? auditEmployeeName,
+    String? auditDesignation,
+    String? auditNote,
+  }) async {
+    try {
+      final now = DateTime.now();
+      final updatedBudget = budget.copyWith(
+        updatedAt: now,
+        updatedBy: auditEmployeeId ?? budget.updatedBy,
+      );
+
+      final data = <String, dynamic>{
+        'project_budget': updatedBudget.toJson(contractValue: contractValue),
+        'updated_at': now.toIso8601String(),
+      };
+
+      if (auditEmployeeId != null && auditEmployeeId.isNotEmpty) {
+        data['updated_by'] = auditEmployeeId;
+      }
+      if (auditEmployeeName != null && auditEmployeeName.isNotEmpty) {
+        data['updated_by_name'] = auditEmployeeName;
+      }
+
+      await _projectsRef.doc(projectId).update(data);
+
+      if ((auditEmployeeId != null && auditEmployeeId.isNotEmpty) ||
+          (auditNote != null && auditNote.isNotEmpty)) {
+        final auditDoc = _auditLogsRef(projectId).doc();
+        final log = ProjectAuditLog(
+          id: auditDoc.id,
+          projectId: projectId,
+          employeeId: auditEmployeeId ?? 'EMP-UNKNOWN',
+          employeeName: auditEmployeeName ?? 'Unknown',
+          designation: auditDesignation ?? 'Staff',
+          changeNote: auditNote ??
+              'Updated Project Budget (${updatedBudget.status.label}, Total: ₹${updatedBudget.totalBudget.toStringAsFixed(2)})',
+          timestamp: now,
+        );
+        await auditDoc.set(log.toJson());
+      }
+    } catch (e, stack) {
+      developer.log('Error updating project budget for $projectId: $e',
           name: 'FirebaseProjectRepository', error: e, stackTrace: stack);
       rethrow;
     }

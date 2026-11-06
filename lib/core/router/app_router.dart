@@ -13,6 +13,8 @@ import '../../features/projects/presentation/screens/project_dashboard_screen.da
 import '../../features/projects/presentation/screens/new_project_form_screen.dart';
 import '../../features/projects/presentation/screens/assigned_projects_screen.dart';
 import '../../features/projects/presentation/screens/edit_project_form_screen.dart';
+import '../../features/projects/presentation/screens/project_breakdown_screen.dart';
+import '../../features/projects/presentation/screens/project_budget_screen.dart';
 import '../../features/projects/domain/models/site_project.dart';
 import '../../features/tenders/presentation/screens/tender_list_screen.dart';
 import '../../features/tenders/presentation/screens/tender_form_screen.dart';
@@ -281,6 +283,38 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/project/new', builder: (_, _) => const NewProjectFormScreen()),
       GoRoute(path: '/projects/assigned', builder: (_, _) => const AssignedProjectsScreen()),
       GoRoute(path: '/project/assigned', builder: (_, _) => const AssignedProjectsScreen()),
+      GoRoute(
+        path: '/projects/breakdown/:id',
+        builder: (_, state) {
+          final id = state.pathParameters['id'] ?? '';
+          final project = state.extra as SiteProject?;
+          return ProjectBreakdownScreen(projectId: id, initialProject: project);
+        },
+      ),
+      GoRoute(
+        path: '/project/breakdown/:id',
+        builder: (_, state) {
+          final id = state.pathParameters['id'] ?? '';
+          final project = state.extra as SiteProject?;
+          return ProjectBreakdownScreen(projectId: id, initialProject: project);
+        },
+      ),
+      GoRoute(
+        path: '/projects/budget/:id',
+        builder: (_, state) {
+          final id = state.pathParameters['id'] ?? '';
+          final project = state.extra as SiteProject?;
+          return ProjectBudgetScreen(projectId: id, initialProject: project);
+        },
+      ),
+      GoRoute(
+        path: '/project/budget/:id',
+        builder: (_, state) {
+          final id = state.pathParameters['id'] ?? '';
+          final project = state.extra as SiteProject?;
+          return ProjectBudgetScreen(projectId: id, initialProject: project);
+        },
+      ),
       GoRoute(
         path: '/projects/edit/:id',
         builder: (_, state) {

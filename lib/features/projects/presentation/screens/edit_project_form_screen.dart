@@ -671,6 +671,18 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
             _selectedAssignedEmployees.map((e) => e.fullName).join(', '),
         assignedToEmployeeId:
             _selectedAssignedEmployees.map((e) => e.employeeId).join(', '),
+        assignedToDesignation: _selectedAssignedEmployees.isNotEmpty
+            ? _selectedAssignedEmployees.first.designation
+            : (_loadedProject?.assignedToDesignation ?? ''),
+        assignedToContactNumber: _selectedAssignedEmployees.isNotEmpty
+            ? (_selectedAssignedEmployees.first.phoneNumber.isNotEmpty
+                ? _selectedAssignedEmployees.first.phoneNumber
+                : _selectedAssignedEmployees.first.personalMobile)
+            : (_loadedProject?.assignedToContactNumber ?? ''),
+        assignedToEmail: _selectedAssignedEmployees.isNotEmpty
+            ? _selectedAssignedEmployees.first.emailAddress
+            : (_loadedProject?.assignedToEmail ?? ''),
+        assignedDate: _loadedProject?.assignedDate,
         openingDate: _openingDate,
         openingDateRemark: _openingDateRemarkCtrl.text.trim(),
         closingDate: _closingDate,

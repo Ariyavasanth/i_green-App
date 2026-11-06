@@ -69,6 +69,26 @@ class _AssignedProjectsScreenState
     );
   }
 
+  Future<void> _openBreakdown(BuildContext context, SiteProject project) async {
+    await context.push(
+      '/projects/breakdown/${project.id}',
+      extra: project,
+    );
+    if (mounted) {
+      ref.invalidate(projectsStreamProvider);
+    }
+  }
+
+  Future<void> _openBudget(BuildContext context, SiteProject project) async {
+    await context.push(
+      '/projects/budget/${project.id}',
+      extra: project,
+    );
+    if (mounted) {
+      ref.invalidate(projectsStreamProvider);
+    }
+  }
+
   Future<void> _openEdit(BuildContext context, SiteProject project) async {
     final result = await context.push<bool>(
       '/projects/edit/${project.id}',
@@ -388,6 +408,34 @@ class _AssignedProjectsScreenState
                   ),
                 ),
               ),
+              // Breakdown
+              SizedBox(
+                width: 85,
+                child: Text(
+                  'Breakdown',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+              // Budget
+              SizedBox(
+                width: 75,
+                child: Text(
+                  'Budget',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
               // 6. Edit
               SizedBox(
                 width: 70,
@@ -478,6 +526,38 @@ class _AssignedProjectsScreenState
                         ),
                         tooltip: 'View Project Details',
                         onPressed: () => _openDetails(context, project),
+                      ),
+                    ),
+                  ),
+
+                  // Breakdown action
+                  SizedBox(
+                    width: 85,
+                    child: Center(
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.table_chart_outlined,
+                          size: 20,
+                          color: Color(0xFF0284C7),
+                        ),
+                        tooltip: 'Project Breakdown (Materials & Services)',
+                        onPressed: () => _openBreakdown(context, project),
+                      ),
+                    ),
+                  ),
+
+                  // Budget action
+                  SizedBox(
+                    width: 75,
+                    child: Center(
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.pie_chart_outline_rounded,
+                          size: 20,
+                          color: Color(0xFF0D9488),
+                        ),
+                        tooltip: 'Project Budget & Profitability',
+                        onPressed: () => _openBudget(context, project),
                       ),
                     ),
                   ),
@@ -665,6 +745,20 @@ class _AssignedProjectsScreenState
                     color: const Color(0xFF414A51),
                     tooltip: 'View Details',
                     onPressed: () => _openDetails(context, project),
+                  ),
+                  // Breakdown Action
+                  IconButton(
+                    icon: const Icon(Icons.table_chart_outlined, size: 20),
+                    color: const Color(0xFF0284C7),
+                    tooltip: 'Project Breakdown',
+                    onPressed: () => _openBreakdown(context, project),
+                  ),
+                  // Budget Action
+                  IconButton(
+                    icon: const Icon(Icons.pie_chart_outline_rounded, size: 20),
+                    color: const Color(0xFF0D9488),
+                    tooltip: 'Project Budget & Profitability',
+                    onPressed: () => _openBudget(context, project),
                   ),
                   // 6. Edit Action
                   IconButton(
