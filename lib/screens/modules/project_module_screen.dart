@@ -34,12 +34,6 @@ class ProjectModuleScreen extends ConsumerStatefulWidget {
         Color(0xFF9C27B0),
       ),
       _SubModule(
-        'ASSIGNED PROJECTS',
-        Icons.assignment_ind_outlined,
-        '/projects/assigned',
-        Color(0xFF414A51),
-      ),
-      _SubModule(
         'FUND REQUEST',
         Icons.currency_exchange_rounded,
         '/fund-requester',

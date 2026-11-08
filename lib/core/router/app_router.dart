@@ -12,6 +12,7 @@ import '../../screens/modules/factory_module_screen.dart';
 import '../../features/projects/presentation/screens/project_dashboard_screen.dart';
 import '../../features/projects/presentation/screens/new_project_form_screen.dart';
 import '../../features/projects/presentation/screens/assigned_projects_screen.dart';
+import '../../features/projects/presentation/screens/manage_project_screen.dart';
 import '../../features/projects/presentation/screens/edit_project_form_screen.dart';
 import '../../features/projects/presentation/screens/project_breakdown_screen.dart';
 import '../../features/projects/presentation/screens/project_budget_screen.dart';
@@ -283,6 +284,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/project/new', builder: (_, _) => const NewProjectFormScreen()),
       GoRoute(path: '/projects/assigned', builder: (_, _) => const AssignedProjectsScreen()),
       GoRoute(path: '/project/assigned', builder: (_, _) => const AssignedProjectsScreen()),
+      GoRoute(path: '/projects/list', builder: (_, _) => const AssignedProjectsScreen()),
+      GoRoute(path: '/project/list', builder: (_, _) => const AssignedProjectsScreen()),
+      GoRoute(
+        path: '/projects/manage/:id',
+        builder: (_, state) {
+          final id = state.pathParameters['id'] ?? '';
+          final project = state.extra as SiteProject?;
+          return ManageProjectScreen(projectId: id, initialProject: project);
+        },
+      ),
+      GoRoute(
+        path: '/project/manage/:id',
+        builder: (_, state) {
+          final id = state.pathParameters['id'] ?? '';
+          final project = state.extra as SiteProject?;
+          return ManageProjectScreen(projectId: id, initialProject: project);
+        },
+      ),
       GoRoute(
         path: '/projects/breakdown/:id',
         builder: (_, state) {

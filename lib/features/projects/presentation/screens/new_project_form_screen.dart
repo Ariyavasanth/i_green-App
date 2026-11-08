@@ -22,6 +22,7 @@ import '../../../tenders/presentation/screens/tender_form_screen.dart';
 import '../../../tenders/presentation/screens/update_tender_result_dialog.dart';
 import '../../../tenders/presentation/widgets/tender_document_actions.dart';
 import '../../../tenders/providers/tender_providers.dart';
+import 'assigned_projects_screen.dart';
 
 class NewProjectFormScreen extends ConsumerStatefulWidget {
   const NewProjectFormScreen({
@@ -29,20 +30,24 @@ class NewProjectFormScreen extends ConsumerStatefulWidget {
     this.project,
     this.projectId,
     this.initialTender,
+    this.initialTabIndex = 0,
   });
 
   final SiteProject? project;
   final String? projectId;
   final Tender? initialTender;
+  final int initialTabIndex;
 
   @override
   ConsumerState<NewProjectFormScreen> createState() =>
       _NewProjectFormScreenState();
 }
 
-class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
+class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen>
+    with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _scrollController = ScrollController();
+  TabController? _tabController;
 
   // ── State variables ──
   bool _isSubmitting = false;
@@ -58,7 +63,6 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
 
   // SECTION 2 — PROJECT CODE
   String _isMappedToTender = 'No';
-  bool _showOnlyWonTenders = true;
   String _subOrOwn = 'Main';
   String _selectedTenderId = '';
   final _tenderRefNoController = TextEditingController();
@@ -75,9 +79,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
   List<ProjectDocument> _existingWorkOrderDocs = [];
 
   // SECTION 3 — TENDER TYPE
-  static const List<String> _tenderTypeOptions = ['Open', 'Close'];
   String _selectedTenderType = 'Open';
-  String _selectedQualified = 'Yes';
   final _tenderAmountController = TextEditingController();
 
   // SECTION 4 — TENDER SPEC / ENQUIRY SPEC
@@ -119,6 +121,15 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
   @override
   void initState() {
     super.initState();
+    _isEditMode = widget.project != null ||
+        (widget.projectId != null && widget.projectId!.isNotEmpty);
+    if (!_isEditMode) {
+      _tabController = TabController(
+        length: 2,
+        vsync: this,
+        initialIndex: widget.initialTabIndex.clamp(0, 1),
+      );
+    }
     _assignedDate = DateTime.now();
     _assignedDateController.text =
         DateFormat('dd-MM-yyyy').format(_assignedDate!);
@@ -155,26 +166,16 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     if (_generalDetailsController.text.trim().isEmpty) {
       _generalDetailsController.text = t.title;
     }
-    _selectedTenderType = t.tenderType.toLowerCase().contains('close')
-        ? 'Close'
-        : 'Open';
-    _selectedQualified = t.qualified.isNotEmpty ? t.qualified : 'Yes';
+    _selectedTenderType = t.tenderType.isNotEmpty ? t.tenderType : 'Open';
 
-    // Original tender value from tender record
-    if (t.tenderAmount > 0) {
-      _tenderAmountController.text = (t.tenderAmount % 1 == 0
-          ? t.tenderAmount.toInt().toString()
-          : t.tenderAmount.toString());
-      if (_approximateProjectValueController.text.trim().isEmpty) {
-        _approximateProjectValueController.text = _tenderAmountController.text;
-      }
-    }
-
-    // Project Value represents final value from Work Order / Contract
-    if (t.awardedValue > 0) {
-      _actualProjectValueController.text = (t.awardedValue % 1 == 0
-          ? t.awardedValue.toInt().toString()
-          : t.awardedValue.toString());
+    // Fetch Awarded Value from Won Tender
+    final awardedVal = t.awardedValue > 0 ? t.awardedValue : t.tenderAmount;
+    if (awardedVal > 0) {
+      final valStr = (awardedVal % 1 == 0
+          ? awardedVal.toInt().toString()
+          : awardedVal.toString());
+      _tenderAmountController.text = valStr;
+      _actualProjectValueController.text = valStr;
     }
 
     // Auto-match Client / Department
@@ -204,16 +205,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
       }
     }
 
-    _tenderSpecRemarkController.text = t.tenderSpecRemark;
-    _existingTenderSpecDocs = List.from(t.tenderSpecDocuments);
-    _openingDate = t.openingDate;
-    _openingDateRemarkController.text = t.openingDateRemark;
-    _closingDate = t.closingDate;
-    _closingDateRemarkController.text = t.closingDateRemark;
-    _bqrRemarkController.text = t.bqrRemark;
-    _existingBqrDocs = List.from(t.bqrDocuments);
-    _emdRemarkController.text = t.emdRemark;
-    _existingEmdDocs = List.from(t.emdDocuments);
+    _autoGenerateProjectCode();
   }
 
   void _populateFromProject(SiteProject p) {
@@ -250,7 +242,6 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     _selectedTenderType = p.tenderType.toLowerCase().contains('close')
         ? 'Close'
         : 'Open';
-    _selectedQualified = p.qualified.isNotEmpty ? p.qualified : 'Yes';
     _tenderAmountController.text = p.tenderAmount > 0
         ? (p.tenderAmount % 1 == 0
             ? p.tenderAmount.toInt().toString()
@@ -276,6 +267,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
 
   @override
   void dispose() {
+    _tabController?.dispose();
     _scrollController.dispose();
     _generalDetailsController.dispose();
     _placeController.dispose();
@@ -406,34 +398,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     }
   }
 
-  void _generateGeneralCodeAction() {
-    final clientName = _selectedClient?.displayName.isNotEmpty == true
-        ? _selectedClient!.displayName
-        : (_selectedClient?.companyName ?? 'GEN');
-    final details = _generalDetailsController.text.trim();
-    final place = _placeController.text.trim();
-
-    final code = ProjectCodeGenerator.generateGeneralCode(
-      clientName: clientName,
-      details: details,
-      place: place,
-      sequenceNumber: 1,
-    );
-
-    setState(() {
-      _generalCodeController.text = code;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Generated General Code: $code'),
-        backgroundColor: const Color(0xFF414A51),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
-  Future<void> _generateProjectCodeAction() async {
+  Future<void> _autoGenerateProjectCode() async {
     final clientName = _selectedClient?.displayName.isNotEmpty == true
         ? _selectedClient!.displayName
         : (_selectedClient?.companyName ?? 'CLI');
@@ -453,18 +418,11 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
       sequenceNumber: seq,
     );
 
-    setState(() {
-      _projectCodeController.text = code;
-    });
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Generated Project Code: $code'),
-        backgroundColor: const Color(0xFF414A51),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    if (mounted) {
+      setState(() {
+        _projectCodeController.text = code;
+      });
+    }
   }
 
   Future<void> _pickFiles(
@@ -536,13 +494,13 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
       return;
     }
 
-    if (_generalDetailsController.text.trim().isEmpty) {
-      _showToast('Please enter Project Name / Details *');
+    if (_selectedClient == null) {
+      _showToast('Please select a Client *');
       return;
     }
 
-    if (_selectedClient == null) {
-      _showToast('Please select a Client *');
+    if (_generalDetailsController.text.trim().isEmpty) {
+      _showToast('Please enter Project Name / Details *');
       return;
     }
 
@@ -551,51 +509,14 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
       return;
     }
 
-    if (_selectedCreatorEmployee == null) {
-      _showToast('Please select Employee Name * in Section 1');
+    if (_actualProjectValueController.text.trim().isEmpty) {
+      _showToast('Please enter Project Value *');
       return;
     }
 
-    if (_selectedAssignedEmployee == null && _selectedAssignedEmployees.isEmpty) {
-      _showToast('Please select Employee Name * in Section 5');
-      return;
-    }
-
-    if (_assignedDate == null) {
-      _showToast('Please select Assigned Date * in Section 5');
-      return;
-    }
-
-    // Auto-generate codes if user did not click CREATE CODE
-    if (_generalCodeController.text.trim().isEmpty) {
-      _generalCodeController.text = ProjectCodeGenerator.generateGeneralCode(
-        clientName: _selectedClient!.displayName,
-        details: _generalDetailsController.text.trim(),
-        place: _placeController.text.trim(),
-      );
-    }
-
+    // Auto-generate project code if empty
     if (_projectCodeController.text.trim().isEmpty) {
-      int seq = 1;
-      try {
-        seq = await ref.read(projectRepositoryProvider).getNextProjectSequence();
-      } catch (_) {}
-      _projectCodeController.text = ProjectCodeGenerator.generateProjectCode(
-        clientName: _selectedClient!.displayName,
-        subOrOwn: _subOrOwn,
-        state: _selectedState,
-        district: _selectedDistrict,
-        area: _areaController.text.trim(),
-        sequenceNumber: seq,
-      );
-    }
-
-    // Validate closing date relative to opening date
-    if (_openingDate != null && _closingDate != null) {
-      if (_closingDate!.isBefore(_openingDate!)) {
-        _showToast('Closing Date cannot be earlier than Opening Date.');
-        return;
-      }
+      await _autoGenerateProjectCode();
     }
 
     setState(() => _isSubmitting = true);
@@ -610,36 +531,29 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                   : 'Unknown Client'))
           : (_loadedProject?.clientName ?? 'Unknown Client');
 
-      if (_selectedAssignedEmployee != null &&
-          !_selectedAssignedEmployees.contains(_selectedAssignedEmployee)) {
-        _selectedAssignedEmployees.insert(0, _selectedAssignedEmployee!);
-      }
-      final assignedNames =
-          _selectedAssignedEmployees.map((e) => e.fullName).toList();
-      final assignedIds =
-          _selectedAssignedEmployees.map((e) => e.employeeId).toList();
+      final projectVal =
+          double.tryParse(_actualProjectValueController.text.trim()) ?? 0.0;
+      final tenderAwardedVal =
+          double.tryParse(_tenderAmountController.text.trim()) ?? projectVal;
 
       final filesByCategory = <String, List<PlatformFile>>{
-        'tender_spec': _tenderSpecFiles,
-        'bqr': _bqrFiles,
-        'emd': _emdFiles,
         'wrpo': _wrpoFiles,
         'work_order': _workOrderFiles,
       };
 
       if (_isEditMode && _loadedProject != null) {
         final updatedProject = _loadedProject!.copyWith(
-          employeeName: _selectedCreatorEmployee!.fullName,
-          employeeId: _selectedCreatorEmployee!.employeeId,
           clientName: clientName,
           clientId: _selectedClient?.id,
           generalDetails: _generalDetailsController.text.trim(),
           place: _placeController.text.trim(),
-          generalCode: _generalCodeController.text.trim(),
+          generalCode: _projectCodeController.text.trim().isNotEmpty
+              ? _projectCodeController.text.trim()
+              : _loadedProject!.generalCode,
           subOrOwn: _subOrOwn,
           isMappedToTender: _isMappedToTender,
           tenderId: _isMappedToTender == 'Yes' ? _selectedTenderId : '',
-          tenderRefNo: _tenderRefNoController.text.trim(),
+          tenderRefNo: _isMappedToTender == 'Yes' ? _tenderRefNoController.text.trim() : '',
           wrpoRemark: _wrpoRemarkController.text.trim(),
           wrpoDocuments: _existingWrpoDocs,
           state: _selectedState,
@@ -648,35 +562,11 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
           projectCode: _projectCodeController.text.trim().isNotEmpty
               ? _projectCodeController.text.trim()
               : _loadedProject!.projectCode,
-          tenderType: _selectedTenderType,
-          qualified: _selectedQualified,
-          tenderAmount: double.tryParse(_tenderAmountController.text.trim()) ?? 0.0,
-          approximateProjectValue:
-              double.tryParse(_approximateProjectValueController.text.trim()) ??
-                  0.0,
-          actualProjectValue:
-              double.tryParse(_actualProjectValueController.text.trim()) ?? 0.0,
+          tenderType: _isMappedToTender == 'Yes' ? _selectedTenderType : '',
+          tenderAmount: tenderAwardedVal,
+          approximateProjectValue: projectVal,
+          actualProjectValue: projectVal,
           workOrderDocuments: _existingWorkOrderDocs,
-          tenderSpecRemark: _tenderSpecRemarkController.text.trim(),
-          tenderSpecDocuments: _existingTenderSpecDocs,
-          assignedToEmployeeNames: assignedNames,
-          assignedToEmployeeIds: assignedIds,
-          assignedToEmployeeName:
-              _selectedAssignedEmployee?.fullName ?? assignedNames.join(', '),
-          assignedToEmployeeId:
-              _selectedAssignedEmployee?.employeeId ?? assignedIds.join(', '),
-          assignedToDesignation: _assignedDesignationController.text.trim(),
-          assignedToContactNumber: _assignedContactController.text.trim(),
-          assignedToEmail: _assignedEmailController.text.trim(),
-          assignedDate: _assignedDate,
-          openingDate: _openingDate,
-          openingDateRemark: _openingDateRemarkController.text.trim(),
-          closingDate: _closingDate,
-          closingDateRemark: _closingDateRemarkController.text.trim(),
-          bqrRemark: _bqrRemarkController.text.trim(),
-          bqrDocuments: _existingBqrDocs,
-          emdRemark: _emdRemarkController.text.trim(),
-          emdDocuments: _existingEmdDocs,
           updatedAt: DateTime.now(),
           updatedBy: currentEmp?.employeeId ?? currentEmp?.id.toString() ?? 'Unknown',
           updatedByName: currentEmp?.fullName ?? currentEmp?.name ?? 'Admin',
@@ -718,49 +608,38 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
         }
       } else {
         final project = SiteProject(
-          employeeName: _selectedCreatorEmployee!.fullName,
-          employeeId: _selectedCreatorEmployee!.employeeId,
+          employeeName: currentEmp?.fullName ?? currentEmp?.employeeId ?? 'Admin',
+          employeeId: currentEmp?.employeeId ?? currentEmp?.id.toString() ?? 'Admin',
           clientName: clientName,
           clientId: _selectedClient?.id,
           generalDetails: _generalDetailsController.text.trim(),
           place: _placeController.text.trim(),
-          generalCode: _generalCodeController.text.trim(),
+          generalCode: _projectCodeController.text.trim(),
           subOrOwn: _subOrOwn,
           isMappedToTender: _isMappedToTender,
           tenderId: _isMappedToTender == 'Yes' ? _selectedTenderId : '',
-          tenderRefNo: _tenderRefNoController.text.trim(),
+          tenderRefNo: _isMappedToTender == 'Yes' ? _tenderRefNoController.text.trim() : '',
           wrpoRemark: _wrpoRemarkController.text.trim(),
           wrpoDocuments: _existingWrpoDocs,
           state: _selectedState,
           district: _selectedDistrict,
           area: _areaController.text.trim(),
           projectCode: _projectCodeController.text.trim(),
-          tenderType: _selectedTenderType,
-          qualified: _selectedQualified,
-          tenderAmount: double.tryParse(_tenderAmountController.text.trim()) ?? 0.0,
-          approximateProjectValue:
-              double.tryParse(_approximateProjectValueController.text.trim()) ??
-                  0.0,
-          actualProjectValue:
-              double.tryParse(_actualProjectValueController.text.trim()) ?? 0.0,
+          tenderType: _isMappedToTender == 'Yes' ? _selectedTenderType : '',
+          qualified: 'Yes',
+          tenderAmount: tenderAwardedVal,
+          approximateProjectValue: projectVal,
+          actualProjectValue: projectVal,
           workOrderDocuments: _existingWorkOrderDocs,
-          tenderSpecRemark: _tenderSpecRemarkController.text.trim(),
-          assignedToEmployeeNames: assignedNames,
-          assignedToEmployeeIds: assignedIds,
-          assignedToEmployeeName:
-              _selectedAssignedEmployee?.fullName ?? assignedNames.join(', '),
-          assignedToEmployeeId:
-              _selectedAssignedEmployee?.employeeId ?? assignedIds.join(', '),
-          assignedToDesignation: _assignedDesignationController.text.trim(),
-          assignedToContactNumber: _assignedContactController.text.trim(),
-          assignedToEmail: _assignedEmailController.text.trim(),
-          assignedDate: _assignedDate,
-          openingDate: _openingDate,
-          openingDateRemark: _openingDateRemarkController.text.trim(),
-          closingDate: _closingDate,
-          closingDateRemark: _closingDateRemarkController.text.trim(),
-          bqrRemark: _bqrRemarkController.text.trim(),
-          emdRemark: _emdRemarkController.text.trim(),
+          tenderSpecRemark: '',
+          assignedToEmployeeNames: const [],
+          assignedToEmployeeIds: const [],
+          assignedToEmployeeName: '',
+          assignedToEmployeeId: '',
+          assignedToDesignation: '',
+          assignedToContactNumber: '',
+          assignedToEmail: '',
+          assignedDate: DateTime.now(),
           status: 'Active',
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
@@ -795,10 +674,12 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
             ),
           );
 
-          if (context.canPop()) {
+          if (_tabController != null) {
+            _tabController!.animateTo(0);
+          } else if (context.canPop()) {
             context.pop(true);
           } else {
-            context.go('/module/project');
+            context.go('/projects/new');
           }
         }
       }
@@ -939,72 +820,10 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
       }
     }
 
-    final tenderTypesAsync = ref.watch(tenderTypesProvider);
-    final tenderTypes = tenderTypesAsync.valueOrNull ??
-        [
-          'Open Tender',
-          'Limited Tender',
-          'Single Tender / Direct',
-          'E-Tender',
-          'Item Rate Tender',
-          'Percentage Rate Tender',
-          'EPC Tender',
-          'Turnkey Tender',
-          'Quotation',
-          'Other',
-        ];
-
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 700;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F3),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF414A51)),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go(_isEditMode ? '/projects/assigned' : '/module/project');
-            }
-          },
-        ),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                color: const Color(0xFF9C27B0).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.rocket_launch_rounded,
-                size: 20,
-                color: Color(0xFF9C27B0),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              _isEditMode ? 'EDIT PROJECT' : 'NEW PROJECT',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF414A51),
-                letterSpacing: 0.5,
-              ),
-            ),
-          ],
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(color: const Color(0xFFE5E8E2), height: 1),
-        ),
-      ),
-      body: Form(
+    final formBody = Form(
         key: _formKey,
         child: Scrollbar(
           controller: _scrollController,
@@ -1021,41 +840,19 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // SECTION 1 — GENERAL CODE
+                    // SECTION 1 — PROJECT DETAILS
                     _buildSectionCard(
                       sectionNumber: 'SECTION 1',
-                      sectionTitle: 'GENERAL CODE',
-                      icon: Icons.qr_code_rounded,
+                      sectionTitle: 'PROJECT DETAILS',
+                      icon: Icons.business_center_outlined,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (isMobile) ...[
-                            _buildEmployeeSelectField(
-                              label: 'Employee Name *',
-                              employees: allEmployees,
-                              selected: _selectedCreatorEmployee,
-                              onChanged: (emp) => setState(
-                                  () => _selectedCreatorEmployee = emp),
-                            ),
-                            const SizedBox(height: 14),
+                          if (_isMappedToTender == 'Yes') ...[
+                            _buildReadOnlyClientDisplay(),
+                          ] else ...[
                             _buildClientSelectField(customers),
-                          ] else
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: _buildEmployeeSelectField(
-                                    label: 'Employee Name *',
-                                    employees: allEmployees,
-                                    selected: _selectedCreatorEmployee,
-                                    onChanged: (emp) => setState(
-                                        () => _selectedCreatorEmployee = emp),
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(child: _buildClientSelectField(customers)),
-                              ],
-                            ),
+                          ],
                           const SizedBox(height: 14),
                           if (isMobile) ...[
                             TextFormField(
@@ -1113,14 +910,6 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                                 ),
                               ],
                             ),
-                          const SizedBox(height: 16),
-                          // General Code Action & Display
-                          _buildCodeActionRow(
-                            codeLabel: 'General Code',
-                            controller: _generalCodeController,
-                            buttonLabel: 'CREATE CODE',
-                            onGenerate: _generateGeneralCodeAction,
-                          ),
                         ],
                       ),
                     ),
@@ -1141,19 +930,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                             _buildTenderMappingDropdown(customers),
                           ],
                           const SizedBox(height: 14),
-                          if (isMobile) ...[
-                            _buildClientDisplayOrSelect(customers),
-                            const SizedBox(height: 14),
-                            _buildSubOrOwnDropdown(),
-                          ] else
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(child: _buildClientDisplayOrSelect(customers)),
-                                const SizedBox(width: 16),
-                                Expanded(child: _buildSubOrOwnDropdown()),
-                              ],
-                            ),
+                          _buildSubOrOwnDropdown(),
                           const SizedBox(height: 14),
                           // Location Hierarchy: State -> District -> Area
                           if (isMobile) ...[
@@ -1174,22 +951,8 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                               ],
                             ),
                           const SizedBox(height: 14),
-                          // Project Values (Approximate & Actual)
-                          if (isMobile) ...[
-                            _buildApproximateProjectValueField(),
-                            const SizedBox(height: 14),
-                            _buildActualProjectValueField(),
-                          ] else
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                    child:
-                                        _buildApproximateProjectValueField()),
-                                const SizedBox(width: 16),
-                                Expanded(child: _buildActualProjectValueField()),
-                              ],
-                            ),
+                          // Project Value (Work Order / Contract) *
+                          _buildActualProjectValueField(),
                           const SizedBox(height: 16),
                           // Work Order / Contract Document Upload
                           _buildFileUploadWidget(
@@ -1198,13 +961,8 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                             existingDocs: _existingWorkOrderDocs,
                           ),
                           const SizedBox(height: 16),
-                          // Project Code Action & Display
-                          _buildCodeActionRow(
-                            codeLabel: 'Project Code',
-                            controller: _projectCodeController,
-                            buttonLabel: 'CREATE CODE',
-                            onGenerate: _generateProjectCodeAction,
-                          ),
+                          // Auto-Generated Project Code Display
+                          _buildAutoProjectCodeCard(),
                         ],
                       ),
                     ),
@@ -1212,18 +970,17 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                       const SizedBox(height: 18),
                       _buildWrpoSection(),
                     ],
-                    const SizedBox(height: 18),
 
-                    // SECTION 3 — TENDER TYPE & DETAILS
-                    _buildSectionCard(
-                      sectionNumber: 'SECTION 3',
-                      sectionTitle: 'TENDER TYPE & DETAILS',
-                      icon: Icons.assignment_outlined,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (_isMappedToTender == 'Yes' &&
-                              _selectedTenderId.isNotEmpty) ...[
+                    // SECTION 3 — TENDER TYPE & DETAILS (Only shown when Mapped to Tender is Yes)
+                    if (_isMappedToTender == 'Yes') ...[
+                      const SizedBox(height: 18),
+                      _buildSectionCard(
+                        sectionNumber: 'SECTION 3',
+                        sectionTitle: 'TENDER TYPE & DETAILS',
+                        icon: Icons.assignment_outlined,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 8),
@@ -1243,7 +1000,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      'Auto-filled from Won Tender "$_selectedTenderId" | Ref: ${_tenderRefNoController.text.isNotEmpty ? _tenderRefNoController.text : "N/A"}',
+                                      'Auto-filled from Won Tender "${_selectedTenderId.isNotEmpty ? _selectedTenderId : "Selected"}" (Read-Only)',
                                       style: const TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
@@ -1254,75 +1011,65 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                                 ],
                               ),
                             ),
+                            if (isMobile) ...[
+                              _buildReadOnlyField(
+                                label: 'Tender Reference No',
+                                controller: _tenderRefNoController,
+                                hintText: 'Auto-fetched from Tender',
+                                prefixIcon: Icons.tag_rounded,
+                              ),
+                              const SizedBox(height: 14),
+                              _buildReadOnlyText(
+                                label: 'Tender Type',
+                                value: _selectedTenderType.isNotEmpty
+                                    ? _selectedTenderType
+                                    : 'Open',
+                                prefixIcon: Icons.category_outlined,
+                              ),
+                              const SizedBox(height: 14),
+                              _buildReadOnlyField(
+                                label: 'Tender Awarded Value',
+                                controller: _tenderAmountController,
+                                hintText: 'Auto-fetched from Tender',
+                                prefixIcon: Icons.currency_rupee_rounded,
+                              ),
+                            ] else
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _buildReadOnlyField(
+                                      label: 'Tender Reference No',
+                                      controller: _tenderRefNoController,
+                                      hintText: 'Auto-fetched from Tender',
+                                      prefixIcon: Icons.tag_rounded,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: _buildReadOnlyText(
+                                      label: 'Tender Type',
+                                      value: _selectedTenderType.isNotEmpty
+                                          ? _selectedTenderType
+                                          : 'Open',
+                                      prefixIcon: Icons.category_outlined,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: _buildReadOnlyField(
+                                      label: 'Tender Awarded Value',
+                                      controller: _tenderAmountController,
+                                      hintText: 'Auto-fetched from Tender',
+                                      prefixIcon: Icons.currency_rupee_rounded,
+                                    ),
+                                  ),
+                                ],
+                              ),
                           ],
-                          if (isMobile) ...[
-                            _buildTenderRefNoField(),
-                            const SizedBox(height: 14),
-                            _buildTenderTypeDropdown(tenderTypes),
-                            const SizedBox(height: 14),
-                            _buildQualifiedDropdown(),
-                            const SizedBox(height: 14),
-                            _buildTenderAmountField(),
-                          ] else
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                    flex: 3,
-                                    child: _buildTenderRefNoField()),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                    flex: 3,
-                                    child:
-                                        _buildTenderTypeDropdown(tenderTypes)),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                    flex: 2, child: _buildQualifiedDropdown()),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                    flex: 3, child: _buildTenderAmountField()),
-                              ],
-                            ),
-                        ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 18),
-
-                    // SECTION 4 — TENDER SPEC / ENQUIRY SPEC
-                    _buildSectionCard(
-                      sectionNumber: 'SECTION 4',
-                      sectionTitle: 'TENDER SPEC / ENQUIRY SPEC',
-                      icon: Icons.description_outlined,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextFormField(
-                            controller: _tenderSpecRemarkController,
-                            maxLines: 2,
-                            decoration: const InputDecoration(
-                              labelText: 'Remark Text',
-                              hintText: 'Enter specification or enquiry remarks...',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          _buildFileUploadWidget(
-                            label: 'Tender Spec Documents',
-                            files: _tenderSpecFiles,
-                            existingDocs: _existingTenderSpecDocs,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-
-                    // SECTION 5 — ASSIGNED TO
-                    _buildSectionCard(
-                      sectionNumber: 'SECTION 5',
-                      sectionTitle: 'ASSIGNED TO',
-                      icon: Icons.person_pin_circle_outlined,
-                      child: _buildAssignedToSection(allEmployees, isMobile),
-                    ),
+                    ],
                     const SizedBox(height: 28),
 
                     // ── FINAL ACTION: CREATE OR UPDATE SITE PROJECT ──
@@ -1394,7 +1141,103 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
             ),
           ),
         ),
+      );
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F6F3),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF414A51)),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/module/project');
+            }
+          },
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: const Color(0xFF9C27B0).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.rocket_launch_rounded,
+                size: 20,
+                color: Color(0xFF9C27B0),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              _isEditMode ? 'EDIT PROJECT' : 'NEW PROJECT',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF414A51),
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+        bottom: _isEditMode
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(1),
+                child: Container(color: const Color(0xFFE5E8E2), height: 1),
+              )
+            : TabBar(
+                controller: _tabController,
+                labelColor: const Color(0xFF414A51),
+                unselectedLabelColor: const Color(0xFF718096),
+                indicatorColor: const Color(0xFF9CC70A),
+                indicatorWeight: 3,
+                tabs: const [
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.list_alt_rounded, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'PROJECT LIST',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add_circle_outline_rounded, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'CREATE PROJECT',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
       ),
+      body: _isEditMode
+          ? formBody
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                AssignedProjectsScreen(
+                  isEmbedded: true,
+                  onNavigateToCreate: () => _tabController?.animateTo(1),
+                ),
+                formBody,
+              ],
+            ),
     );
   }
 
@@ -1581,6 +1424,204 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildReadOnlyText({
+    required String label,
+    required String value,
+    IconData? prefixIcon,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: const Color(0xFFD0D5DD), width: 0.8),
+          ),
+          child: Row(
+            children: [
+              if (prefixIcon != null) ...[
+                Icon(prefixIcon, size: 16, color: const Color(0xFF414A51)),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: Text(
+                  value.isNotEmpty ? value : '-',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF414A51),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReadOnlyClientDisplay() {
+    final clientName = _selectedClient?.displayName.isNotEmpty == true
+        ? _selectedClient!.displayName
+        : (_selectedClient?.companyName.isNotEmpty == true
+            ? _selectedClient!.companyName
+            : 'No Client Selected');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            const Text(
+              'Client / Department',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'From Won Tender (Read-Only)',
+                style: TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF414A51),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 5),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8.5),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFD0D5DD), width: 0.8),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.business_rounded, size: 16, color: Color(0xFF414A51)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  clientName,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF414A51),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAutoProjectCodeCard() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAF8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E8E2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.qr_code_2_rounded,
+              color: Color(0xFF414A51),
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Project Code (Auto-Generated)',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF718096),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _projectCodeController.text.isNotEmpty
+                      ? _projectCodeController.text
+                      : 'Auto-generating...',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: _projectCodeController.text.isNotEmpty
+                        ? const Color(0xFF414A51)
+                        : const Color(0xFFA0AEC0),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF9CC70A).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.auto_awesome, size: 13, color: Color(0xFF414A51)),
+                SizedBox(width: 4),
+                Text(
+                  'Auto',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF414A51),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2230,7 +2271,12 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
             placeholder: 'Select Client',
             isRequired: true,
             validator: (val) => val == null ? 'Client is required' : null,
-            onChanged: (c) => setState(() => _selectedClient = c),
+            onChanged: (c) {
+              setState(() {
+                _selectedClient = c;
+                _autoGenerateProjectCode();
+              });
+            },
           ),
         ),
         const SizedBox(width: 8),
@@ -2264,55 +2310,6 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     );
   }
 
-  Widget _buildClientDisplayOrSelect(List<Customer> customers) {
-    final clientName = _selectedClient?.displayName.isNotEmpty == true
-        ? _selectedClient!.displayName
-        : (_selectedClient?.companyName.isNotEmpty == true
-            ? _selectedClient!.companyName
-            : 'No Client Selected');
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text(
-          'Client',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 5),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8.5),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF9FAFB),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFD0D5DD), width: 0.8),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.business_rounded, size: 16, color: Colors.black54),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  clientName,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black87,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildSubOrOwnDropdown() {
     return AppSearchableDropdown<String>(
       label: 'Sub Division (Main / Sub)',
@@ -2324,7 +2321,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
         if (val != null) {
           setState(() {
             _subOrOwn = val;
-            _generateProjectCodeAction();
+            _autoGenerateProjectCode();
           });
         }
       },
@@ -2351,7 +2348,10 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
               isSelected: _isMappedToTender == 'Yes',
               onTap: () {
                 if (_isMappedToTender != 'Yes') {
-                  setState(() => _isMappedToTender = 'Yes');
+                  setState(() {
+                    _isMappedToTender = 'Yes';
+                    _autoGenerateProjectCode();
+                  });
                 }
               },
             ),
@@ -2365,6 +2365,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                     _isMappedToTender = 'No';
                     _selectedTenderId = '';
                     _tenderRefNoController.clear();
+                    _autoGenerateProjectCode();
                   });
                 }
               },
@@ -2425,13 +2426,14 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
     final tendersAsync = ref.watch(tendersStreamProvider);
     return tendersAsync.when(
       data: (tenders) {
-        final wonTenders =
-            tenders.where((t) => t.status.trim().toLowerCase() == 'won').toList();
+        final wonTenders = tenders
+            .where((t) =>
+                t.status.trim().toLowerCase() == 'won' ||
+                t.qualified.trim().toLowerCase() == 'won')
+            .toList();
 
-        // If won tenders exist, respect filter; if none exist, show all tenders so user is not blocked
         final hasWon = wonTenders.isNotEmpty;
-        final displayTenders =
-            (_showOnlyWonTenders && hasWon) ? wonTenders : tenders;
+        final displayTenders = hasWon ? wonTenders : tenders;
         final tenderIdOptions = displayTenders.map((t) => t.tenderId).toList();
 
         final selectedVal = tenderIdOptions.contains(_selectedTenderId)
@@ -2449,56 +2451,12 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (hasWon) ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Select Tender',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF414A51),
-                    ),
-                  ),
-                  InkWell(
-                    onTap: () {
-                      setState(() => _showOnlyWonTenders = !_showOnlyWonTenders);
-                    },
-                    borderRadius: BorderRadius.circular(4),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 2),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _showOnlyWonTenders
-                                ? Icons.check_box_rounded
-                                : Icons.check_box_outline_blank_rounded,
-                            size: 16,
-                            color: const Color(0xFF9CC70A),
-                          ),
-                          const SizedBox(width: 4),
-                          const Text(
-                            'Only Won Tenders',
-                            style: TextStyle(
-                                fontSize: 11.5, color: Color(0xFF414A51)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-            ],
             Row(
               children: [
                 Expanded(
                   child: AppSearchableDropdown<String>(
-                    label: hasWon && _showOnlyWonTenders
-                        ? 'Tender ID (Won Tenders only) *'
+                    label: hasWon
+                        ? 'Tender ID (Won Tenders) *'
                         : 'Tender ID *',
                     value: selectedVal,
                     items: tenderIdOptions,
@@ -2521,10 +2479,10 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                           ? '$id$statusBadge - ${match.title}$refSnippet'
                           : id;
                     },
-                    searchHint: 'Search Tender by ID, status or title...',
+                    searchHint: 'Search Won Tender by ID or title...',
                     placeholder: displayTenders.isEmpty
-                        ? 'No Tenders Available'
-                        : 'Select Tender ID',
+                        ? 'No Won Tenders Available'
+                        : 'Select Won Tender ID',
                     onChanged: (val) {
                       if (val != null) {
                         final match = displayTenders.firstWhere(
@@ -2538,7 +2496,6 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                         setState(() {
                           _selectedTenderId = val;
                           _populateFromTender(match, customers);
-                          _generateProjectCodeAction();
                         });
                       }
                     },
@@ -2581,7 +2538,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Showing ${tenders.length} available tender(s) (including "Submitted"). You can select your tender to map it now.',
+                        'No tenders currently marked as Won. Showing all ${tenders.length} available tenders to link.',
                         style: const TextStyle(
                             fontSize: 12, color: Color(0xFF166534)),
                       ),
@@ -2608,7 +2565,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Tender "${selectedTender.tenderId}" is "${selectedTender.status}". To record the Work Order / Contract award details in Tender Management, click Update.',
+                        'Tender "${selectedTender.tenderId}" status is "${selectedTender.status}". To record the Work Order / Contract award details in Tender Management, click Update.',
                         style: const TextStyle(
                             fontSize: 11.5, color: Color(0xFF92400E)),
                       ),
@@ -2638,72 +2595,6 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
       },
       loading: () => const LinearProgressIndicator(color: Color(0xFF9CC70A)),
       error: (err, stack) => const SizedBox.shrink(),
-    );
-  }
-
-  Widget _buildTenderRefNoField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text(
-          'Tender Reference No',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 5),
-        SizedBox(
-          height: 38,
-          child: TextFormField(
-            controller: _tenderRefNoController,
-            readOnly: _isMappedToTender == 'Yes',
-            style: TextStyle(
-              fontSize: 12,
-              color: _isMappedToTender == 'Yes'
-                  ? const Color(0xFF414A51)
-                  : Colors.black87,
-              fontWeight: _isMappedToTender == 'Yes'
-                  ? FontWeight.w600
-                  : FontWeight.normal,
-            ),
-            decoration: InputDecoration(
-              hintText: 'e.g. TR-2024-001',
-              filled: _isMappedToTender == 'Yes',
-              fillColor:
-                  _isMappedToTender == 'Yes' ? const Color(0xFFF9FAFB) : null,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTenderTypeDropdown(List<String> tenderTypes) {
-    final options = <String>{
-      ..._tenderTypeOptions,
-      ...tenderTypes,
-      if (_selectedTenderType.isNotEmpty) _selectedTenderType,
-    }.toList();
-
-    return AppSearchableDropdown<String>(
-      label: 'Tender Type',
-      value: options.contains(_selectedTenderType)
-          ? _selectedTenderType
-          : options.first,
-      items: options,
-      searchHint: 'Search tender type...',
-      placeholder: 'Select Tender Type',
-      onChanged: (val) {
-        if (val != null) setState(() => _selectedTenderType = val);
-      },
     );
   }
 
@@ -2748,6 +2639,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
           setState(() {
             _selectedState = val;
             _updateDistrictsForState(val);
+            _autoGenerateProjectCode();
           });
         }
       },
@@ -2765,7 +2657,12 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
       searchHint: 'Search district...',
       placeholder: 'Select District',
       onChanged: (val) {
-        if (val != null) setState(() => _selectedDistrict = val);
+        if (val != null) {
+          setState(() {
+            _selectedDistrict = val;
+            _autoGenerateProjectCode();
+          });
+        }
       },
     );
   }
@@ -2788,6 +2685,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
           height: 38,
           child: TextFormField(
             controller: _areaController,
+            onChanged: (_) => _autoGenerateProjectCode(),
             style: const TextStyle(fontSize: 12, color: Colors.black87),
             decoration: InputDecoration(
               hintText: 'e.g. Porur / Guindy',
@@ -2803,65 +2701,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: AppColors.primary, width: 1.2),
-              ),
-              filled: true,
-              fillColor: Colors.white,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildApproximateProjectValueField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text(
-          'Approximate Project Value',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 5),
-        SizedBox(
-          height: 38,
-          child: TextFormField(
-            controller: _approximateProjectValueController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
-            ],
-            style: const TextStyle(fontSize: 12, color: Colors.black87),
-            decoration: InputDecoration(
-              hintText: 'e.g. 2500000',
-              prefixText: '₹ ',
-              prefixStyle: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87),
-              hintStyle:
-                  const TextStyle(fontSize: 11.5, color: Colors.black38),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8.5),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide:
-                    const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide:
-                    const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide:
-                    const BorderSide(color: AppColors.primary, width: 1.2),
+                borderSide: const BorderSide(color: Color(0xFF9CC70A), width: 1.2),
               ),
               filled: true,
               fillColor: Colors.white,
@@ -2878,7 +2718,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         const Text(
-          'Actual Project Value (Work Order / Contract) *',
+          'Project Value (Work Order / Contract) *',
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -2894,6 +2734,9 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
             ],
+            validator: (v) => (v == null || v.trim().isEmpty)
+                ? 'Project Value is required'
+                : null,
             style: const TextStyle(fontSize: 12, color: Colors.black87),
             decoration: InputDecoration(
               hintText: 'Final value from Work Order / Contract',
@@ -2919,7 +2762,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide:
-                    const BorderSide(color: AppColors.primary, width: 1.2),
+                    const BorderSide(color: Color(0xFF9CC70A), width: 1.2),
               ),
               filled: true,
               fillColor: Colors.white,
@@ -2929,137 +2772,6 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen> {
       ],
     );
   }
-
-  Widget _buildQualifiedDropdown() {
-    return AppSearchableDropdown<String>(
-      label: 'Qualified',
-      value: _selectedQualified,
-      items: const ['Yes', 'No'],
-      searchHint: 'Search Qualified...',
-      placeholder: 'Select Qualified',
-      onChanged: (val) {
-        if (val != null) setState(() => _selectedQualified = val);
-      },
-    );
-  }
-
-  Widget _buildTenderAmountField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text(
-          'Tender Value (Original Bid)',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 5),
-        SizedBox(
-          height: 38,
-          child: TextFormField(
-            controller: _tenderAmountController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
-            ],
-            style: const TextStyle(fontSize: 12, color: Colors.black87),
-            decoration: InputDecoration(
-              hintText: 'Enter amount',
-              prefixText: '₹ ',
-              prefixStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
-              hintStyle: const TextStyle(fontSize: 11.5, color: Colors.black38),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8.5),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: AppColors.primary, width: 1.2),
-              ),
-              filled: true,
-              fillColor: Colors.white,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCodeActionRow({
-    required String codeLabel,
-    required TextEditingController controller,
-    required String buttonLabel,
-    required VoidCallback onGenerate,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAF8),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E8E2)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  codeLabel,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF718096),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  controller.text.isNotEmpty
-                      ? controller.text
-                      : 'Not Generated Yet',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: controller.text.isNotEmpty
-                        ? const Color(0xFF414A51)
-                        : const Color(0xFFA0AEC0),
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF414A51),
-              side: const BorderSide(color: Color(0xFF9CC70A), width: 1.5),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            ),
-            onPressed: onGenerate,
-            icon: const Icon(Icons.auto_awesome, size: 16, color: Color(0xFF9CC70A)),
-            label: Text(
-              buttonLabel,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-
 
   Widget _buildFileUploadWidget({
     required String label,

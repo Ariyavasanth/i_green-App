@@ -9,7 +9,14 @@ import '../../providers/project_providers.dart';
 import '../dialogs/project_details_dialog.dart';
 
 class AssignedProjectsScreen extends ConsumerStatefulWidget {
-  const AssignedProjectsScreen({super.key});
+  const AssignedProjectsScreen({
+    super.key,
+    this.isEmbedded = false,
+    this.onNavigateToCreate,
+  });
+
+  final bool isEmbedded;
+  final VoidCallback? onNavigateToCreate;
 
   @override
   ConsumerState<AssignedProjectsScreen> createState() =>
@@ -99,6 +106,16 @@ class _AssignedProjectsScreenState
     }
   }
 
+  Future<void> _openManageProject(BuildContext context, SiteProject project) async {
+    await context.push(
+      '/projects/manage/${project.id}',
+      extra: project,
+    );
+    if (mounted) {
+      ref.invalidate(projectsStreamProvider);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final projectsAsync = ref.watch(projectsStreamProvider);
@@ -109,6 +126,102 @@ class _AssignedProjectsScreenState
         : screenWidth > 650
             ? 24.0
             : 16.0;
+
+    final content = SafeArea(
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(
+          horizontalPadding,
+          widget.isEmbedded ? 14 : 20,
+          horizontalPadding,
+          40,
+        ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1200),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isMobile = constraints.maxWidth < 750;
+
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border:
+                        Border.all(color: const Color(0xFFE5E8E2), width: 1),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // ── Search & Filter Bar ──
+                      _buildSearchFilterBar(isMobile),
+
+                      // ── Table Content ──
+                      projectsAsync.when(
+                        loading: () => _buildLoadingState(),
+                        error: (err, stack) => _buildErrorState(err),
+                        data: (allProjects) {
+                          final filtered = _filterProjects(allProjects);
+
+                          if (filtered.isEmpty) {
+                            return _buildEmptyState(
+                              hasQuery: _searchQuery.isNotEmpty,
+                            );
+                          }
+
+                          final totalItems = filtered.length;
+                          final totalPages =
+                              (totalItems / _rowsPerPage).ceil();
+                          if (_currentPage >= totalPages && totalPages > 0) {
+                            _currentPage = totalPages - 1;
+                          }
+
+                          final startIndex = _currentPage * _rowsPerPage;
+                          final endIndex =
+                              (startIndex + _rowsPerPage > totalItems)
+                                  ? totalItems
+                                  : startIndex + _rowsPerPage;
+                          final pageItems =
+                              filtered.sublist(startIndex, endIndex);
+
+                          return Column(
+                            children: [
+                              if (isMobile)
+                                _buildMobileCardList(pageItems)
+                              else
+                                _buildDesktopTable(pageItems),
+                              _buildPaginationBar(
+                                totalItems: totalItems,
+                                startIndex: startIndex,
+                                endIndex: endIndex,
+                                totalPages: totalPages,
+                                isMobile: isMobile,
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (widget.isEmbedded) {
+      return content;
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F3),
@@ -142,7 +255,7 @@ class _AssignedProjectsScreenState
             ),
             const SizedBox(width: 12),
             const Text(
-              'ASSIGNED PROJECTS',
+              'PROJECT LIST',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
@@ -152,102 +265,45 @@ class _AssignedProjectsScreenState
             ),
           ],
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF9CC70A),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+              ),
+              onPressed: () {
+                if (widget.onNavigateToCreate != null) {
+                  widget.onNavigateToCreate!();
+                } else {
+                  context.push('/projects/new');
+                }
+              },
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text(
+                'New Project',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(color: const Color(0xFFE5E8E2), height: 1),
         ),
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(
-            horizontalPadding,
-            20,
-            horizontalPadding,
-            40,
-          ),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1200),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final isMobile = constraints.maxWidth < 750;
-
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border:
-                          Border.all(color: const Color(0xFFE5E8E2), width: 1),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.03),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // ── Search & Filter Bar ──
-                        _buildSearchFilterBar(isMobile),
-
-                        // ── Table Content ──
-                        projectsAsync.when(
-                          loading: () => _buildLoadingState(),
-                          error: (err, stack) => _buildErrorState(err),
-                          data: (allProjects) {
-                            final filtered = _filterProjects(allProjects);
-
-                            if (filtered.isEmpty) {
-                              return _buildEmptyState(
-                                hasQuery: _searchQuery.isNotEmpty,
-                              );
-                            }
-
-                            final totalItems = filtered.length;
-                            final totalPages =
-                                (totalItems / _rowsPerPage).ceil();
-                            if (_currentPage >= totalPages && totalPages > 0) {
-                              _currentPage = totalPages - 1;
-                            }
-
-                            final startIndex = _currentPage * _rowsPerPage;
-                            final endIndex =
-                                (startIndex + _rowsPerPage > totalItems)
-                                    ? totalItems
-                                    : startIndex + _rowsPerPage;
-                            final pageItems =
-                                filtered.sublist(startIndex, endIndex);
-
-                            return Column(
-                              children: [
-                                if (isMobile)
-                                  _buildMobileCardList(pageItems)
-                                else
-                                  _buildDesktopTable(pageItems),
-                                _buildPaginationBar(
-                                  totalItems: totalItems,
-                                  startIndex: startIndex,
-                                  endIndex: endIndex,
-                                  totalPages: totalPages,
-                                  isMobile: isMobile,
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ),
-      ),
+      body: content,
     );
   }
 
@@ -335,17 +391,17 @@ class _AssignedProjectsScreenState
   Widget _buildDesktopTable(List<SiteProject> projects) {
     return Column(
       children: [
-        // Table Header: Exactly 6 Columns
+        // Table Header
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           color: const Color(0xFF414A51),
           child: const Row(
             children: [
-              // 1. Project ID
+              // 1. Project ID & Name
               Expanded(
-                flex: 3,
+                flex: 4,
                 child: Text(
-                  'Project ID',
+                  'Project & Name',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 13.5,
@@ -394,9 +450,23 @@ class _AssignedProjectsScreenState
                   ),
                 ),
               ),
+              // Primary Manage Action
+              SizedBox(
+                width: 145,
+                child: Text(
+                  'Manage Project',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
               // 5. View
               SizedBox(
-                width: 70,
+                width: 60,
                 child: Text(
                   'View',
                   textAlign: TextAlign.center,
@@ -410,7 +480,7 @@ class _AssignedProjectsScreenState
               ),
               // Breakdown
               SizedBox(
-                width: 85,
+                width: 75,
                 child: Text(
                   'Breakdown',
                   textAlign: TextAlign.center,
@@ -424,7 +494,7 @@ class _AssignedProjectsScreenState
               ),
               // Budget
               SizedBox(
-                width: 75,
+                width: 70,
                 child: Text(
                   'Budget',
                   textAlign: TextAlign.center,
@@ -438,7 +508,7 @@ class _AssignedProjectsScreenState
               ),
               // 6. Edit
               SizedBox(
-                width: 70,
+                width: 60,
                 child: Text(
                   'Edit',
                   textAlign: TextAlign.center,
@@ -466,6 +536,10 @@ class _AssignedProjectsScreenState
           ),
           itemBuilder: (context, index) {
             final project = projects[index];
+            final statusText = project.status.trim().isNotEmpty
+                ? project.status.trim()
+                : 'Active';
+
             return Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: 20,
@@ -473,17 +547,70 @@ class _AssignedProjectsScreenState
               ),
               child: Row(
                 children: [
-                  // 1. Project ID
+                  // 1. Project ID & Name & Status
                   Expanded(
-                    flex: 3,
-                    child: Text(
-                      project.projectCode.isNotEmpty
-                          ? project.projectCode
-                          : (project.id.isNotEmpty ? project.id : '—'),
-                      style: const TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF22282D),
+                    flex: 4,
+                    child: InkWell(
+                      onTap: () => _openManageProject(context, project),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  project.projectCode.isNotEmpty
+                                      ? project.projectCode
+                                      : (project.id.isNotEmpty ? project.id : '—'),
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF22282D),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF9CC70A)
+                                      .withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  statusText,
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF414A51),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (project.generalDetails.isNotEmpty ||
+                              project.clientName.isNotEmpty) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              project.generalDetails.isNotEmpty
+                                  ? project.generalDetails
+                                  : project.clientName,
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ),
@@ -514,9 +641,44 @@ class _AssignedProjectsScreenState
                     child: _buildLastUpdateCell(project),
                   ),
 
+                  // Primary Manage Action Button
+                  SizedBox(
+                    width: 145,
+                    child: Center(
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF414A51),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          minimumSize: const Size(0, 32),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onPressed: () => _openManageProject(context, project),
+                        icon: const Icon(
+                          Icons.dashboard_customize_outlined,
+                          size: 14,
+                          color: Color(0xFF9CC70A),
+                        ),
+                        label: const Text(
+                          'View / Manage',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
                   // 5. View action (Eye icon)
                   SizedBox(
-                    width: 70,
+                    width: 60,
                     child: Center(
                       child: IconButton(
                         icon: const Icon(
@@ -532,7 +694,7 @@ class _AssignedProjectsScreenState
 
                   // Breakdown action
                   SizedBox(
-                    width: 85,
+                    width: 75,
                     child: Center(
                       child: IconButton(
                         icon: const Icon(
@@ -548,7 +710,7 @@ class _AssignedProjectsScreenState
 
                   // Budget action
                   SizedBox(
-                    width: 75,
+                    width: 70,
                     child: Center(
                       child: IconButton(
                         icon: const Icon(
@@ -564,7 +726,7 @@ class _AssignedProjectsScreenState
 
                   // 6. Edit action (Pencil icon)
                   SizedBox(
-                    width: 70,
+                    width: 60,
                     child: Center(
                       child: IconButton(
                         icon: const Icon(
@@ -699,6 +861,9 @@ class _AssignedProjectsScreenState
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final project = projects[index];
+        final statusText = project.status.trim().isNotEmpty
+            ? project.status.trim()
+            : 'Active';
 
         return Container(
           padding: const EdgeInsets.all(14),
@@ -710,7 +875,7 @@ class _AssignedProjectsScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header: 1. Project ID + Actions (5. View, 6. Edit)
+              // Header: 1. Project ID + Status + Actions
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -728,15 +893,63 @@ class _AssignedProjectsScreenState
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      project.projectCode.isNotEmpty
-                          ? project.projectCode
-                          : (project.id.isNotEmpty ? project.id : '—'),
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF22282D),
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                project.projectCode.isNotEmpty
+                                    ? project.projectCode
+                                    : (project.id.isNotEmpty ? project.id : '—'),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF22282D),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF9CC70A)
+                                    .withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                statusText,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF414A51),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (project.generalDetails.isNotEmpty ||
+                            project.clientName.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            project.generalDetails.isNotEmpty
+                                ? project.generalDetails
+                                : project.clientName,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   // 5. View Action
@@ -745,20 +958,6 @@ class _AssignedProjectsScreenState
                     color: const Color(0xFF414A51),
                     tooltip: 'View Details',
                     onPressed: () => _openDetails(context, project),
-                  ),
-                  // Breakdown Action
-                  IconButton(
-                    icon: const Icon(Icons.table_chart_outlined, size: 20),
-                    color: const Color(0xFF0284C7),
-                    tooltip: 'Project Breakdown',
-                    onPressed: () => _openBreakdown(context, project),
-                  ),
-                  // Budget Action
-                  IconButton(
-                    icon: const Icon(Icons.pie_chart_outline_rounded, size: 20),
-                    color: const Color(0xFF0D9488),
-                    tooltip: 'Project Budget & Profitability',
-                    onPressed: () => _openBudget(context, project),
                   ),
                   // 6. Edit Action
                   IconButton(
@@ -829,6 +1028,74 @@ class _AssignedProjectsScreenState
                   ),
                   Expanded(
                     child: _buildLastUpdateCell(project),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // View / Manage Project Primary Button
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF414A51),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  onPressed: () => _openManageProject(context, project),
+                  icon: const Icon(
+                    Icons.dashboard_customize_outlined,
+                    size: 16,
+                    color: Color(0xFF9CC70A),
+                  ),
+                  label: const Text(
+                    'View / Manage Project',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+
+              // Sub-actions: Breakdown & Budget
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF0284C7),
+                        side: const BorderSide(color: Color(0xFF0284C7)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      onPressed: () => _openBreakdown(context, project),
+                      icon: const Icon(Icons.table_chart_outlined, size: 14),
+                      label: const Text('Breakdown', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF0D9488),
+                        side: const BorderSide(color: Color(0xFF0D9488)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      onPressed: () => _openBudget(context, project),
+                      icon: const Icon(Icons.pie_chart_outline_rounded, size: 14),
+                      label: const Text('Budget', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                    ),
                   ),
                 ],
               ),
