@@ -16,6 +16,8 @@ import '../../employee/providers/employee_providers.dart';
 import '../../loan/providers/loan_providers.dart';
 import '../../permission/providers/permission_providers.dart';
 import '../../attendance/services/attendance_location_service.dart';
+import '../../notifications/presentation/notifications_popover.dart';
+import '../../notifications/providers/notification_providers.dart';
 
 final sidebarStateStorageProvider = Provider<SidebarStateStorage>(
   (_) => createSidebarStateStorage(),
@@ -759,35 +761,45 @@ class _TopBar extends ConsumerWidget {
                 ),
                 const SizedBox(width: 4),
               ],
-              Stack(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.notifications_outlined, color: Color(0xFF414A51), size: 20),
-                      onPressed: () {},
-                    ),
-                  ),
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFC62828),
-                        shape: BoxShape.circle,
+              Consumer(
+                builder: (context, ref, _) {
+                  final unreadCount = ref.watch(unreadNotificationsCountProvider);
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.notifications_outlined, color: Color(0xFF414A51), size: 20),
+                          onPressed: () => NotificationsPopover.showAsBottomSheet(context),
+                        ),
                       ),
-                      child: const Text(
-                        '1',
-                        style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ],
+                      if (unreadCount > 0)
+                        Positioned(
+                          right: 2,
+                          top: 2,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFC62828),
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                            child: Center(
+                              child: Text(
+                                unreadCount > 99 ? '99+' : '$unreadCount',
+                                style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
               ),
             ],
             if (!compact) ...[
@@ -842,10 +854,40 @@ class _TopBar extends ConsumerWidget {
                   ),
                 ],
               ),
-              IconButton(
-                tooltip: 'Notifications',
-                onPressed: () {},
-                icon: const Icon(Icons.notifications_none),
+              Consumer(
+                builder: (context, ref, _) {
+                  final unreadCount = ref.watch(unreadNotificationsCountProvider);
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.center,
+                    children: [
+                      IconButton(
+                        tooltip: 'Notifications',
+                        onPressed: () => NotificationsPopover.showAsDesktopDialog(context),
+                        icon: const Icon(Icons.notifications_none, color: Color(0xFF414A51)),
+                      ),
+                      if (unreadCount > 0)
+                        Positioned(
+                          right: 6,
+                          top: 6,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFC62828),
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                            child: Center(
+                              child: Text(
+                                unreadCount > 99 ? '99+' : '$unreadCount',
+                                style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
               ),
             ],
             const SizedBox(width: 4),

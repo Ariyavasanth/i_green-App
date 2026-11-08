@@ -11,6 +11,8 @@ import '../../projects/presentation/dialogs/project_picker_dialog.dart';
 import '../../projects/providers/project_providers.dart';
 import '../../task_management/providers/task_providers.dart';
 import '../../time_clocking/providers/clocking_providers.dart';
+import '../../notifications/domain/app_notification.dart';
+import '../../notifications/providers/notification_providers.dart';
 import '../domain/on_duty_assignment.dart';
 import '../domain/on_duty_site.dart';
 import '../providers/on_duty_providers.dart';
@@ -1289,6 +1291,22 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
 
       final createdId = await repo.createAssignment(newAssignment);
 
+      try {
+        ref.read(notificationRepositoryProvider).sendNotification(
+          AppNotification(
+            id: '',
+            title: 'New On-Duty Request',
+            message: '${_selectedEmployee!.fullName} submitted an On-Duty request for ${primarySite.effectiveName} on $todayStr.',
+            type: 'od_request',
+            requiredPermission: 'On-Duty Management',
+            senderId: _selectedEmployee!.id.toString(),
+            senderName: _selectedEmployee!.fullName,
+            route: '/on-duty-management',
+            createdAt: DateTime.now(),
+          ),
+        );
+      } catch (_) {}
+
       // Start OD Attendance Session only if NOT starting from home.
       // For first OD starting from home, check-in will be recorded when the employee reaches the OD site.
       if (!_startOdFromHome) {
@@ -1429,6 +1447,24 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
           createdAt: DateTime.now().toIso8601String(),
         );
         await repo.createAssignment(assignment);
+
+        if (widget.isSelfRequest || assignedByVal.startsWith('Self')) {
+          try {
+            ref.read(notificationRepositoryProvider).sendNotification(
+              AppNotification(
+                id: '',
+                title: 'New On-Duty Request',
+                message: '${_selectedEmployee!.fullName} submitted an On-Duty request for ${primarySite.effectiveName} on $dateStr.',
+                type: 'od_request',
+                requiredPermission: 'On-Duty Management',
+                senderId: _selectedEmployee!.id.toString(),
+                senderName: _selectedEmployee!.fullName,
+                route: '/on-duty-management',
+                createdAt: DateTime.now(),
+              ),
+            );
+          } catch (_) {}
+        }
       }
 
       // Invalidate providers

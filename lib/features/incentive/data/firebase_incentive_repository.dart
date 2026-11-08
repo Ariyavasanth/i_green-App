@@ -99,10 +99,34 @@ class FirebaseIncentiveRepository implements IncentiveRepository {
   @override
   Future<void> createRequest(IncentiveRequest request) async {
     final data = Map<String, dynamic>.from(request.toMap());
-    data['id'] =
-        request.id ?? (DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF);
+    final genId = request.id ?? (DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF);
+    data['id'] = genId;
     data['updated_at'] = FieldValue.serverTimestamp();
     await _requests.doc().set(data);
+
+    try {
+      final notifDoc = _firestore.collection('notifications').doc();
+      final amtStr = request.amount.toStringAsFixed(0);
+      await notifDoc.set({
+        'id': notifDoc.id,
+        'title': 'New Incentive Request',
+        'message': '${request.employeeName} submitted an incentive request for ${request.productName} (₹$amtStr).',
+        'type': 'incentive_request',
+        'required_permission': 'Incentive Management',
+        'sender_id': request.employeeId?.toString(),
+        'sender_name': request.employeeName,
+        'route': '/incentive-management',
+        'created_at': DateTime.now().toIso8601String(),
+        'server_timestamp': FieldValue.serverTimestamp(),
+        'read_by_employee_ids': <String>[],
+        'metadata': {
+          'incentive_request_id': genId,
+          'product_name': request.productName,
+          'site': request.site,
+          'amount': request.amount,
+        },
+      });
+    } catch (_) {}
   }
 
   @override

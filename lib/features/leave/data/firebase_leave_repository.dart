@@ -264,6 +264,31 @@ class FirebaseLeaveRepository implements LeaveRepository {
     data['submitted_at'] = FieldValue.serverTimestamp();
 
     await docRef.set(data);
+
+    try {
+      final daysStr = request.numDays % 1 == 0
+          ? request.numDays.toInt().toString()
+          : request.numDays.toString();
+      final notifDoc = _firestore.collection('notifications').doc();
+      await notifDoc.set({
+        'id': notifDoc.id,
+        'title': 'New Leave Request',
+        'message': '${request.employeeName} submitted a leave request for ${request.leaveType} ($daysStr days).',
+        'type': 'leave_request',
+        'required_permission': 'Leave Management',
+        'sender_id': request.employeeId.toString(),
+        'sender_name': request.employeeName,
+        'route': '/leave-management',
+        'created_at': DateTime.now().toIso8601String(),
+        'server_timestamp': FieldValue.serverTimestamp(),
+        'read_by_employee_ids': <String>[],
+        'metadata': {
+          'leave_request_id': generatedId,
+          'from_date': request.fromDate,
+          'to_date': request.toDate,
+        },
+      });
+    } catch (_) {}
   }
 
   @override

@@ -10,6 +10,8 @@ import '../features/employee/domain/employee.dart';
 import '../features/employee/providers/employee_providers.dart';
 import '../widgets/brand_logo.dart';
 import '../widgets/module_card.dart';
+import '../features/notifications/presentation/notifications_popover.dart';
+import '../features/notifications/providers/notification_providers.dart';
 
 class ModuleDashboardScreen extends ConsumerWidget {
   const ModuleDashboardScreen({super.key});
@@ -173,11 +175,22 @@ class _DashboardTopBar extends StatelessWidget {
               ),
               const Spacer(),
               // Notification Button
-              _TopBarIconButton(
-                icon: Icons.notifications_none_rounded,
-                tooltip: 'Notifications',
-                hasBadge: true,
-                onTap: () {},
+              Consumer(
+                builder: (context, ref, _) {
+                  final unreadCount = ref.watch(unreadNotificationsCountProvider);
+                  return _TopBarIconButton(
+                    icon: Icons.notifications_none_rounded,
+                    tooltip: 'Notifications',
+                    hasBadge: unreadCount > 0,
+                    onTap: () {
+                      if (isNarrow) {
+                        NotificationsPopover.showAsBottomSheet(context);
+                      } else {
+                        NotificationsPopover.showAsDesktopDialog(context);
+                      }
+                    },
+                  );
+                },
               ),
               if (!isNarrow) ...[
                 const SizedBox(width: 8),

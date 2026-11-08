@@ -10,6 +10,8 @@ import '../domain/holiday.dart';
 import '../domain/leave_overlap_validator.dart';
 import '../providers/leave_providers.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../notifications/presentation/notifications_popover.dart';
+import '../../notifications/providers/notification_providers.dart';
 
 enum EmployeeLeaveTab {
   dashboard,
@@ -789,7 +791,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
       greeting = 'Good Evening';
     }
 
-    final unreadCount = _notifications.where((n) => !n['isRead']).length;
+    final unreadCount = ref.watch(unreadNotificationsCountProvider);
     final empName = currentEmp.fullName.isNotEmpty ? currentEmp.fullName : 'Employee';
 
     return Container(
@@ -1867,27 +1869,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
 
   // --- MODALS & DIALOGS ---
   void _showNotificationBottomSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Notifications', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            ..._notifications.map((n) => ListTile(
-                  leading: Icon(n['icon'] as IconData, color: n['color'] as Color),
-                  title: Text(n['title'] as String, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: Text(n['message'] as String, style: const TextStyle(fontSize: 12)),
-                  trailing: Text(n['time'] as String, style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                )),
-          ],
-        ),
-      ),
-    );
+    NotificationsPopover.showAsBottomSheet(context);
   }
 
   void _showRequestDetailsModal(LeaveRequest req) {
