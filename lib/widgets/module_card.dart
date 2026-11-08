@@ -1,8 +1,11 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/app_colors.dart';
+import '../features/notifications/presentation/notifications_popover.dart';
+import '../features/notifications/providers/notification_providers.dart';
 
 /// A top-level module card (large, for the module dashboard).
 class ModuleCard extends StatefulWidget {
@@ -682,10 +685,34 @@ class DesktopModuleScreenHeader extends StatelessWidget {
             onPressed: () {},
             tooltip: 'Calendar',
           ),
-          IconButton(
-            icon: const Icon(Icons.notifications_none_rounded, size: 21, color: Color(0xFF64748B)),
-            onPressed: () {},
-            tooltip: 'Notifications',
+          Consumer(
+            builder: (context, ref, _) {
+              final unreadCount = ref.watch(unreadNotificationsCountProvider);
+              return Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications_none_rounded, size: 21, color: Color(0xFF64748B)),
+                    onPressed: () => NotificationsPopover.showAsDesktopDialog(context),
+                    tooltip: 'Notifications',
+                  ),
+                  if (unreadCount > 0)
+                    Positioned(
+                      top: 7,
+                      right: 7,
+                      child: Container(
+                        width: 7,
+                        height: 7,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFFE53935),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
           const SizedBox(width: 8),
           InkWell(
