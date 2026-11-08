@@ -71,6 +71,13 @@ class SiteProject {
     // Section 11 – SD Date / Bank Guarantee / Bill Deduction
     this.sdDateRemark = '',
     this.sdDateDocuments = const [],
+    this.sdAmount = 0.0,
+    this.sdAgreementNo = '',
+    this.sdAgreementDate,
+    // Work Start & Timeline
+    this.siteHandoverDate,
+    this.workStartDate,
+    this.targetCompletionDate,
     // Section 12 – BOQ
     this.boqRemark = '',
     this.boqDocuments = const [],
@@ -235,6 +242,14 @@ class SiteProject {
   // Section 11 – SD Date / Bank Guarantee / Bill Deduction
   final String sdDateRemark;
   final List<ProjectDocument> sdDateDocuments;
+  final double sdAmount;
+  final String sdAgreementNo;
+  final DateTime? sdAgreementDate;
+
+  // Work Start & Timeline
+  final DateTime? siteHandoverDate;
+  final DateTime? workStartDate;
+  final DateTime? targetCompletionDate;
 
   // Section 12 – BOQ
   final String boqRemark;
@@ -387,6 +402,13 @@ class SiteProject {
         // SD Date
         'sd_date_remark': sdDateRemark,
         'sd_date_documents': sdDateDocuments.map((d) => d.toJson()).toList(),
+        'sd_amount': sdAmount,
+        'sd_agreement_no': sdAgreementNo,
+        'sd_agreement_date': sdAgreementDate?.toIso8601String(),
+        // Work Start & Timeline
+        'site_handover_date': siteHandoverDate?.toIso8601String(),
+        'work_start_date': workStartDate?.toIso8601String(),
+        'target_completion_date': targetCompletionDate?.toIso8601String(),
         // BOQ
         'boq_remark': boqRemark,
         'boq_documents': boqDocuments.map((d) => d.toJson()).toList(),
@@ -606,9 +628,24 @@ class SiteProject {
       competitorName: json['competitor_name'] as String? ?? '',
       quotedAmount: (json['quoted_amount'] as num?)?.toDouble() ?? 0.0,
       tenderLostDocuments: parseDocList(json['tender_lost_documents']),
-      // SD Date
+      // SD Date & Agreement
       sdDateRemark: json['sd_date_remark'] as String? ?? '',
       sdDateDocuments: parseDocList(json['sd_date_documents']),
+      sdAmount: (json['sd_amount'] as num?)?.toDouble() ?? 0.0,
+      sdAgreementNo: json['sd_agreement_no'] as String? ?? '',
+      sdAgreementDate: json['sd_agreement_date'] != null
+          ? DateTime.tryParse(json['sd_agreement_date'].toString())
+          : null,
+      // Work Start & Timeline
+      siteHandoverDate: json['site_handover_date'] != null
+          ? DateTime.tryParse(json['site_handover_date'].toString())
+          : null,
+      workStartDate: json['work_start_date'] != null
+          ? DateTime.tryParse(json['work_start_date'].toString())
+          : null,
+      targetCompletionDate: json['target_completion_date'] != null
+          ? DateTime.tryParse(json['target_completion_date'].toString())
+          : null,
       // BOQ
       boqRemark: json['boq_remark'] as String? ?? '',
       boqDocuments: parseDocList(json['boq_documents']),
@@ -760,6 +797,12 @@ class SiteProject {
     // SD Date
     String? sdDateRemark,
     List<ProjectDocument>? sdDateDocuments,
+    double? sdAmount,
+    String? sdAgreementNo,
+    DateTime? sdAgreementDate,
+    DateTime? siteHandoverDate,
+    DateTime? workStartDate,
+    DateTime? targetCompletionDate,
     // BOQ
     String? boqRemark,
     List<ProjectDocument>? boqDocuments,
@@ -881,6 +924,12 @@ class SiteProject {
       tenderLostDocuments: tenderLostDocuments ?? this.tenderLostDocuments,
       sdDateRemark: sdDateRemark ?? this.sdDateRemark,
       sdDateDocuments: sdDateDocuments ?? this.sdDateDocuments,
+      sdAmount: sdAmount ?? this.sdAmount,
+      sdAgreementNo: sdAgreementNo ?? this.sdAgreementNo,
+      sdAgreementDate: sdAgreementDate ?? this.sdAgreementDate,
+      siteHandoverDate: siteHandoverDate ?? this.siteHandoverDate,
+      workStartDate: workStartDate ?? this.workStartDate,
+      targetCompletionDate: targetCompletionDate ?? this.targetCompletionDate,
       boqRemark: boqRemark ?? this.boqRemark,
       boqDocuments: boqDocuments ?? this.boqDocuments,
       projectDetailsRemark: projectDetailsRemark ?? this.projectDetailsRemark,

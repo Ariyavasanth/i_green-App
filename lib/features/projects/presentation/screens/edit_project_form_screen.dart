@@ -11,11 +11,14 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../employee/domain/employee.dart';
 import '../../../employee/providers/employee_providers.dart';
 import '../../domain/models/deduction_entry.dart';
+import '../../domain/models/project_breakdown_item.dart';
+import '../../domain/models/project_budget.dart';
 import '../../domain/models/project_document.dart';
 import '../../domain/models/site_project.dart';
 import '../../domain/models/tender_description_item.dart';
 import '../../providers/project_providers.dart';
 import '../dialogs/project_audit_history_dialog.dart';
+import '../screens/project_budget_screen.dart';
 
 // ─── Scope of work equipment/resource catalog ───
 const List<Map<String, dynamic>> _kScopeCatalog = [
@@ -61,6 +64,30 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
   String _lastUpdatedEmployee = '';
   String _lastUpdatedEmployeeId = '';
   DateTime? _lastUpdatedDate;
+
+  // ─── SD Agreement & Work Commencement ───
+  final _sdAmountCtrl = TextEditingController();
+  final _sdAgreementNoCtrl = TextEditingController();
+  DateTime? _sdAgreementDate;
+  DateTime? _siteHandoverDate;
+  DateTime? _workStartDate;
+  DateTime? _targetCompletionDate;
+
+  // ─── Supply Items (Materials) ───
+  final List<ProjectBreakdownItem> _supplyItems = [];
+  final _supplyDescCtrl = TextEditingController();
+  final _supplyUnitCtrl = TextEditingController();
+  final _supplyQtyCtrl = TextEditingController();
+  final _supplyRateCtrl = TextEditingController();
+  final _supplyAmountCtrl = TextEditingController();
+
+  // ─── Service Items (Works) ───
+  final List<ProjectBreakdownItem> _serviceItems = [];
+  final _serviceDescCtrl = TextEditingController();
+  final _serviceUnitCtrl = TextEditingController();
+  final _serviceQtyCtrl = TextEditingController();
+  final _serviceRateCtrl = TextEditingController();
+  final _serviceAmountCtrl = TextEditingController();
 
   // ─── Section 1: Tender & Assignment ───
   String _qualified = 'Yes';
@@ -186,12 +213,18 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
   ];
   static const List<String> _flowOfBillsOptions = [
     '',
-    'Pending',
-    'Submitted',
-    'Under Review',
-    'Approved',
-    'Rejected',
-    'Paid',
+    'JE',
+    'AE',
+    'AD',
+    'DE',
+    'SE',
+    'CE',
+    'MM',
+    'DFC',
+    'APS',
+    'DO',
+    'AO',
+    'Cash',
   ];
   static const List<String> _ownOrSubcontractOptions = [
     '',
@@ -277,6 +310,34 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
 
     _sdDateRemarkCtrl.text = p.sdDateRemark;
     _existingSdDateDocs = List.from(p.sdDateDocuments);
+    _sdAmountCtrl.text = p.sdAmount > 0
+        ? (p.sdAmount % 1 == 0
+            ? p.sdAmount.toInt().toString()
+            : p.sdAmount.toString())
+        : '';
+    _sdAgreementNoCtrl.text = p.sdAgreementNo;
+    _sdAgreementDate = p.sdAgreementDate;
+
+    _siteHandoverDate = p.siteHandoverDate;
+    _workStartDate = p.workStartDate;
+    _targetCompletionDate = p.targetCompletionDate;
+
+    _supplyItems.clear();
+    _supplyItems.addAll(p.breakdownMaterials);
+
+    _serviceItems.clear();
+    _serviceItems.addAll(p.breakdownServices);
+    if (_serviceItems.isEmpty && p.tenderDescriptions.isNotEmpty) {
+      for (final td in p.tenderDescriptions) {
+        _serviceItems.add(ProjectBreakdownItem.create(
+          description: td.description,
+          unit: td.unit,
+          quantity: td.quantity,
+          rate: td.rate,
+          type: BreakdownItemType.service,
+        ));
+      }
+    }
 
     _boqRemarkCtrl.text = p.boqRemark;
     _existingBoqDocs = List.from(p.boqDocuments);
@@ -356,6 +417,18 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
     _competitorNameCtrl.dispose();
     _quotedAmountCtrl.dispose();
     _sdDateRemarkCtrl.dispose();
+    _sdAmountCtrl.dispose();
+    _sdAgreementNoCtrl.dispose();
+    _supplyDescCtrl.dispose();
+    _supplyUnitCtrl.dispose();
+    _supplyQtyCtrl.dispose();
+    _supplyRateCtrl.dispose();
+    _supplyAmountCtrl.dispose();
+    _serviceDescCtrl.dispose();
+    _serviceUnitCtrl.dispose();
+    _serviceQtyCtrl.dispose();
+    _serviceRateCtrl.dispose();
+    _serviceAmountCtrl.dispose();
     _boqRemarkCtrl.dispose();
     _projectDetailsRemarkCtrl.dispose();
     _workOrderRemarkCtrl.dispose();
@@ -652,17 +725,38 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
       final currentEmp = ref.read(currentEmployeeProvider);
 
       final updatedProject = _loadedProject!.copyWith(
-        tenderType: _selectedTenderType,
-        qualified: _qualified,
-        tenderAmount:
-            double.tryParse(_tenderAmountCtrl.text.trim()) ?? 0.0,
+        tenderType: _selectedTenderType.isNotEmpty
+            ? _selectedTenderType
+            : _loadedProject!.tenderType,
+        qualified:
+            _qualified.isNotEmpty ? _qualified : _loadedProject!.qualified,
+        tenderAmount: double.tryParse(_tenderAmountCtrl.text.trim()) ??
+            _loadedProject!.tenderAmount,
         approximateProjectValue:
             double.tryParse(_approximateProjectValueCtrl.text.trim()) ?? 0.0,
         actualProjectValue:
             double.tryParse(_actualProjectValueCtrl.text.trim()) ?? 0.0,
+        sdAmount: double.tryParse(_sdAmountCtrl.text.trim()) ?? 0.0,
+        sdAgreementNo: _sdAgreementNoCtrl.text.trim(),
+        sdAgreementDate: _sdAgreementDate,
+        siteHandoverDate: _siteHandoverDate,
+        workStartDate: _workStartDate,
+        targetCompletionDate: _targetCompletionDate,
+        breakdownMaterials: List.from(_supplyItems),
+        breakdownServices: List.from(_serviceItems),
+        tenderDescriptions: _serviceItems.isNotEmpty
+            ? _serviceItems
+                .map<TenderDescriptionItem>((s) => TenderDescriptionItem(
+                      description: s.description,
+                      unit: s.unit,
+                      quantity: s.quantity,
+                      rate: s.rate,
+                      amount: s.amount,
+                    ))
+                .toList()
+            : List<TenderDescriptionItem>.from(_tenderDescriptions),
         tenderSpecRemark: _tenderSpecRemarkCtrl.text.trim(),
         tenderSpecDocuments: _existingTenderSpecDocs,
-        tenderDescriptions: List.from(_tenderDescriptions),
         assignedToEmployeeNames:
             _selectedAssignedEmployees.map((e) => e.fullName).toList(),
         assignedToEmployeeIds:
@@ -683,20 +777,23 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
             ? _selectedAssignedEmployees.first.emailAddress
             : (_loadedProject?.assignedToEmail ?? ''),
         assignedDate: _loadedProject?.assignedDate,
-        openingDate: _openingDate,
-        openingDateRemark: _openingDateRemarkCtrl.text.trim(),
-        closingDate: _closingDate,
-        closingDateRemark: _closingDateRemarkCtrl.text.trim(),
-        bqrRemark: _bqrRemarkCtrl.text.trim(),
-        bqrDocuments: _existingBqrDocs,
-        emdRemark: _emdRemarkCtrl.text.trim(),
-        emdDocuments: _existingEmdDocs,
-        tenderLostRemark: _tenderLostRemarkCtrl.text.trim(),
-        tenderLostStatus: _tenderLostStatus,
-        competitorName: _competitorNameCtrl.text.trim(),
-        quotedAmount:
-            double.tryParse(_quotedAmountCtrl.text.trim()) ?? 0.0,
-        tenderLostDocuments: _existingTenderLostDocs,
+        openingDate: _loadedProject?.openingDate,
+        openingDateRemark: _loadedProject?.openingDateRemark ?? '',
+        closingDate: _loadedProject?.closingDate,
+        closingDateRemark: _loadedProject?.closingDateRemark ?? '',
+        bqrRemark: _loadedProject?.bqrRemark ?? '',
+        bqrDocuments: _existingBqrDocs.isNotEmpty
+            ? _existingBqrDocs
+            : (_loadedProject?.bqrDocuments ?? const []),
+        emdRemark: _loadedProject?.emdRemark ?? '',
+        emdDocuments: _existingEmdDocs.isNotEmpty
+            ? _existingEmdDocs
+            : (_loadedProject?.emdDocuments ?? const []),
+        tenderLostRemark: _loadedProject?.tenderLostRemark ?? '',
+        tenderLostStatus: _loadedProject?.tenderLostStatus ?? '',
+        competitorName: _loadedProject?.competitorName ?? '',
+        quotedAmount: _loadedProject?.quotedAmount ?? 0.0,
+        tenderLostDocuments: _loadedProject?.tenderLostDocuments ?? const [],
         sdDateRemark: _sdDateRemarkCtrl.text.trim(),
         sdDateDocuments: _existingSdDateDocs,
         boqRemark: _boqRemarkCtrl.text.trim(),
@@ -915,29 +1012,21 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
                   _buildProjectIdentityCard(p),
                   const SizedBox(height: 18),
 
-                  // ── SECTION 1: Tender & Assignment Details ──
+                  // ── SECTION 01: Agreement & Security Deposit (SD Agreement) ──
                   _buildSectionContainer(
                     badge: 'SECTION 01',
-                    title: 'Tender & Assignment Details',
-                    subtitle: 'Manage tender categorization, scope items, and assigned project teams.',
-                    icon: Icons.assignment_outlined,
+                    title: 'Agreement & Security Deposit (SD)',
+                    subtitle: 'Record finalized contract value, work order / LOA, and security deposit agreement.',
+                    icon: Icons.assignment_turned_in_outlined,
                     children: [
-                      _buildSubheading('TENDER CATEGORY & AMOUNT'),
-                      _buildTenderTypeGrid(tenderTypesAsync.valueOrNull ?? []),
-                      const SizedBox(height: 16),
-                      _buildSubheading('TENDER SPECIFICATION & ENQUIRY'),
-                      _buildModernUploadRow(
-                        remarkCtrl: _tenderSpecRemarkCtrl,
-                        remarkHint: 'Enter tender enquiry specifications or notes...',
-                        files: _tenderSpecFiles,
-                        existingDocs: _existingTenderSpecDocs,
-                        onExistingRemoved: (doc) =>
-                            setState(() => _existingTenderSpecDocs.remove(doc)),
-                        label: 'Tender Spec Documents',
-                      ),
-                      const SizedBox(height: 20),
-                      _buildSubheading('TENDER DESCRIPTION BREAKDOWN'),
-                      _buildTenderDescriptionModule(),
+                      _buildSubheading('AWARDED CONTRACT VALUES'),
+                      _buildAwardValueModule(),
+                      const SizedBox(height: 18),
+                      _buildSubheading('SD AGREEMENT & BANK GUARANTEE'),
+                      _buildSdAgreementModule(),
+                      const SizedBox(height: 18),
+                      _buildSubheading('WORK ORDER / LOA & CONTRACT AGREEMENT'),
+                      _buildContractDocumentsModule(),
                       const SizedBox(height: 20),
                       _buildSubheading('TEAM ALLOCATION'),
                       _buildAssignedTeamModule(allEmployees),
@@ -945,236 +1034,60 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
                   ),
                   const SizedBox(height: 18),
 
-                  // ── SECTION 2: Key Dates & Documents ──
+                  // ── SECTION 02: Work Start & Site Handover ──
                   _buildSectionContainer(
                     badge: 'SECTION 02',
-                    title: 'Key Dates & Compliance Documents',
-                    subtitle: 'Track opening, closing dates, BQR/EMD verification, and tender results.',
+                    title: 'Work Start & Site Handover',
+                    subtitle: 'Track site possession, work commencement date, and target completion schedule.',
                     icon: Icons.calendar_month_outlined,
                     children: [
-                      if (_isMobile) ...[
-                        _buildModernDateInput(
-                          label: 'Opening Date',
-                          date: _openingDate,
-                          remarkCtrl: _openingDateRemarkCtrl,
-                          onPick: () => _pickDate(
-                            current: _openingDate,
-                            onPicked: (d) => setState(() => _openingDate = d),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildModernDateInput(
-                          label: 'Closing Date',
-                          date: _closingDate,
-                          remarkCtrl: _closingDateRemarkCtrl,
-                          onPick: () => _pickDate(
-                            current: _closingDate,
-                            onPicked: (d) => setState(() => _closingDate = d),
-                          ),
-                        ),
-                      ] else ...[
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildModernDateInput(
-                                label: 'Opening Date',
-                                date: _openingDate,
-                                remarkCtrl: _openingDateRemarkCtrl,
-                                onPick: () => _pickDate(
-                                  current: _openingDate,
-                                  onPicked: (d) => setState(() => _openingDate = d),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: _buildModernDateInput(
-                                label: 'Closing Date',
-                                date: _closingDate,
-                                remarkCtrl: _closingDateRemarkCtrl,
-                                onPick: () => _pickDate(
-                                  current: _closingDate,
-                                  onPicked: (d) => setState(() => _closingDate = d),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      _buildSubheading('BQR & EMD COMPLIANCE'),
-                      _buildModernUploadRow(
-                        remarkCtrl: _bqrRemarkCtrl,
-                        remarkHint: 'Bidder qualification requirement remarks...',
-                        files: _bqrFiles,
-                        existingDocs: _existingBqrDocs,
-                        onExistingRemoved: (doc) =>
-                            setState(() => _existingBqrDocs.remove(doc)),
-                        label: 'BQR Documents',
-                      ),
-                      const SizedBox(height: 14),
-                      _buildModernUploadRow(
-                        remarkCtrl: _emdRemarkCtrl,
-                        remarkHint: 'EMD details or exemption notes...',
-                        files: _emdFiles,
-                        existingDocs: _existingEmdDocs,
-                        onExistingRemoved: (doc) =>
-                            setState(() => _existingEmdDocs.remove(doc)),
-                        label: 'EMD / Exemption Documents',
-                      ),
-                      const SizedBox(height: 20),
-                      _buildSubheading('TENDER OUTCOME / LOST TRACKING'),
-                      _buildTenderLostModule(),
+                      _buildWorkStartModule(),
                     ],
                   ),
                   const SizedBox(height: 18),
 
-                  // ── SECTION 3: Project Execution & Technical Specifications ──
+                  // ── SECTION 03: Project Budget ──
                   _buildSectionContainer(
                     badge: 'SECTION 03',
-                    title: 'Project Execution & Technical Specs',
-                    subtitle: 'BOQ, contracts, drawings, material supplies, machinery, and scope.',
-                    icon: Icons.engineering_outlined,
+                    title: 'Project Budget & Cost Estimation',
+                    subtitle: 'Track approved expenditure across materials, services, machinery, and subcontracts.',
+                    icon: Icons.pie_chart_outline_rounded,
                     children: [
+                      _buildProjectBudgetOverviewModule(p),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+
+                  // ── SECTION 04: Supply Items (Materials) ──
+                  _buildSectionContainer(
+                    badge: 'SECTION 04',
+                    title: 'Supply Items (Materials)',
+                    subtitle: 'Itemize physical materials supplied for execution (HDPE pipes, MS pipes, cables, clamps, fittings).',
+                    icon: Icons.inventory_2_outlined,
+                    children: [
+                      _buildSupplyItemsModule(),
+                      const SizedBox(height: 16),
+                      _buildSubheading('SUPPLY DOCUMENTS & DELIVERY CHALLANS'),
                       _buildModernUploadRow(
-                        remarkCtrl: _sdDateRemarkCtrl,
-                        remarkHint: 'SD / Bank guarantee / deduction notes...',
-                        files: _sdDateFiles,
-                        existingDocs: _existingSdDateDocs,
-                        onExistingRemoved: (doc) =>
-                            setState(() => _existingSdDateDocs.remove(doc)),
-                        label: 'SD Date / Bank Guarantee / Bill Deduction',
+                        remarkCtrl: _supplyMaterialsRemarkCtrl,
+                        remarkHint: 'Supply delivery challans, material test reports, or purchase order notes...',
+                        files: _supplyMaterialsFiles,
+                        existingDocs: _existingSupplyMaterialsDocs,
+                        onExistingRemoved: (doc) => setState(() => _existingSupplyMaterialsDocs.remove(doc)),
+                        label: 'Supply Documents / Challans',
                       ),
-                      const SizedBox(height: 14),
-                      if (_isMobile) ...[
-                        _buildModernUploadRow(
-                          remarkCtrl: _boqRemarkCtrl,
-                          remarkHint: 'BOQ remarks...',
-                          files: _boqFiles,
-                          existingDocs: _existingBoqDocs,
-                          onExistingRemoved: (doc) =>
-                              setState(() => _existingBoqDocs.remove(doc)),
-                          label: 'BOQ Document',
-                        ),
-                        const SizedBox(height: 12),
-                        _buildModernUploadRow(
-                          remarkCtrl: _projectDetailsRemarkCtrl,
-                          remarkHint: 'Site details...',
-                          files: _projectDetailsFiles,
-                          existingDocs: _existingProjectDetailsDocs,
-                          onExistingRemoved: (doc) => setState(
-                              () => _existingProjectDetailsDocs.remove(doc)),
-                          label: 'Project Details',
-                        ),
-                        const SizedBox(height: 12),
-                        _buildModernUploadRow(
-                          remarkCtrl: _workOrderRemarkCtrl,
-                          remarkHint: 'LOA / work order notes...',
-                          files: _workOrderFiles,
-                          existingDocs: _existingWorkOrderDocs,
-                          onExistingRemoved: (doc) =>
-                              setState(() => _existingWorkOrderDocs.remove(doc)),
-                          label: 'Work Order / LOA',
-                        ),
-                        const SizedBox(height: 12),
-                        _buildModernUploadRow(
-                          remarkCtrl: _agreementRemarkCtrl,
-                          remarkHint: 'Agreement notes...',
-                          files: _agreementFiles,
-                          existingDocs: _existingAgreementDocs,
-                          onExistingRemoved: (doc) =>
-                              setState(() => _existingAgreementDocs.remove(doc)),
-                          label: 'Agreement Document',
-                        ),
-                        const SizedBox(height: 12),
-                        _buildProfileDrawingModule(),
-                        const SizedBox(height: 12),
-                        _buildModernUploadRow(
-                          remarkCtrl: _supplyMaterialsRemarkCtrl,
-                          remarkHint: 'Supply notes and budget...',
-                          files: _supplyMaterialsFiles,
-                          existingDocs: _existingSupplyMaterialsDocs,
-                          onExistingRemoved: (doc) => setState(
-                              () => _existingSupplyMaterialsDocs.remove(doc)),
-                          label: 'Supply of Materials with Budget',
-                        ),
-                      ] else ...[
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildModernUploadRow(
-                                remarkCtrl: _boqRemarkCtrl,
-                                remarkHint: 'BOQ remarks...',
-                                files: _boqFiles,
-                                existingDocs: _existingBoqDocs,
-                                onExistingRemoved: (doc) =>
-                                    setState(() => _existingBoqDocs.remove(doc)),
-                                label: 'BOQ Document',
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: _buildModernUploadRow(
-                                remarkCtrl: _projectDetailsRemarkCtrl,
-                                remarkHint: 'Site details...',
-                                files: _projectDetailsFiles,
-                                existingDocs: _existingProjectDetailsDocs,
-                                onExistingRemoved: (doc) => setState(
-                                    () => _existingProjectDetailsDocs.remove(doc)),
-                                label: 'Project Details',
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildModernUploadRow(
-                                remarkCtrl: _workOrderRemarkCtrl,
-                                remarkHint: 'LOA / work order notes...',
-                                files: _workOrderFiles,
-                                existingDocs: _existingWorkOrderDocs,
-                                onExistingRemoved: (doc) =>
-                                    setState(() => _existingWorkOrderDocs.remove(doc)),
-                                label: 'Work Order / LOA',
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: _buildModernUploadRow(
-                                remarkCtrl: _agreementRemarkCtrl,
-                                remarkHint: 'Agreement notes...',
-                                files: _agreementFiles,
-                                existingDocs: _existingAgreementDocs,
-                                onExistingRemoved: (doc) =>
-                                    setState(() => _existingAgreementDocs.remove(doc)),
-                                label: 'Agreement Document',
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildProfileDrawingModule(),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: _buildModernUploadRow(
-                                remarkCtrl: _supplyMaterialsRemarkCtrl,
-                                remarkHint: 'Supply notes and budget...',
-                                files: _supplyMaterialsFiles,
-                                existingDocs: _existingSupplyMaterialsDocs,
-                                onExistingRemoved: (doc) => setState(
-                                    () => _existingSupplyMaterialsDocs.remove(doc)),
-                                label: 'Supply of Materials with Budget',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+
+                  // ── SECTION 05: Service Items & Scope of Work ──
+                  _buildSectionContainer(
+                    badge: 'SECTION 05',
+                    title: 'Service Items & Execution Scope',
+                    subtitle: 'Itemize work activities (HDD drilling, pipe laying, trenching, welding) and resource mobilization.',
+                    icon: Icons.handyman_outlined,
+                    children: [
+                      _buildServiceItemsModule(),
                       const SizedBox(height: 20),
                       _buildSubheading('SUBCONTRACT & MACHINERY USAGE'),
                       _buildSubcontractAndMachineryModule(),
@@ -1185,19 +1098,76 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
                   ),
                   const SizedBox(height: 18),
 
-                  // ── SECTION 4: Billing, Payments & Retentions ──
+                  // ── SECTION 06: Work Profile Drawings & Technical Specs ──
                   _buildSectionContainer(
-                    badge: 'SECTION 04',
-                    title: 'Billing, Payments & Retentions',
-                    subtitle: 'Track billing flows, payment receipts, deduction breakdown, and retention dates.',
-                    icon: Icons.account_balance_wallet_outlined,
+                    badge: 'SECTION 06',
+                    title: 'Work Profile Drawings & Technical Specs',
+                    subtitle: 'Upload technical pipeline profiles, alignment sheets, crossing points, and BOQ documents.',
+                    icon: Icons.architecture_rounded,
                     children: [
-                      _buildBillingAndFlowModule(),
-                      const SizedBox(height: 20),
-                      _buildSubheading('PAYMENT RECEIVED & DEDUCTIONS BREAKDOWN'),
+                      _buildProfileDrawingModule(),
+                      const SizedBox(height: 16),
+                      _buildSubheading('BOQ & SPECIFICATION REFERENCES'),
+                      _buildModernUploadRow(
+                        remarkCtrl: _boqRemarkCtrl,
+                        remarkHint: 'Bill of Quantities (BOQ) remarks or amendment notes...',
+                        files: _boqFiles,
+                        existingDocs: _existingBoqDocs,
+                        onExistingRemoved: (doc) => setState(() => _existingBoqDocs.remove(doc)),
+                        label: 'BOQ Document',
+                      ),
+                      if (_existingTenderSpecDocs.isNotEmpty || _tenderSpecRemarkCtrl.text.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        _buildTenderSpecReferenceCard(),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+
+                  // ── SECTION 07: Bill Preparation & Upload (RA Bills) ──
+                  _buildSectionContainer(
+                    badge: 'SECTION 07',
+                    title: 'Bill Preparation & Upload (RA Bills)',
+                    subtitle: 'Prepare and upload Running Account (RA) bills, final bills, and measurement sheets.',
+                    icon: Icons.receipt_long_outlined,
+                    children: [
+                      _buildBillUploadModule(),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+
+                  // ── SECTION 08: Flow of Bills / Approval Cycle ──
+                  _buildSectionContainer(
+                    badge: 'SECTION 08',
+                    title: 'Bill Flow & Verification Status',
+                    subtitle:
+                        'Track departmental verification flow: JE → AE → AD → DE → SE → CE → MM → DFC → APS → DO → AO → Cash.',
+                    icon: Icons.sync_alt_rounded,
+                    children: [
+                      _buildBillFlowTrackingModule(),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+
+                  // ── SECTION 09: Payment Received & Deductions ──
+                  _buildSectionContainer(
+                    badge: 'SECTION 09',
+                    title: 'Payment Received & Deductions Breakdown',
+                    subtitle: 'Record net amount received from client and track itemized deductions (TDS, GST, LD, Retention).',
+                    icon: Icons.payments_outlined,
+                    children: [
                       _buildPaymentAndDeductionModule(),
-                      const SizedBox(height: 20),
-                      _buildSubheading('RETENTION RECEIVABLE TRACKING'),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+
+                  // ── SECTION 10: Security Deposit & Retention Tracking ──
+                  _buildSectionContainer(
+                    badge: 'SECTION 10',
+                    title: 'Security Deposit & Retention Recovery',
+                    subtitle: 'Track money held by client (SD, EMD, RA Retentions) and receivable release dates.',
+                    icon: Icons.account_balance_outlined,
+                    children: [
                       _buildRetentionCard(
                         title: 'EMD Retention Receivable Date',
                         remarkCtrl: _emdRetentionRemarkCtrl,
@@ -1774,6 +1744,75 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
                     NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0).format(p.actualProjectValue)),
             ],
           ),
+          if (p.isMappedToTender == 'Yes' || p.tenderRefNo.isNotEmpty || p.tenderAmount > 0) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: BoxDecoration(
+                color: const Color(0xFF9CC70A).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF414A51),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.verified_outlined, size: 16, color: Color(0xFF9CC70A)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Text(
+                              'ORIGINAL TENDER RECORD (INHERITED)',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF414A51),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF9CC70A),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'WON / AWARDED',
+                                style: TextStyle(
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF414A51),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'Tender Ref: ${p.tenderRefNo.isNotEmpty ? p.tenderRefNo : "—"}  •  Type: ${p.tenderType.isNotEmpty ? p.tenderType : (p.tenderCategory.isNotEmpty ? p.tenderCategory : "Open")}  •  Original Tender Value: ${NumberFormat.currency(locale: 'en_IN', symbol: '₹ ', decimalDigits: 0).format(p.tenderAmount)}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF334155),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1950,180 +1989,1695 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
     );
   }
 
-  // ─── 1. Tender Type Grid ───
+  // ─── 1. Award Values Module ───
 
-  Widget _buildTenderTypeGrid(List<String> tenderTypes) {
-    final tOptions = const ['Open', 'Close'];
-
-    if (_isMobile) {
-      return Column(
+  Widget _buildAwardValueModule() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Expanded(
-                flex: 2,
-                child: DropdownButtonFormField<String>(
-                  initialValue:
-                      _qualifiedOptions.contains(_qualified) ? _qualified : 'Yes',
-                  decoration: _inputDeco('Qualified Status'),
-                  style: const TextStyle(
-                      fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                  items: _qualifiedOptions
-                      .map((o) => DropdownMenuItem(value: o, child: Text(o)))
-                      .toList(),
-                  onChanged: (v) => setState(() => _qualified = v ?? 'Yes'),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
                 ),
+                child: const Icon(Icons.currency_rupee_rounded,
+                    size: 16, color: Color(0xFF414A51)),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 3,
-                child: DropdownButtonFormField<String>(
-                  initialValue: tOptions.contains(_selectedTenderType)
-                      ? _selectedTenderType
-                      : null,
-                  decoration: _inputDeco('Tender Type'),
-                  style: const TextStyle(
-                      fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                  items: tOptions
-                      .map((o) => DropdownMenuItem(
-                          value: o,
-                          child: Text(o, style: const TextStyle(fontSize: 12.5))))
-                      .toList(),
-                  onChanged: (v) => setState(() => _selectedTenderType = v ?? ''),
+              const SizedBox(width: 8),
+              const Text(
+                'FINAL CONTRACT / AWARD VALUES',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF414A51),
+                  letterSpacing: 0.5,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          TextFormField(
-            controller: _tenderAmountCtrl,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
-            ],
-            style: const TextStyle(
-                fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-            decoration: _inputDeco('Tender Amount', prefixText: '₹ '),
+          const SizedBox(height: 12),
+          if (_isMobile) ...[
+            TextFormField(
+              controller: _actualProjectValueCtrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+              ],
+              style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1E293B)),
+              decoration: _inputDeco('Actual Project Value (Awarded)',
+                  prefixText: '₹ ', hint: 'Final awarded contract value'),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _approximateProjectValueCtrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+              ],
+              style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF475569)),
+              decoration: _inputDeco('Approximate Project Estimate',
+                  prefixText: '₹ ', hint: 'Original tender estimate'),
+            ),
+          ] else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _actualProjectValueCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                    ],
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1E293B)),
+                    decoration: _inputDeco('Actual Project Value (Awarded)',
+                        prefixText: '₹ ', hint: 'Final awarded contract value'),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: TextFormField(
+                    controller: _approximateProjectValueCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                    ],
+                    style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF475569)),
+                    decoration: _inputDeco('Approximate Project Estimate',
+                        prefixText: '₹ ', hint: 'Original tender estimate'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ─── SD Agreement & Bank Guarantee Module ───
+
+  Widget _buildSdAgreementModule() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_isMobile) ...[
+            TextFormField(
+              controller: _sdAgreementNoCtrl,
+              style: const TextStyle(fontSize: 12.5),
+              decoration: _inputDeco('SD Agreement / BG Number',
+                  hint: 'e.g. BG-2024-001 or SD-AGR-42'),
+            ),
+            const SizedBox(height: 10),
+            _buildModernDateInput(
+              label: 'SD Agreement Date',
+              date: _sdAgreementDate,
+              onPick: () => _pickDate(
+                current: _sdAgreementDate,
+                onPicked: (d) => setState(() => _sdAgreementDate = d),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _sdAmountCtrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+              ],
+              style:
+                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+              decoration: _inputDeco('SD Amount / Bank Guarantee Value',
+                  prefixText: '₹ '),
+            ),
+          ] else ...[
+            Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: TextFormField(
+                    controller: _sdAgreementNoCtrl,
+                    style: const TextStyle(fontSize: 12.5),
+                    decoration: _inputDeco('SD Agreement / BG Number',
+                        hint: 'e.g. BG-2024-001 or SD-AGR-42'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: _buildModernDateInput(
+                    label: 'SD Agreement Date',
+                    date: _sdAgreementDate,
+                    onPick: () => _pickDate(
+                      current: _sdAgreementDate,
+                      onPicked: (d) => setState(() => _sdAgreementDate = d),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 3,
+                  child: TextFormField(
+                    controller: _sdAmountCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                    ],
+                    style: const TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w600),
+                    decoration: _inputDeco('SD Amount / Bank Guarantee Value',
+                        prefixText: '₹ '),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 14),
+          _buildModernUploadRow(
+            remarkCtrl: _sdDateRemarkCtrl,
+            remarkHint:
+                'Security deposit agreement terms, bank guarantee notes, deduction terms...',
+            files: _sdDateFiles,
+            existingDocs: _existingSdDateDocs,
+            onExistingRemoved: (doc) =>
+                setState(() => _existingSdDateDocs.remove(doc)),
+            label: 'SD Agreement / Bank Guarantee Document',
           ),
-          const SizedBox(height: 10),
-          TextFormField(
-            controller: _approximateProjectValueCtrl,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
-            ],
-            style: const TextStyle(
-                fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-            decoration:
-                _inputDeco('Approximate Project Value', prefixText: '₹ '),
+        ],
+      ),
+    );
+  }
+
+  // ─── Work Order & Contract Agreement Documents Module ───
+
+  Widget _buildContractDocumentsModule() {
+    if (_isMobile) {
+      return Column(
+        children: [
+          _buildModernUploadRow(
+            remarkCtrl: _workOrderRemarkCtrl,
+            remarkHint: 'Work order / Letter of Award (LOA) notes...',
+            files: _workOrderFiles,
+            existingDocs: _existingWorkOrderDocs,
+            onExistingRemoved: (doc) =>
+                setState(() => _existingWorkOrderDocs.remove(doc)),
+            label: 'Work Order / Letter of Award (LOA)',
           ),
-          const SizedBox(height: 10),
-          TextFormField(
-            controller: _actualProjectValueCtrl,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
-            ],
-            style: const TextStyle(
-                fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-            decoration: _inputDeco('Actual Project Value', prefixText: '₹ '),
+          const SizedBox(height: 12),
+          _buildModernUploadRow(
+            remarkCtrl: _agreementRemarkCtrl,
+            remarkHint:
+                'Contract agreement clauses and signed agreement notes...',
+            files: _agreementFiles,
+            existingDocs: _existingAgreementDocs,
+            onExistingRemoved: (doc) =>
+                setState(() => _existingAgreementDocs.remove(doc)),
+            label: 'Signed Contract Agreement Document',
           ),
         ],
       );
     }
-
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: DropdownButtonFormField<String>(
-                initialValue:
-                    _qualifiedOptions.contains(_qualified) ? _qualified : 'Yes',
-                decoration: _inputDeco('Qualified Status'),
-                style: const TextStyle(
-                    fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                items: _qualifiedOptions
-                    .map((o) => DropdownMenuItem(value: o, child: Text(o)))
-                    .toList(),
-                onChanged: (v) => setState(() => _qualified = v ?? 'Yes'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 3,
-              child: DropdownButtonFormField<String>(
-                initialValue: tOptions.contains(_selectedTenderType)
-                    ? _selectedTenderType
-                    : null,
-                decoration: _inputDeco('Choose Tender Category / Type'),
-                style: const TextStyle(
-                    fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                items: tOptions
-                    .map((o) => DropdownMenuItem(
-                        value: o,
-                        child: Text(o, style: const TextStyle(fontSize: 12.5))))
-                    .toList(),
-                onChanged: (v) => setState(() => _selectedTenderType = v ?? ''),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 3,
-              child: TextFormField(
-                controller: _tenderAmountCtrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
-                ],
-                style: const TextStyle(
-                    fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                decoration: _inputDeco('Tender Amount', prefixText: '₹ '),
-              ),
-            ),
-          ],
+        Expanded(
+          child: _buildModernUploadRow(
+            remarkCtrl: _workOrderRemarkCtrl,
+            remarkHint: 'Work order / Letter of Award (LOA) notes...',
+            files: _workOrderFiles,
+            existingDocs: _existingWorkOrderDocs,
+            onExistingRemoved: (doc) =>
+                setState(() => _existingWorkOrderDocs.remove(doc)),
+            label: 'Work Order / Letter of Award (LOA)',
+          ),
         ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _approximateProjectValueCtrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
-                ],
-                style: const TextStyle(
-                    fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                decoration:
-                    _inputDeco('Approximate Project Value', prefixText: '₹ '),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextFormField(
-                controller: _actualProjectValueCtrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
-                ],
-                style: const TextStyle(
-                    fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                decoration: _inputDeco('Actual Project Value', prefixText: '₹ '),
-              ),
-            ),
-          ],
+        const SizedBox(width: 14),
+        Expanded(
+          child: _buildModernUploadRow(
+            remarkCtrl: _agreementRemarkCtrl,
+            remarkHint:
+                'Contract agreement clauses and signed agreement notes...',
+            files: _agreementFiles,
+            existingDocs: _existingAgreementDocs,
+            onExistingRemoved: (doc) =>
+                setState(() => _existingAgreementDocs.remove(doc)),
+            label: 'Signed Contract Agreement Document',
+          ),
         ),
       ],
     );
+  }
+
+  // ─── Work Start & Mobilization Module ───
+
+  Widget _buildWorkStartModule() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_isMobile) ...[
+            _buildModernDateInput(
+              label: 'Site Handover Date',
+              date: _siteHandoverDate,
+              onPick: () => _pickDate(
+                current: _siteHandoverDate,
+                onPicked: (d) => setState(() => _siteHandoverDate = d),
+              ),
+            ),
+            const SizedBox(height: 10),
+            _buildModernDateInput(
+              label: 'Work Start Date (Actual / Planned)',
+              date: _workStartDate,
+              onPick: () => _pickDate(
+                current: _workStartDate,
+                onPicked: (d) => setState(() => _workStartDate = d),
+              ),
+            ),
+            const SizedBox(height: 10),
+            _buildModernDateInput(
+              label: 'Scheduled Completion Target',
+              date: _targetCompletionDate,
+              onPick: () => _pickDate(
+                current: _targetCompletionDate,
+                onPicked: (d) => setState(() => _targetCompletionDate = d),
+              ),
+            ),
+          ] else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: _buildModernDateInput(
+                    label: 'Site Handover Date',
+                    date: _siteHandoverDate,
+                    onPick: () => _pickDate(
+                      current: _siteHandoverDate,
+                      onPicked: (d) => setState(() => _siteHandoverDate = d),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildModernDateInput(
+                    label: 'Work Start Date (Actual / Planned)',
+                    date: _workStartDate,
+                    onPick: () => _pickDate(
+                      current: _workStartDate,
+                      onPicked: (d) => setState(() => _workStartDate = d),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildModernDateInput(
+                    label: 'Scheduled Completion Target',
+                    date: _targetCompletionDate,
+                    onPick: () => _pickDate(
+                      current: _targetCompletionDate,
+                      onPicked: (d) => setState(() => _targetCompletionDate = d),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 14),
+          _buildModernUploadRow(
+            remarkCtrl: _projectDetailsRemarkCtrl,
+            remarkHint:
+                'Site handover report, site possession letter, work commencement notice...',
+            files: _projectDetailsFiles,
+            existingDocs: _existingProjectDetailsDocs,
+            onExistingRemoved: (doc) =>
+                setState(() => _existingProjectDetailsDocs.remove(doc)),
+            label: 'Site Handover / Work Commencement Document',
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Project Budget Overview Module ───
+
+  Widget _buildProjectBudgetOverviewModule(SiteProject p) {
+    final totalMaterials =
+        _supplyItems.fold(0.0, (acc, item) => acc + item.amount);
+    final totalServices =
+        _serviceItems.fold(0.0, (acc, item) => acc + item.amount);
+    final totalDirectCost = totalMaterials + totalServices;
+    final contractVal =
+        double.tryParse(_actualProjectValueCtrl.text.trim()) ?? p.contractValue;
+    final margin = contractVal > 0 ? (contractVal - totalDirectCost) : 0.0;
+    final marginPct = contractVal > 0 ? (margin / contractVal * 100) : 0.0;
+
+    final currFmt = NumberFormat.currency(
+        locale: 'en_IN', symbol: '₹ ', decimalDigits: 0);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.analytics_outlined,
+                    size: 18, color: Color(0xFF414A51)),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'ESTIMATED EXPENDITURE VS CONTRACT VALUE',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF414A51),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    Text(
+                      'Aggregated from Supply Materials and Service Work Items',
+                      style: TextStyle(
+                          fontSize: 10.5, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF414A51),
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ProjectBudgetScreen(
+                        projectId: p.id,
+                        initialProject: p,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.tune_rounded, size: 15),
+                label: const Text('Open Budget Planner',
+                    style:
+                        TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            children: [
+              _buildBudgetMetricCard(
+                  'Contract Value',
+                  currFmt.format(contractVal),
+                  const Color(0xFF1E293B),
+                  Icons.assignment_turned_in_outlined),
+              _buildBudgetMetricCard('Materials Cost',
+                  currFmt.format(totalMaterials),
+                  const Color(0xFF2563EB),
+                  Icons.inventory_2_outlined),
+              _buildBudgetMetricCard('Services Cost',
+                  currFmt.format(totalServices),
+                  const Color(0xFFD97706),
+                  Icons.handyman_outlined),
+              _buildBudgetMetricCard(
+                  'Total Direct Cost',
+                  currFmt.format(totalDirectCost),
+                  const Color(0xFF475569),
+                  Icons.calculate_outlined),
+              if (contractVal > 0)
+                _buildBudgetMetricCard(
+                    'Projected Margin',
+                    '${currFmt.format(margin)} (${marginPct.toStringAsFixed(1)}%)',
+                    margin >= 0
+                        ? const Color(0xFF16A34A)
+                        : const Color(0xFFDC2626),
+                    Icons.trending_up_rounded),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBudgetMetricCard(
+      String label, String value, Color color, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: const TextStyle(
+                      fontSize: 10,
+                      color: Color(0xFF64748B),
+                      fontWeight: FontWeight.w600)),
+              Text(value,
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: color)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Supply Items Module (Materials) ───
+
+  void _calcSupplyAmount() {
+    final qty = double.tryParse(_supplyQtyCtrl.text.trim()) ?? 0;
+    final rate = double.tryParse(_supplyRateCtrl.text.trim()) ?? 0;
+    _supplyAmountCtrl.text = (qty * rate).toStringAsFixed(2);
+  }
+
+  void _addSupplyItem() {
+    final desc = _supplyDescCtrl.text.trim();
+    if (desc.isEmpty) {
+      _toast('Enter material description.', isError: true);
+      return;
+    }
+    final qty = double.tryParse(_supplyQtyCtrl.text.trim()) ?? 0;
+    final rate = double.tryParse(_supplyRateCtrl.text.trim()) ?? 0;
+    setState(() {
+      _supplyItems.add(ProjectBreakdownItem.create(
+        description: desc,
+        unit: _supplyUnitCtrl.text.trim().isNotEmpty
+            ? _supplyUnitCtrl.text.trim()
+            : 'nos',
+        quantity: qty,
+        rate: rate,
+        type: BreakdownItemType.material,
+      ));
+      _supplyDescCtrl.clear();
+      _supplyUnitCtrl.clear();
+      _supplyQtyCtrl.clear();
+      _supplyRateCtrl.clear();
+      _supplyAmountCtrl.clear();
+    });
+  }
+
+  Widget _buildSupplyItemsModule() {
+    final totalSupply =
+        _supplyItems.fold(0.0, (acc, item) => acc + item.amount);
+    final currFmt = NumberFormat.currency(
+        locale: 'en_IN', symbol: '₹ ', decimalDigits: 2);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_isMobile) ...[
+            TextFormField(
+              controller: _supplyDescCtrl,
+              style: const TextStyle(fontSize: 12.5),
+              decoration: _inputDeco('Material Description',
+                  hint: 'e.g. HDPE Pipe 110mm PN10, MS Casing, Cables'),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: _supplyUnitCtrl,
+                    style: const TextStyle(fontSize: 12.5),
+                    decoration: _inputDeco('Unit', hint: 'm / nos / kg'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: _supplyQtyCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                    ],
+                    style: const TextStyle(fontSize: 12.5),
+                    decoration: _inputDeco('Quantity'),
+                    onChanged: (_) => _calcSupplyAmount(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 3,
+                  child: TextFormField(
+                    controller: _supplyRateCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                    ],
+                    style: const TextStyle(fontSize: 12.5),
+                    decoration: _inputDeco('Rate', prefixText: '₹ '),
+                    onChanged: (_) => _calcSupplyAmount(),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _supplyAmountCtrl,
+                    readOnly: true,
+                    style: const TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w700),
+                    decoration: _inputDeco('Amount', prefixText: '₹ '),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF414A51),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: _addSupplyItem,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add Material',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 11.5)),
+                ),
+              ],
+            ),
+          ] else ...[
+            Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: TextFormField(
+                    controller: _supplyDescCtrl,
+                    style: const TextStyle(fontSize: 12.5),
+                    decoration: _inputDeco('Material Description',
+                        hint:
+                            'e.g. HDPE Pipe 110mm PN10, MS Casing, Valves, Clamps'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: _supplyUnitCtrl,
+                    style: const TextStyle(fontSize: 12.5),
+                    decoration: _inputDeco('Unit', hint: 'm / nos / kg'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: _supplyQtyCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                    ],
+                    style: const TextStyle(fontSize: 12.5),
+                    decoration: _inputDeco('Quantity'),
+                    onChanged: (_) => _calcSupplyAmount(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: _supplyRateCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                    ],
+                    style: const TextStyle(fontSize: 12.5),
+                    decoration: _inputDeco('Rate', prefixText: '₹ '),
+                    onChanged: (_) => _calcSupplyAmount(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: _supplyAmountCtrl,
+                    readOnly: true,
+                    style: const TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w700),
+                    decoration: _inputDeco('Amount', prefixText: '₹ '),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF414A51),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: _addSupplyItem,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add Material',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 11.5)),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+
+          // Items Table
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final tableWidth = math.max(constraints.maxWidth, 600.0);
+                return ScrollConfiguration(
+                  behavior:
+                      ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: tableWidth,
+                      child: Table(
+                      border: TableBorder.all(color: const Color(0xFFE2E8F0)),
+                      columnWidths: const {
+                        0: FlexColumnWidth(4),
+                        1: FlexColumnWidth(2),
+                        2: FlexColumnWidth(2),
+                        3: FlexColumnWidth(2),
+                        4: FlexColumnWidth(2),
+                        5: FixedColumnWidth(36),
+                      },
+                      children: [
+                        TableRow(
+                          decoration:
+                              const BoxDecoration(color: Color(0xFF414A51)),
+                          children: const [
+                            Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
+                                child: Text('Material Item',
+                                    style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white))),
+                            Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
+                                child: Text('Unit',
+                                    style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white))),
+                            Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
+                                child: Text('Quantity',
+                                    style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white))),
+                            Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
+                                child: Text('Rate',
+                                    style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white))),
+                            Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
+                                child: Text('Amount (₹)',
+                                    style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white))),
+                            Padding(
+                                padding: EdgeInsets.all(8), child: Text('')),
+                          ],
+                        ),
+                        if (_supplyItems.isEmpty)
+                          TableRow(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 12, horizontal: 10),
+                                child: Text(
+                                    'No supply materials itemized yet.',
+                                    style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: Colors.grey.shade500)),
+                              ),
+                              const SizedBox(),
+                              const SizedBox(),
+                              const SizedBox(),
+                              const SizedBox(),
+                              const SizedBox(),
+                            ],
+                          )
+                        else
+                          ..._supplyItems.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final item = entry.value;
+                            return TableRow(
+                              decoration: BoxDecoration(
+                                color: idx.isEven
+                                    ? Colors.white
+                                    : const Color(0xFFF8FAFC),
+                              ),
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
+                                  child: Text(item.description,
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600)),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
+                                  child: Text(item.unit,
+                                      style: const TextStyle(fontSize: 12)),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
+                                  child: Text(
+                                      item.quantity % 1 == 0
+                                          ? item.quantity.toInt().toString()
+                                          : item.quantity.toString(),
+                                      style: const TextStyle(fontSize: 12)),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
+                                  child: Text(
+                                      NumberFormat.currency(
+                                              locale: 'en_IN',
+                                              symbol: '₹ ',
+                                              decimalDigits: 2)
+                                          .format(item.rate),
+                                      style: const TextStyle(fontSize: 12)),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
+                                  child: Text(
+                                      NumberFormat.currency(
+                                              locale: 'en_IN',
+                                              symbol: '₹ ',
+                                              decimalDigits: 2)
+                                          .format(item.amount),
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF1E293B))),
+                                ),
+                                Center(
+                                  child: IconButton(
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    icon: const Icon(Icons.delete_outline,
+                                        size: 16, color: Color(0xFFEF4444)),
+                                    onPressed: () => setState(
+                                        () => _supplyItems.removeAt(idx)),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+            ),
+          ),
+          if (_supplyItems.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                        color: const Color(0xFF2563EB).withValues(alpha: 0.3)),
+                  ),
+                  child: Text(
+                    'TOTAL SUPPLY MATERIALS: ${currFmt.format(totalSupply)}',
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF1E40AF),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ─── Service Items Module (Works / Services) ───
+
+  void _calcServiceAmount() {
+    final qty = double.tryParse(_serviceQtyCtrl.text.trim()) ?? 0;
+    final rate = double.tryParse(_serviceRateCtrl.text.trim()) ?? 0;
+    _serviceAmountCtrl.text = (qty * rate).toStringAsFixed(2);
+  }
+
+  void _addServiceItem() {
+    final desc = _serviceDescCtrl.text.trim();
+    if (desc.isEmpty) {
+      _toast('Enter service description.', isError: true);
+      return;
+    }
+    final qty = double.tryParse(_serviceQtyCtrl.text.trim()) ?? 0;
+    final rate = double.tryParse(_serviceRateCtrl.text.trim()) ?? 0;
+    setState(() {
+      _serviceItems.add(ProjectBreakdownItem.create(
+        description: desc,
+        unit: _serviceUnitCtrl.text.trim().isNotEmpty
+            ? _serviceUnitCtrl.text.trim()
+            : 'mtr',
+        quantity: qty,
+        rate: rate,
+        type: BreakdownItemType.service,
+      ));
+      _serviceDescCtrl.clear();
+      _serviceUnitCtrl.clear();
+      _serviceQtyCtrl.clear();
+      _serviceRateCtrl.clear();
+      _serviceAmountCtrl.clear();
+    });
+  }
+
+  Widget _buildServiceItemsModule() {
+    final totalServices =
+        _serviceItems.fold(0.0, (acc, item) => acc + item.amount);
+    final currFmt = NumberFormat.currency(
+        locale: 'en_IN', symbol: '₹ ', decimalDigits: 2);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_isMobile) ...[
+            TextFormField(
+              controller: _serviceDescCtrl,
+              style: const TextStyle(fontSize: 12.5),
+              decoration: _inputDeco('Service / Scope Description',
+                  hint:
+                      'e.g. HDD drilling, trench excavation, joint welding, testing'),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: _serviceUnitCtrl,
+                    style: const TextStyle(fontSize: 12.5),
+                    decoration: _inputDeco('Unit', hint: 'm / nos / joint'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: _serviceQtyCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                    ],
+                    style: const TextStyle(fontSize: 12.5),
+                    decoration: _inputDeco('Quantity'),
+                    onChanged: (_) => _calcServiceAmount(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 3,
+                  child: TextFormField(
+                    controller: _serviceRateCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                    ],
+                    style: const TextStyle(fontSize: 12.5),
+                    decoration: _inputDeco('Rate', prefixText: '₹ '),
+                    onChanged: (_) => _calcServiceAmount(),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _serviceAmountCtrl,
+                    readOnly: true,
+                    style: const TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w700),
+                    decoration: _inputDeco('Amount', prefixText: '₹ '),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF414A51),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: _addServiceItem,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add Service',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 11.5)),
+                ),
+              ],
+            ),
+          ] else ...[
+            Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: TextFormField(
+                    controller: _serviceDescCtrl,
+                    style: const TextStyle(fontSize: 12.5),
+                    decoration: _inputDeco('Service / Scope Description',
+                        hint:
+                            'e.g. HDD drilling, trench excavation, joint welding, testing'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: _serviceUnitCtrl,
+                    style: const TextStyle(fontSize: 12.5),
+                    decoration: _inputDeco('Unit', hint: 'm / nos / joint'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: _serviceQtyCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                    ],
+                    style: const TextStyle(fontSize: 12.5),
+                    decoration: _inputDeco('Quantity'),
+                    onChanged: (_) => _calcServiceAmount(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: _serviceRateCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                    ],
+                    style: const TextStyle(fontSize: 12.5),
+                    decoration: _inputDeco('Rate', prefixText: '₹ '),
+                    onChanged: (_) => _calcServiceAmount(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: _serviceAmountCtrl,
+                    readOnly: true,
+                    style: const TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w700),
+                    decoration: _inputDeco('Amount', prefixText: '₹ '),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF414A51),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: _addServiceItem,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add Service',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 11.5)),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+
+          // Items Table
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final tableWidth = math.max(constraints.maxWidth, 600.0);
+                return ScrollConfiguration(
+                  behavior:
+                      ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: tableWidth,
+                      child: Table(
+                      border: TableBorder.all(color: const Color(0xFFE2E8F0)),
+                      columnWidths: const {
+                        0: FlexColumnWidth(4),
+                        1: FlexColumnWidth(2),
+                        2: FlexColumnWidth(2),
+                        3: FlexColumnWidth(2),
+                        4: FlexColumnWidth(2),
+                        5: FixedColumnWidth(36),
+                      },
+                      children: [
+                        TableRow(
+                          decoration:
+                              const BoxDecoration(color: Color(0xFF414A51)),
+                          children: const [
+                            Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
+                                child: Text('Service / Scope Item',
+                                    style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white))),
+                            Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
+                                child: Text('Unit',
+                                    style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white))),
+                            Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
+                                child: Text('Quantity',
+                                    style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white))),
+                            Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
+                                child: Text('Rate',
+                                    style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white))),
+                            Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
+                                child: Text('Amount (₹)',
+                                    style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white))),
+                            Padding(
+                                padding: EdgeInsets.all(8), child: Text('')),
+                          ],
+                        ),
+                        if (_serviceItems.isEmpty)
+                          TableRow(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 12, horizontal: 10),
+                                child: Text(
+                                    'No service work items itemized yet.',
+                                    style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: Colors.grey.shade500)),
+                              ),
+                              const SizedBox(),
+                              const SizedBox(),
+                              const SizedBox(),
+                              const SizedBox(),
+                              const SizedBox(),
+                            ],
+                          )
+                        else
+                          ..._serviceItems.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final item = entry.value;
+                            return TableRow(
+                              decoration: BoxDecoration(
+                                color: idx.isEven
+                                    ? Colors.white
+                                    : const Color(0xFFF8FAFC),
+                              ),
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
+                                  child: Text(item.description,
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600)),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
+                                  child: Text(item.unit,
+                                      style: const TextStyle(fontSize: 12)),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
+                                  child: Text(
+                                      item.quantity % 1 == 0
+                                          ? item.quantity.toInt().toString()
+                                          : item.quantity.toString(),
+                                      style: const TextStyle(fontSize: 12)),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
+                                  child: Text(
+                                      NumberFormat.currency(
+                                              locale: 'en_IN',
+                                              symbol: '₹ ',
+                                              decimalDigits: 2)
+                                          .format(item.rate),
+                                      style: const TextStyle(fontSize: 12)),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
+                                  child: Text(
+                                      NumberFormat.currency(
+                                              locale: 'en_IN',
+                                              symbol: '₹ ',
+                                              decimalDigits: 2)
+                                          .format(item.amount),
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF1E293B))),
+                                ),
+                                Center(
+                                  child: IconButton(
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    icon: const Icon(Icons.delete_outline,
+                                        size: 16, color: Color(0xFFEF4444)),
+                                    onPressed: () => setState(
+                                        () => _serviceItems.removeAt(idx)),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+            ),
+          ),
+          if (_serviceItems.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD97706).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                        color: const Color(0xFFD97706).withValues(alpha: 0.3)),
+                  ),
+                  child: Text(
+                    'TOTAL SERVICE SCOPE: ${currFmt.format(totalServices)}',
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFFB45309),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ─── Inherited Tender Spec Reference Card ───
+
+  Widget _buildTenderSpecReferenceCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.description_outlined,
+                  size: 16, color: Color(0xFF64748B)),
+              SizedBox(width: 8),
+              Text(
+                'INHERITED TENDER SPECIFICATIONS (READ-ONLY REFERENCE)',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF475569),
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          if (_tenderSpecRemarkCtrl.text.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              _tenderSpecRemarkCtrl.text,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
+            ),
+          ],
+          if (_existingTenderSpecDocs.isNotEmpty ||
+              _tenderSpecFiles.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                ..._existingTenderSpecDocs.map((d) => _buildDocChip(
+                      name: d.name,
+                      isExisting: true,
+                      onRemove: () =>
+                          setState(() => _existingTenderSpecDocs.remove(d)),
+                      onView: () => _previewFile(
+                        name: d.name,
+                        url: d.downloadUrl,
+                        size: d.size,
+                        isLocal: false,
+                      ),
+                    )),
+                ..._tenderSpecFiles.map((f) => _buildDocChip(
+                      name: f.name,
+                      isExisting: false,
+                      onRemove: () =>
+                          setState(() => _tenderSpecFiles.remove(f)),
+                      onView: () => _previewFile(
+                        name: f.name,
+                        bytes: f.bytes,
+                        size: f.size,
+                        isLocal: true,
+                      ),
+                    )),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ─── Bill Preparation & Upload Module ───
+
+  Widget _buildBillUploadModule() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_isMobile) ...[
+            TextFormField(
+              controller: _billingDetailsRemarkCtrl,
+              style: const TextStyle(fontSize: 12.5),
+              decoration: _inputDeco('Bill Submission Details / Reference',
+                  hint: 'e.g. RA Bill #01 for 350m HDD cable laying'),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF414A51),
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                      backgroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 11),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(9)),
+                    ),
+                    onPressed: () => _pickFiles(_billingDetailsFiles,
+                        existing: _existingBillingDetailsDocs),
+                    icon: const Icon(Icons.receipt_long_outlined, size: 16),
+                    label: Text(
+                      _existingBillingDetailsDocs.isEmpty &&
+                              _billingDetailsFiles.isEmpty
+                          ? 'Upload Bills / Sheets'
+                          : 'Bills (${_existingBillingDetailsDocs.length + _billingDetailsFiles.length})',
+                      style: const TextStyle(
+                          fontSize: 11.5, fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF9CC70A),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 11),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(9)),
+                    ),
+                    onPressed: () => _toast('Opening Billing Chat...'),
+                    icon: const Icon(Icons.chat_bubble_outline_rounded,
+                        size: 15),
+                    label: const Text('BILL CHAT',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5),
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                ),
+              ],
+            ),
+          ] else ...[
+            Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: TextFormField(
+                    controller: _billingDetailsRemarkCtrl,
+                    style: const TextStyle(fontSize: 12.5),
+                    decoration: _inputDeco('Bill Submission Details / Reference',
+                        hint: 'e.g. RA Bill #01 for 350m HDD cable laying'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF414A51),
+                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    backgroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9)),
+                  ),
+                  onPressed: () => _pickFiles(_billingDetailsFiles,
+                      existing: _existingBillingDetailsDocs),
+                  icon: const Icon(Icons.receipt_long_outlined, size: 16),
+                  label: Text(
+                    _existingBillingDetailsDocs.isEmpty &&
+                            _billingDetailsFiles.isEmpty
+                        ? 'Upload Bills / Sheets'
+                        : 'Bills (${_existingBillingDetailsDocs.length + _billingDetailsFiles.length})',
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF9CC70A),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9)),
+                  ),
+                  onPressed: () => _toast('Opening Billing Chat...'),
+                  icon: const Icon(Icons.chat_bubble_outline_rounded,
+                      size: 16),
+                  label: const Text('OPEN BILL CHAT',
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5)),
+                ),
+              ],
+            ),
+          ],
+          if (_existingBillingDetailsDocs.isNotEmpty ||
+              _billingDetailsFiles.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                ..._existingBillingDetailsDocs.map((d) => _buildDocChip(
+                      name: d.name,
+                      isExisting: true,
+                      onRemove: () =>
+                          setState(() => _existingBillingDetailsDocs.remove(d)),
+                      onView: () => _previewFile(
+                        name: d.name,
+                        url: d.downloadUrl,
+                        size: d.size,
+                        isLocal: false,
+                      ),
+                    )),
+                ..._billingDetailsFiles.map((f) => _buildDocChip(
+                      name: f.name,
+                      isExisting: false,
+                      onRemove: () =>
+                          setState(() => _billingDetailsFiles.remove(f)),
+                      onView: () => _previewFile(
+                        name: f.name,
+                        bytes: f.bytes,
+                        size: f.size,
+                        isLocal: true,
+                      ),
+                    )),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ─── Flow of Bills / Approval Cycle Module ───
+
+  Widget _buildBillFlowTrackingModule() {
+    final flowOptions = {
+      ..._flowOfBillsOptions,
+      if (_flowOfBillsStatus.isNotEmpty) _flowOfBillsStatus,
+    }.toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_isMobile) ...[
+            DropdownButtonFormField<String>(
+              initialValue: flowOptions.contains(_flowOfBillsStatus)
+                  ? _flowOfBillsStatus
+                  : null,
+              decoration: _inputDeco('Flow Of Bills'),
+              style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1E293B)),
+              items: flowOptions
+                  .map((o) => DropdownMenuItem(
+                      value: o,
+                      child: Text(o.isEmpty ? '-- Select Status --' : o)))
+                  .toList(),
+              onChanged: (v) => setState(() => _flowOfBillsStatus = v ?? ''),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _flowOfBillsRemarkCtrl,
+              style: const TextStyle(fontSize: 12.5),
+              decoration: _inputDeco('Flow Remarks & Verification Notes',
+                  hint:
+                      'Client engineer certification status, verification date, notes...'),
+            ),
+          ] else ...[
+            Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: flowOptions.contains(_flowOfBillsStatus)
+                        ? _flowOfBillsStatus
+                        : null,
+                    decoration: _inputDeco('Flow Of Bills'),
+                    style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1E293B)),
+                    items: flowOptions
+                        .map((o) => DropdownMenuItem(
+                            value: o,
+                            child:
+                                Text(o.isEmpty ? '-- Select Status --' : o)))
+                        .toList(),
+                    onChanged: (v) =>
+                        setState(() => _flowOfBillsStatus = v ?? ''),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 6,
+                  child: TextFormField(
+                    controller: _flowOfBillsRemarkCtrl,
+                    style: const TextStyle(fontSize: 12.5),
+                    decoration: _inputDeco('Flow Remarks & Verification Notes',
+                        hint:
+                            'Client engineer certification status, verification date, notes...'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ─── Legacy Tender Type Grid (Retained for Reference/Fallback) ───
+
+  Widget _buildTenderTypeGrid(List<String> tenderTypes) {
+    return _buildAwardValueModule();
   }
 
   // ─── Modern Upload Component ───
@@ -2484,11 +4038,14 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final tableWidth = math.max(constraints.maxWidth, 600.0);
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: tableWidth,
-                    child: Table(
+                return ScrollConfiguration(
+                  behavior:
+                      ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: tableWidth,
+                      child: Table(
                       border: TableBorder.all(color: const Color(0xFFE2E8F0)),
                       columnWidths: const {
                         0: FlexColumnWidth(4),
@@ -2576,8 +4133,9 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
                       ],
                     ),
                   ),
-                );
-              },
+                ),
+              );
+            },
             ),
           ),
         ],
@@ -2798,9 +4356,39 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
   Widget _buildModernDateInput({
     required String label,
     required DateTime? date,
-    required TextEditingController remarkCtrl,
+    TextEditingController? remarkCtrl,
     required VoidCallback onPick,
   }) {
+    final dateField = InkWell(
+      onTap: onPick,
+      child: AbsorbPointer(
+        child: TextFormField(
+          readOnly: true,
+          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+          decoration: _inputDeco(
+            label,
+            hint: 'dd-mm-yyyy',
+            suffix: const Icon(Icons.calendar_today_outlined, size: 16),
+          ),
+          controller: TextEditingController(
+            text: date != null ? DateFormat('dd-MM-yyyy').format(date) : '',
+          ),
+        ),
+      ),
+    );
+
+    if (remarkCtrl == null) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: dateField,
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -2812,23 +4400,7 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                InkWell(
-                  onTap: onPick,
-                  child: AbsorbPointer(
-                    child: TextFormField(
-                      readOnly: true,
-                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-                      decoration: _inputDeco(
-                        label,
-                        hint: 'dd-mm-yyyy',
-                        suffix: const Icon(Icons.calendar_today_outlined, size: 16),
-                      ),
-                      controller: TextEditingController(
-                        text: date != null ? DateFormat('dd-MM-yyyy').format(date) : '',
-                      ),
-                    ),
-                  ),
-                ),
+                dateField,
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: remarkCtrl,
@@ -2841,23 +4413,7 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
               children: [
                 Expanded(
                   flex: 4,
-                  child: InkWell(
-                    onTap: onPick,
-                    child: AbsorbPointer(
-                      child: TextFormField(
-                        readOnly: true,
-                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-                        decoration: _inputDeco(
-                          label,
-                          hint: 'dd-mm-yyyy',
-                          suffix: const Icon(Icons.calendar_today_outlined, size: 16),
-                        ),
-                        controller: TextEditingController(
-                          text: date != null ? DateFormat('dd-MM-yyyy').format(date) : '',
-                        ),
-                      ),
-                    ),
-                  ),
+                  child: dateField,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -3733,11 +5289,14 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final tableWidth = math.max(constraints.maxWidth, 500.0);
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: tableWidth,
-                    child: Table(
+                return ScrollConfiguration(
+                  behavior:
+                      ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: tableWidth,
+                      child: Table(
                       border: TableBorder.all(color: const Color(0xFFE2E8F0)),
                       columnWidths: const {
                         0: FlexColumnWidth(3),
@@ -3823,8 +5382,9 @@ class _EditProjectFormScreenState extends ConsumerState<EditProjectFormScreen> {
                       ],
                     ),
                   ),
-                );
-              },
+                ),
+              );
+            },
             ),
           ),
         ],
