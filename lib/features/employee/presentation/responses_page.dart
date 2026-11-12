@@ -25,6 +25,7 @@ enum CandidateCardStatus {
   resubmitted,
   accepted,
   registered,
+  expired,
   rejected,
 }
 
@@ -53,6 +54,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     'Correction Requested',
     'Resubmitted',
     'Accepted',
+    'Expired',
     'Rejected',
   ];
 
@@ -80,9 +82,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final linksAsync = ref.watch(registrationLinksProvider);
+    final linksAsync = ref.watch(registrationLinksStreamProvider);
     final employeesAsync = ref.watch(allEmployeesProvider);
-    final candidateResponsesAsync = ref.watch(candidateResponsesProvider);
+    final candidateResponsesAsync = ref.watch(candidateResponsesStreamProvider);
     final prefAsync = ref.watch(empColumnPreferenceProvider(_tableId));
     final searchQuery = ref.watch(responseSearchQueryProvider);
     final statusFilter = ref.watch(responseStatusFilterProvider);
@@ -159,6 +161,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   matchesStatus = normStatus == CandidateCardStatus.resubmitted;
                 } else if (filter == 'accepted') {
                   matchesStatus = normStatus == CandidateCardStatus.accepted;
+                } else if (filter == 'expired') {
+                  matchesStatus = normStatus == CandidateCardStatus.expired;
                 } else if (filter == 'rejected') {
                   matchesStatus = normStatus == CandidateCardStatus.rejected;
                 } else {
@@ -210,8 +214,10 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                       Expanded(
                         child: RefreshIndicator(
                           onRefresh: () async {
+                            ref.invalidate(registrationLinksStreamProvider);
                             ref.invalidate(registrationLinksProvider);
                             ref.invalidate(allEmployeesProvider);
+                            ref.invalidate(candidateResponsesStreamProvider);
                             ref.invalidate(candidateResponsesProvider);
                             await ref.read(registrationLinksProvider.future);
                           },
@@ -577,6 +583,13 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           : l.linkStatus;
       return _normalizeStatus(eff, l, resp) == CandidateCardStatus.rejected;
     }).length;
+    final expiredCount = activeLinks.where((l) {
+      final resp = _candidateResponseForLink(l, candidateResponses);
+      final eff = (resp != null && resp.status.isNotEmpty)
+          ? resp.status
+          : l.linkStatus;
+      return _normalizeStatus(eff, l, resp) == CandidateCardStatus.expired;
+    }).length;
 
     return SizedBox(
       height: 64,
@@ -658,6 +671,18 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             onTap: () {
               ref.read(responseStatusFilterProvider.notifier).state =
                   'Accepted';
+              setState(() => _currentPage = 0);
+            },
+          ),
+          const SizedBox(width: 10),
+          _buildStatusTabCard(
+            title: 'Expired',
+            count: expiredCount,
+            icon: Icons.timer_off_rounded,
+            iconColor: const Color(0xFFEF6C00),
+            isSelected: currentFilter == 'Expired',
+            onTap: () {
+              ref.read(responseStatusFilterProvider.notifier).state = 'Expired';
               setState(() => _currentPage = 0);
             },
           ),
@@ -1831,8 +1856,11 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     if (s == 'registered' || s == 'converted') {
       return CandidateCardStatus.registered;
     }
-    if (s == 'rejected' || s == 'expired' || s == 'cancelled') {
+    if (s == 'rejected') {
       return CandidateCardStatus.rejected;
+    }
+    if (s == 'expired' || s == 'cancelled') {
+      return CandidateCardStatus.expired;
     }
     if (s == 'correction_requested' || s == 'correction requested') {
       return CandidateCardStatus.correctionRequested;
@@ -1938,6 +1966,11 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             bg: const Color(0xFFFFF8E1),
             color: const Color(0xFFE65100),
             icon: Icons.access_time_filled,
+          ),
+          CandidateCardStatus.expired => (
+            bg: const Color(0xFFFFF3E0),
+            color: const Color(0xFFEF6C00),
+            icon: Icons.timer_off,
           ),
           CandidateCardStatus.rejected => (
             bg: const Color(0xFFFFEBEE),
@@ -2182,6 +2215,51 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                                   ),
                                 ),
                               ],
+                              if (normalizedStatus ==
+                                  CandidateCardStatus.rejected) ...[
+                                const PopupMenuItem(
+                                  value: 'accept',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.check_circle_outline,
+                                        size: 18,
+                                        color: Colors.blue,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Accept Response',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.blue,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              const PopupMenuItem(
+                                value: 'edit_response',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.edit_outlined,
+                                      size: 18,
+                                      color: AppColors.active,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Edit Response',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.active,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                               const PopupMenuItem(
                                 value: 'copy_link',
                                 child: Row(
@@ -2225,6 +2303,10 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                               } else if (value == 'register') {
                                 GoRouter.of(context).push(
                                   '/employee/register/new?acceptedLinkId=${link.linkId}',
+                                );
+                              } else if (value == 'edit_response') {
+                                GoRouter.of(context).push(
+                                  '/employee/register/${link.linkId}?editResponse=true',
                                 );
                               } else if (value == 'copy_link') {
                                 Clipboard.setData(
@@ -2370,6 +2452,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
         normStatus == CandidateCardStatus.submitted ||
         normStatus == CandidateCardStatus.resubmitted;
     final isAccepted = normStatus == CandidateCardStatus.accepted;
+    final isRejected = normStatus == CandidateCardStatus.rejected;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -2392,6 +2475,32 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               fontSize: isMobile ? 12 : 13,
               fontWeight: FontWeight.w600,
               color: AppColors.textPrimary,
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+        TextButton.icon(
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onPressed: () {
+            GoRouter.of(context).push(
+              '/employee/register/${link.linkId}?editResponse=true',
+            );
+          },
+          icon: Icon(
+            Icons.edit_outlined,
+            size: isMobile ? 14 : 16,
+            color: AppColors.active,
+          ),
+          label: Text(
+            'Edit',
+            style: TextStyle(
+              fontSize: isMobile ? 12 : 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.active,
             ),
           ),
         ),
@@ -2487,6 +2596,30 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                 fontSize: isMobile ? 12 : 13,
                 fontWeight: FontWeight.bold,
                 color: Colors.redAccent,
+              ),
+            ),
+          ),
+        ],
+        if (isRejected) ...[
+          const SizedBox(width: 6),
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () => _setResponseStatus(link, 'Accepted'),
+            icon: Icon(
+              Icons.check_circle_outline,
+              size: isMobile ? 14 : 16,
+              color: Colors.blue,
+            ),
+            label: Text(
+              'Accept',
+              style: TextStyle(
+                fontSize: isMobile ? 12 : 13,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue,
               ),
             ),
           ),
@@ -2687,6 +2820,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
       CandidateCardStatus.resubmitted => 'Resubmitted',
       CandidateCardStatus.accepted => 'Accepted',
       CandidateCardStatus.registered => 'Converted',
+      CandidateCardStatus.expired => 'Expired',
       CandidateCardStatus.rejected => 'Rejected',
       CandidateCardStatus.pending => 'Pending',
     };
@@ -3098,6 +3232,71 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 42,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          GoRouter.of(context).push(
+                            '/employee/register/${link.linkId}?editResponse=true',
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppColors.active),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(
+                          Icons.edit_outlined,
+                          size: 16,
+                          color: AppColors.active,
+                        ),
+                        label: const Text(
+                          'Edit',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.active,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (normalized == CandidateCardStatus.rejected) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: SizedBox(
+                        height: 42,
+                        child: FilledButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            _setResponseStatus(link, 'Accepted');
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(
+                            Icons.check_circle_outline,
+                            size: 16,
+                          ),
+                          label: const Text(
+                            'Accept',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                   if (normalized == CandidateCardStatus.submitted ||
                       normalized == CandidateCardStatus.resubmitted ||
                       normalized == CandidateCardStatus.pending) ...[
@@ -3174,7 +3373,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             linkStatus: status,
             candidateId: effectiveCandId,
           );
+      ref.invalidate(registrationLinksStreamProvider);
       ref.invalidate(registrationLinksProvider);
+      ref.invalidate(candidateResponsesStreamProvider);
       ref.invalidate(candidateResponsesProvider);
       ref.invalidate(employeesProvider);
       ref.invalidate(allEmployeesProvider);
@@ -3252,10 +3453,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     resp.candidateId == link.linkId)) ||
             (link.employeeId.isNotEmpty &&
                 (resp.candidateId == link.employeeId ||
-                    resp.linkId == link.employeeId)) ||
-            (link.employeeName.isNotEmpty &&
-                resp.employeeData.fullName.trim().toLowerCase() ==
-                    link.employeeName.trim().toLowerCase())) {
+                    resp.linkId == link.employeeId))) {
           return resp.employeeData;
         }
       }
@@ -3264,10 +3462,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
       if ((link.employeeId.isNotEmpty &&
               (employee.employeeId == link.employeeId ||
                   employee.id.toString() == link.employeeId)) ||
-          (link.linkId.isNotEmpty && employee.employeeId == link.linkId) ||
-          (link.employeeName.isNotEmpty &&
-              employee.fullName.trim().toLowerCase() ==
-                  link.employeeName.trim().toLowerCase())) {
+          (link.linkId.isNotEmpty && employee.employeeId == link.linkId)) {
         return employee;
       }
     }
@@ -3285,10 +3480,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   resp.candidateId == link.linkId)) ||
           (link.employeeId.isNotEmpty &&
               (resp.candidateId == link.employeeId ||
-                  resp.linkId == link.employeeId)) ||
-          (link.employeeName.isNotEmpty &&
-              resp.employeeData.fullName.trim().toLowerCase() ==
-                  link.employeeName.trim().toLowerCase())) {
+                  resp.linkId == link.linkId ||
+                  resp.linkId == link.employeeId))) {
         return resp;
       }
     }

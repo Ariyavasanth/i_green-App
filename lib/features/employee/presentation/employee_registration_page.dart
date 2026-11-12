@@ -36,6 +36,7 @@ class EmployeeRegistrationPage extends ConsumerStatefulWidget {
     this.acceptedEmpId,
     this.acceptedLinkId,
     this.correctionToken,
+    this.isResponseEdit = false,
     super.key,
   });
 
@@ -44,6 +45,7 @@ class EmployeeRegistrationPage extends ConsumerStatefulWidget {
   final int? acceptedEmpId;
   final String? acceptedLinkId;
   final String? correctionToken;
+  final bool isResponseEdit;
 
   static List<Map<String, String>> get allWorldCountryCodes =>
       _EmployeeRegistrationPageState.allWorldCountryCodes;
@@ -498,6 +500,32 @@ class _EmployeeRegistrationPageState
   }
 
   bool get _isEditing => widget.employee != null || widget.linkId == 'edit';
+
+  bool _isCandidateLinkLocked(RegistrationLink? link) {
+    if (link == null ||
+        widget.isResponseEdit ||
+        _isManagementAdd ||
+        _isEditing ||
+        _isCorrectionMode) {
+      return false;
+    }
+    final statusLower = link.linkStatus.trim().toLowerCase();
+    return statusLower == 'converted' ||
+        statusLower == 'registered' ||
+        statusLower == 'accepted' ||
+        statusLower == 'rejected';
+  }
+
+  bool _isCandidateLinkExpired(RegistrationLink? link) {
+    if (link == null ||
+        widget.isResponseEdit ||
+        _isManagementAdd ||
+        _isEditing ||
+        _isCorrectionMode) {
+      return false;
+    }
+    return link.linkStatus.trim().toLowerCase() == 'expired';
+  }
 
   bool _isSubmitting = false;
   bool _isDraftSaving = false;
@@ -2178,26 +2206,27 @@ class _EmployeeRegistrationPageState
       _selectedAcceptedLinkId = null;
 
       WidgetsBinding.instance.addPostFrameCallback((_) async {
-        ref.invalidate(allEmployeesProvider);
-        ref.invalidate(registrationLinksProvider);
-        ref.invalidate(candidateResponsesProvider);
         final repo = ref.read(employeeRepositoryProvider);
 
         final candidateResponse =
             await repo.getCandidateResponseByLinkId(widget.linkId) ??
             await repo.getCandidateResponseByCandidateId(widget.linkId);
 
-        final List<RegistrationLink> links = await ref.read(
-          registrationLinksProvider.future,
+        RegistrationLink? link = await repo.getRegistrationLinkById(
+          widget.linkId,
         );
-        final matchingLinks = links
-            .where((l) => l.linkId == widget.linkId)
-            .toList();
+        if (link == null) {
+          try {
+            final links = await ref.read(registrationLinksProvider.future);
+            link = links
+                .where((l) => l.linkId == widget.linkId)
+                .firstOrNull;
+          } catch (_) {}
+        }
 
         if (candidateResponse != null && mounted) {
           _populateFromEmployee(candidateResponse.employeeData);
-          if (matchingLinks.isNotEmpty) {
-            final link = matchingLinks.first;
+          if (link != null) {
             _isExperienceMandatory = link.isExperienceMandatory;
             if (_organizationName.isEmpty && link.organizationName.isNotEmpty) {
               _organizationName = link.organizationName;
@@ -2223,66 +2252,60 @@ class _EmployeeRegistrationPageState
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                'Auto-fetched candidate details for ${candidateResponse.employeeData.fullName}. Complete details to finalize registration.',
+                widget.isResponseEdit
+                    ? 'Loaded candidate details for ${candidateResponse.employeeData.fullName}. Edit and save changes.'
+                    : 'Loaded your previous details for ${candidateResponse.employeeData.fullName}. You can review or edit and submit.',
               ),
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 3),
             ),
           );
-        } else {
-          final List<Employee> allEmps = await ref.read(
-            allEmployeesProvider.future,
-          );
-          if (matchingLinks.isNotEmpty && mounted) {
-            final link = matchingLinks.first;
-            _isExperienceMandatory = link.isExperienceMandatory;
-            if (link.organizationName.isNotEmpty) {
-              _organizationName = link.organizationName;
+        } else if (link != null && mounted) {
+          _isExperienceMandatory = link.isExperienceMandatory;
+          if (link.organizationName.isNotEmpty) {
+            _organizationName = link.organizationName;
+          }
+          if (link.department.isNotEmpty) {
+            _department = link.department;
+          }
+          if (link.designation.isNotEmpty) {
+            _designation = link.designation;
+          }
+          if (_referredByNameController.text.trim().isEmpty &&
+              link.referredBy.isNotEmpty) {
+            _referredByNameController.text = link.referredBy;
+            if (link.referredByMobile.isNotEmpty) {
+              final (refCc, refNum) = _parsePhoneAndCountryCode(
+                link.referredByMobile,
+              );
+              _referredByMobileCountryCode = refCc;
+              _referredByMobileController.text = refNum;
             }
-            if (link.department.isNotEmpty) {
-              _department = link.department;
-            }
-            if (link.designation.isNotEmpty) {
-              _designation = link.designation;
-            }
-            if (_referredByNameController.text.trim().isEmpty &&
-                link.referredBy.isNotEmpty) {
-              _referredByNameController.text = link.referredBy;
-              if (link.referredByMobile.isNotEmpty) {
-                final (refCc, refNum) = _parsePhoneAndCountryCode(
-                  link.referredByMobile,
-                );
-                _referredByMobileCountryCode = refCc;
-                _referredByMobileController.text = refNum;
+          }
+          Employee? matchedEmployee;
+          if (link.employeeId.isNotEmpty) {
+            try {
+              final allEmps = await ref.read(allEmployeesProvider.future);
+              matchedEmployee = _findMatchingEmployee(link, allEmps);
+            } catch (_) {}
+          }
+          if (!mounted) return;
+          if (matchedEmployee != null) {
+            _selectedAcceptedEmpId = matchedEmployee.id;
+            _populateFromEmployee(matchedEmployee);
+          } else if (link.employeeName.isNotEmpty) {
+            if (_firstNameController.text.isEmpty) {
+              final nameParts = link.employeeName.trim().split(
+                RegExp(r'\s+'),
+              );
+              if (nameParts.length > 1) {
+                _firstNameController.text = nameParts.first;
+                _lastNameController.text = nameParts.sublist(1).join(' ');
+              } else {
+                _firstNameController.text = link.employeeName;
               }
             }
-            final matchedEmployee = _findMatchingEmployee(link, allEmps);
-            if (matchedEmployee != null) {
-              _selectedAcceptedEmpId = matchedEmployee.id;
-              _populateFromEmployee(matchedEmployee);
-            } else if (link.employeeName.isNotEmpty) {
-              if (_firstNameController.text.isEmpty) {
-                final nameParts = link.employeeName.trim().split(
-                  RegExp(r'\s+'),
-                );
-                if (nameParts.length > 1) {
-                  _firstNameController.text = nameParts.first;
-                  _lastNameController.text = nameParts.sublist(1).join(' ');
-                } else {
-                  _firstNameController.text = link.employeeName;
-                }
-              }
-              _status = 'ACTIVE';
-            }
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Auto-fetched candidate details for ${matchedEmployee?.fullName.isNotEmpty == true ? matchedEmployee!.fullName : (link.employeeName.isNotEmpty ? link.employeeName : link.linkId)}. Complete details to finalize registration.',
-                ),
-                behavior: SnackBarBehavior.floating,
-                duration: const Duration(seconds: 3),
-              ),
-            );
+            _status = 'ACTIVE';
           }
         }
       });
@@ -2658,6 +2681,9 @@ class _EmployeeRegistrationPageState
           !widget.employee!.employeeId.startsWith('CAN-') &&
           !widget.employee!.employeeId.toLowerCase().startsWith('pending_');
 
+      final hasExistingCandId =
+          _currentEmployee != null &&
+          _currentEmployee!.employeeId.startsWith('CAN-');
       final resolvedEmployeeId =
           _employeeCustomIdController.text.trim().isNotEmpty
           ? _employeeCustomIdController.text.trim()
@@ -2665,9 +2691,11 @@ class _EmployeeRegistrationPageState
                 ? _currentEmployee!.employeeId
                 : ((isSubmit && hasWidgetEmpId)
                       ? widget.employee!.employeeId
-                      : (isSubmit
-                            ? ''
-                            : 'pending_${DateTime.now().millisecondsSinceEpoch}')));
+                      : ((isSubmit && hasExistingCandId)
+                            ? _currentEmployee!.employeeId
+                            : (isSubmit
+                                  ? ''
+                                  : 'pending_${DateTime.now().millisecondsSinceEpoch}'))));
 
       String profileImageUrl = _isProfileImageRemoved
           ? ''
@@ -2688,8 +2716,11 @@ class _EmployeeRegistrationPageState
                 '');
 
       if (_profileImageBytes != null) {
+        final uploadEmpKey = resolvedEmployeeId.isNotEmpty
+            ? resolvedEmployeeId
+            : (widget.linkId.isNotEmpty ? widget.linkId : 'candidate');
         final uploaded = await repo.uploadEmployeeProfileImage(
-          employeeId: resolvedEmployeeId,
+          employeeId: uploadEmpKey,
           role: _userType,
           imageBytes: _profileImageBytes!,
           fileName: _selectedFileName.isNotEmpty
@@ -2963,6 +2994,15 @@ class _EmployeeRegistrationPageState
         );
         await repo.updateEmployee(updated);
         savedEmployee = updated;
+      } else if (widget.isResponseEdit &&
+          widget.linkId.isNotEmpty &&
+          widget.linkId != 'new' &&
+          widget.linkId != 'edit') {
+        savedEmployee = await repo.updateCandidateResponse(
+          linkId: widget.linkId,
+          candidateId: _currentEmployee?.employeeId ?? '',
+          employeeData: employeeData,
+        );
       } else if (!isSubmit) {
         // ==========================================
         // DRAFT SAVE / SAVE PROGRESS (Tabs 1 to 12)
@@ -3035,6 +3075,15 @@ class _EmployeeRegistrationPageState
             linkId: linkIdToConvert,
             employeeData: dataWithExistingId,
           );
+        } else if (widget.isResponseEdit &&
+            widget.linkId.isNotEmpty &&
+            widget.linkId != 'new' &&
+            widget.linkId != 'edit') {
+          savedEmployee = await repo.updateCandidateResponse(
+            linkId: widget.linkId,
+            candidateId: _currentEmployee?.employeeId ?? '',
+            employeeData: employeeData,
+          );
         } else if (widget.linkId == 'new' || widget.linkId.isEmpty) {
           // Manual Add finalized
           savedEmployee = await repo.addEmployee(employeeData);
@@ -3056,7 +3105,9 @@ class _EmployeeRegistrationPageState
       ref.invalidate(allEmployeesProvider);
       ref.invalidate(activeResponsesProvider);
       ref.invalidate(registrationLinksProvider);
+      ref.invalidate(registrationLinksStreamProvider);
       ref.invalidate(candidateResponsesProvider);
+      ref.invalidate(candidateResponsesStreamProvider);
 
       if (_selectedAcceptedLinkId != null &&
           _selectedAcceptedLinkId!.isNotEmpty) {
@@ -3087,9 +3138,11 @@ class _EmployeeRegistrationPageState
                 const SizedBox(width: 8),
                 Text(
                   isSubmit
-                      ? (isEditMode
-                            ? 'Employee details updated successfully!'
-                            : 'Employee registered successfully!')
+                      ? (widget.isResponseEdit
+                            ? 'Candidate response updated successfully!'
+                            : (isEditMode
+                                  ? 'Employee details updated successfully!'
+                                  : 'Employee registered successfully!'))
                       : '$currentTab page saved successfully!',
                 ),
               ],
@@ -3100,8 +3153,18 @@ class _EmployeeRegistrationPageState
           ),
         );
 
-        // Redirect to /employee-management only for management/admin additions, edits, or candidate conversions
-        if (isSubmit &&
+        // Redirect for management/admin additions, edits, candidate conversions, or response edits
+        if (isSubmit && widget.isResponseEdit) {
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) {
+              if (GoRouter.of(context).canPop()) {
+                GoRouter.of(context).pop();
+              } else {
+                GoRouter.of(context).go('/responses');
+              }
+            }
+          });
+        } else if (isSubmit &&
             (_isManagementAdd ||
                 _selectedAcceptedLinkId != null ||
                 widget.acceptedLinkId != null)) {
@@ -3350,20 +3413,31 @@ class _EmployeeRegistrationPageState
                     );
                   }
 
-                  if (link.linkStatus == 'Submitted' ||
-                      link.linkStatus == 'Converted' ||
-                      link.linkStatus == 'Completed' ||
-                      link.linkStatus == 'Used') {
+                  if (_isCandidateLinkLocked(link)) {
+                    final stLower = link.linkStatus.trim().toLowerCase();
+                    final isRejected = stLower == 'rejected';
+                    final isAccepted = stLower == 'accepted';
                     return _buildStatusCard(
-                      icon: Icons.check_circle_outline,
-                      color: const Color(0xFF28A745),
-                      title: 'Registration Link Already Used',
-                      message:
-                          'This registration link has already been used and is no longer available.',
+                      icon: isRejected
+                          ? Icons.cancel_outlined
+                          : Icons.check_circle_outline,
+                      color: isRejected
+                          ? Colors.redAccent
+                          : const Color(0xFF28A745),
+                      title: isRejected
+                          ? 'Registration Link Closed'
+                          : (isAccepted
+                                ? 'Registration Already Accepted'
+                                : 'Registration Link Already Used'),
+                      message: isRejected
+                          ? 'This registration response has been closed. Please contact HR if you need assistance.'
+                          : (isAccepted
+                                ? 'Your registration has already been accepted by HR and can no longer be edited via this link.'
+                                : 'This registration link has already been converted into an employee profile.'),
                     );
                   }
 
-                  if (link.linkStatus == 'Expired') {
+                  if (_isCandidateLinkExpired(link)) {
                     return _buildStatusCard(
                       icon: Icons.timer_off_outlined,
                       color: Colors.orange,
@@ -3462,11 +3536,26 @@ class _EmployeeRegistrationPageState
   Widget _buildTopNavBar(RegistrationLink? link) {
     final name = '${_firstNameController.text} ${_lastNameController.text}'
         .trim();
-    final isEditMode = _isEditing;
+    final isEditMode = _isEditing || widget.isResponseEdit;
     final isCorrection = _isCorrectionMode;
+    final hasPriorCandidateSubmission =
+        !_isManagementAdd &&
+        !isEditMode &&
+        !isCorrection &&
+        link != null &&
+        (link.linkStatus.trim().toLowerCase() == 'submitted' ||
+            link.linkStatus.trim().toLowerCase() == 'resubmitted' ||
+            link.linkStatus.trim().toLowerCase() == 'correction requested');
+    final canCandidateSubmit =
+        link != null &&
+        !_isCandidateLinkLocked(link) &&
+        !_isCandidateLinkExpired(link) &&
+        _submittedEmployee == null;
     final titleText = name.isEmpty
         ? (isEditMode
-              ? 'Edit Employee Details'
+              ? (widget.isResponseEdit
+                    ? 'Edit Candidate Response'
+                    : 'Edit Employee Details')
               : (isCorrection
                     ? 'Candidate Correction'
                     : 'Employee Registration'))
@@ -3519,7 +3608,9 @@ class _EmployeeRegistrationPageState
                   ? 'Save Changes'
                   : (isCorrection
                         ? 'Submit Corrections'
-                        : 'Submit Registration')),
+                        : (hasPriorCandidateSubmission
+                              ? 'Update Registration'
+                              : 'Submit Registration'))),
         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
       ),
     );
@@ -3562,10 +3653,7 @@ class _EmployeeRegistrationPageState
                     (_isCorrectionMode &&
                         _activeCorrectionRequest != null &&
                         _submittedEmployee == null) ||
-                    (link != null &&
-                        link.linkStatus != 'Submitted' &&
-                        link.linkStatus != 'Converted' &&
-                        _submittedEmployee == null)) ...[
+                    canCandidateSubmit) ...[
                   const SizedBox(height: 8),
                   SizedBox(
                     width: double.infinity,
@@ -3648,10 +3736,7 @@ class _EmployeeRegistrationPageState
                   (_isCorrectionMode &&
                       _activeCorrectionRequest != null &&
                       _submittedEmployee == null) ||
-                  (link != null &&
-                      link.linkStatus != 'Submitted' &&
-                      link.linkStatus != 'Converted' &&
-                      _submittedEmployee == null))
+                  canCandidateSubmit)
                 submitBtn,
             ],
           ),
@@ -9395,7 +9480,7 @@ class _EmployeeRegistrationPageState
                               size: 18,
                             ),
                             label: Text(
-                              _isEditing
+                              (_isEditing || widget.isResponseEdit)
                                   ? 'Confirm & Save Changes'
                                   : (_isCorrectionMode
                                         ? 'Confirm & Submit Corrections'
@@ -9499,7 +9584,7 @@ class _EmployeeRegistrationPageState
                               size: 18,
                             ),
                             label: Text(
-                              _isEditing
+                              (_isEditing || widget.isResponseEdit)
                                   ? 'Confirm & Save Changes'
                                   : (_isCorrectionMode
                                         ? 'Confirm & Submit Corrections'
@@ -9673,7 +9758,11 @@ class _EmployeeRegistrationPageState
                 if (GoRouter.of(context).canPop()) {
                   GoRouter.of(context).pop();
                 } else {
-                  GoRouter.of(context).go('/employee-management');
+                  GoRouter.of(context).go(
+                    widget.isResponseEdit
+                        ? '/responses'
+                        : '/employee-management',
+                  );
                 }
               },
               child: const Text(

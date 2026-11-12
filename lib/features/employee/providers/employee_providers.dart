@@ -71,6 +71,11 @@ final candidateResponsesProvider = FutureProvider<List<CandidateResponse>>(
   (ref) => ref.watch(employeeRepositoryProvider).getCandidateResponses(),
 );
 
+final candidateResponsesStreamProvider =
+    StreamProvider<List<CandidateResponse>>(
+      (ref) => ref.watch(employeeRepositoryProvider).watchCandidateResponses(),
+    );
+
 final candidateResponseByLinkIdProvider =
     FutureProvider.family<CandidateResponse?, String>(
       (ref, linkId) => ref
@@ -207,6 +212,10 @@ final registrationLinksProvider = FutureProvider<List<RegistrationLink>>(
   (ref) => ref.watch(employeeRepositoryProvider).getRegistrationLinks(),
 );
 
+final registrationLinksStreamProvider = StreamProvider<List<RegistrationLink>>(
+  (ref) => ref.watch(employeeRepositoryProvider).watchRegistrationLinks(),
+);
+
 final registrationLinkByIdProvider =
     FutureProvider.family<RegistrationLink?, String>((ref, linkId) async {
       if (linkId == 'new' || linkId == 'edit' || linkId.isEmpty) {
@@ -221,22 +230,9 @@ final registrationLinkByIdProvider =
           department: 'Management',
         );
       }
-      try {
-        final link = await ref
-            .watch(employeeRepositoryProvider)
-            .getRegistrationLinkById(linkId);
-        if (link != null) return link;
-      } catch (_) {}
-      return const RegistrationLink(
-        id: 0,
-        linkId: 'new',
-        generatedBy: 'Admin',
-        generatedDate: '',
-        expiryDate: '',
-        linkStatus: 'Pending',
-        organizationName: '',
-        department: 'Management',
-      );
+      return ref
+          .watch(employeeRepositoryProvider)
+          .getRegistrationLinkById(linkId);
     });
 
 final empColumnPreferenceProvider =

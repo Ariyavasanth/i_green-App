@@ -146,7 +146,7 @@ class RegistrationLinksDialog extends ConsumerWidget {
                                 onPressed: () {
                                   Navigator.of(context).pop();
                                   GoRouter.of(context).push(
-                                    '/employee/register/${link.linkId}?acceptedLinkId=${link.linkId}',
+                                    '/employee/register/${link.linkId}',
                                   );
                                 },
                               ),

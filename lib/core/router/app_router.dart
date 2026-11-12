@@ -359,12 +359,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final acceptedLinkId = state.uri.queryParameters['acceptedLinkId'];
           final correctionToken = state.uri.queryParameters['correctionToken'] ??
               state.uri.queryParameters['token'];
+          final editResponse =
+              state.uri.queryParameters['editResponse'] == 'true' ||
+              state.uri.queryParameters['edit'] == 'true';
           return EmployeeRegistrationPage(
             linkId: state.pathParameters['linkId'] ?? '',
             employee: state.extra is Employee ? state.extra as Employee : null,
             acceptedEmpId: acceptedEmpId,
             acceptedLinkId: acceptedLinkId,
             correctionToken: correctionToken,
+            isResponseEdit: editResponse,
           );
         },
       ),

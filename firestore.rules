@@ -318,5 +318,32 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isSuperAdmin() || hasPermission('Payroll');
     }
+
+    // ── Candidate Registration Links, Responses & Correction Requests ───────
+    match /registration_links/{linkId} {
+      allow read: if true;
+      allow create: if isSuperAdmin() || hasPermission('Responses') || hasPermission('Employee Management');
+      allow update: if isSuperAdmin() || hasPermission('Responses') || hasPermission('Employee Management') || (
+        request.resource.data.link_status in ['Pending', 'Submitted', 'Resubmitted']
+      );
+      allow delete: if isSuperAdmin() || hasPermission('Responses') || hasPermission('Employee Management');
+    }
+
+    match /candidate_responses/{responseId} {
+      allow read: if true;
+      allow create, update: if isSuperAdmin() || hasPermission('Responses') || hasPermission('Employee Management') || (
+        request.resource.data.status in ['Draft', 'Submitted', 'Resubmitted']
+      );
+      allow delete: if isSuperAdmin() || hasPermission('Responses') || hasPermission('Employee Management');
+    }
+
+    match /correction_requests/{requestId} {
+      allow read: if true;
+      allow create: if isSuperAdmin() || hasPermission('Responses') || hasPermission('Employee Management');
+      allow update: if isSuperAdmin() || hasPermission('Responses') || hasPermission('Employee Management') || (
+        request.resource.data.status in ['completed', 'expired']
+      );
+      allow delete: if isSuperAdmin() || hasPermission('Responses') || hasPermission('Employee Management');
+    }
   }
 }

@@ -522,9 +522,7 @@ class _AddEmployeeLinkDialogState extends ConsumerState<AddEmployeeLinkDialog> {
                     onPressed: () {
                       final linkId = _generatedLink!.linkId;
                       Navigator.of(context).pop();
-                      GoRouter.of(context).push(
-                        '/employee/register/$linkId?acceptedLinkId=$linkId',
-                      );
+                      GoRouter.of(context).push('/employee/register/$linkId');
                     },
                     icon: const Icon(Icons.open_in_new, size: 16),
                     label: const Text(

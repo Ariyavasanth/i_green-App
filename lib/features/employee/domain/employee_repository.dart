@@ -41,6 +41,7 @@ abstract class EmployeeRepository {
     String? referredByEmployeeId,
   });
   Future<List<RegistrationLink>> getRegistrationLinks();
+  Stream<List<RegistrationLink>> watchRegistrationLinks();
   Future<RegistrationLink?> getRegistrationLinkById(String linkId);
   Future<void> updateRegistrationLinkStatus({
     required String linkId,
@@ -56,6 +57,11 @@ abstract class EmployeeRepository {
     required String linkId,
     required Employee candidateData,
   });
+  Future<Employee> updateCandidateResponse({
+    required String linkId,
+    required String candidateId,
+    required Employee employeeData,
+  });
   Future<Employee> convertCandidateToEmployee({
     required String linkId,
     required Employee employeeData,
@@ -66,6 +72,7 @@ abstract class EmployeeRepository {
     String candidateId,
   );
   Future<List<CandidateResponse>> getCandidateResponses();
+  Stream<List<CandidateResponse>> watchCandidateResponses();
 
   // Candidate Correction Requests
   Future<String> createCorrectionRequest({
