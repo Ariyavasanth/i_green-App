@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../employee/services/offer_letter_save_stub.dart'
     if (dart.library.html) '../../../employee/services/offer_letter_save_web.dart'
     if (dart.library.io) '../../../employee/services/offer_letter_save_io.dart';
+import '../../../../core/widgets/smart_network_image.dart';
 import '../../../projects/domain/models/project_document.dart';
 
 class TenderDocumentActions {
@@ -188,6 +189,18 @@ class TenderDocumentActions {
                       ),
                     ),
                     IconButton(
+                      icon: const Icon(Icons.open_in_new,
+                          size: 20, color: Color(0xFF414A51)),
+                      tooltip: 'Open in new tab',
+                      onPressed: () {
+                        if (url.startsWith('http://') ||
+                            url.startsWith('https://')) {
+                          launchUrl(Uri.parse(url),
+                              mode: LaunchMode.externalApplication);
+                        }
+                      },
+                    ),
+                    IconButton(
                       icon: const Icon(Icons.download_rounded,
                           size: 20, color: Color(0xFF414A51)),
                       tooltip: 'Download Image',
@@ -210,11 +223,74 @@ class TenderDocumentActions {
                     maxScale: 4.0,
                     child: memoryBytes != null
                         ? Image.memory(memoryBytes, fit: BoxFit.contain)
-                        : Image.network(
-                            url,
+                        : SmartNetworkImage(
+                            url: url,
                             fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => const Center(
-                              child: Text('Unable to preview image'),
+                            errorBuilder: (_) => Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.broken_image_outlined,
+                                        size: 48, color: Color(0xFF94A3B8)),
+                                    const SizedBox(height: 12),
+                                    const Text(
+                                      'Preview restricted by browser security (CORS) or image format.',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'Your file is safely stored. Click below to view or download directly.',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF94A3B8),
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        FilledButton.icon(
+                                          style: FilledButton.styleFrom(
+                                            backgroundColor:
+                                                const Color(0xFF9CC70A),
+                                            foregroundColor:
+                                                const Color(0xFF414A51),
+                                          ),
+                                          onPressed: () {
+                                            if (url.startsWith('http://') ||
+                                                url.startsWith('https://')) {
+                                              launchUrl(Uri.parse(url),
+                                                  mode: LaunchMode
+                                                      .externalApplication);
+                                            }
+                                          },
+                                          icon: const Icon(Icons.open_in_new,
+                                              size: 16),
+                                          label:
+                                              const Text('Open in New Tab'),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        OutlinedButton.icon(
+                                          onPressed: () =>
+                                              downloadDocument(context, doc),
+                                          icon: const Icon(
+                                              Icons.download_rounded,
+                                              size: 16),
+                                          label: const Text('Download'),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                   ),

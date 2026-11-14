@@ -150,6 +150,31 @@ class _TenderListScreenState extends ConsumerState<TenderListScreen> {
             letterSpacing: 0.2,
           ),
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFF414A51)),
+                foregroundColor: const Color(0xFF414A51),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: () => context.push('/projects/company-documents'),
+              icon: const Icon(Icons.folder_shared_outlined, size: 16),
+              label: const Text(
+                'Company Vault',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFF9CC70A),

@@ -2272,6 +2272,12 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
               ),
             ),
             OutlinedButton.icon(
+              onPressed: () => context.push('/projects/company-documents'),
+              icon: const Icon(Icons.folder_shared_outlined, size: 16),
+              label: const Text('Vault'),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
               onPressed: () async {
                 final companyDocs =
                     ref.read(companyDocumentsStreamProvider).valueOrNull ??
@@ -2279,11 +2285,27 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
                             .read(companyDocumentRepositoryProvider)
                             .getDocuments();
                 if (!mounted) return;
+                final previousCount = _bqrRequirements
+                    .expand((r) => r.documents)
+                    .length;
                 setState(() {
                   _bqrRequirements =
                       matchCompanyDocsToBqr(_bqrRequirements, companyDocs);
                 });
-                _showToast('AI matched available company documents to BQR items.');
+                final newCount = _bqrRequirements
+                    .expand((r) => r.documents)
+                    .length;
+                final added = newCount - previousCount;
+                if (companyDocs.isEmpty) {
+                  _showToast(
+                    'Company Vault is empty. Tap "Vault" to upload company documents.',
+                    isError: true,
+                  );
+                } else if (added > 0) {
+                  _showToast('AI attached $added document(s) from Company Vault to BQR items.');
+                } else {
+                  _showToast('No matching documents found in Vault for current BQR items.');
+                }
               },
               icon: const Icon(Icons.auto_awesome, size: 16),
               label: const Text('AI Fetch Docs'),

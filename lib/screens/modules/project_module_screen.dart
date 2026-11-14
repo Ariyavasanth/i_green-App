@@ -51,6 +51,12 @@ class ProjectModuleScreen extends ConsumerStatefulWidget {
         '/projects/tenders',
         Color(0xFFE91E63),
       ),
+      _SubModule(
+        'COMPANY VAULT',
+        Icons.inventory_2_outlined,
+        '/projects/company-documents',
+        Color(0xFF6366F1),
+      ),
     ],
   };
 

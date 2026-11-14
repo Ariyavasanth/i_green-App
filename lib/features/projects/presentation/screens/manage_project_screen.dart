@@ -6,7 +6,9 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../tenders/domain/models/company_document_item.dart';
 import '../../../tenders/domain/models/tender.dart';
+import '../../../tenders/providers/company_document_providers.dart';
 import '../../../tenders/providers/tender_providers.dart';
 import '../../domain/models/daily_progress_entry.dart';
 import '../../domain/models/project_compliance_record.dart';
@@ -837,6 +839,102 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                 _buildDocumentsList('WRPO Documents', project.wrpoDocuments),
             ],
           ],
+        ),
+        const SizedBox(height: 18),
+
+        // Completion Certificate & Experience Record Card
+        Consumer(
+          builder: (context, ref, _) {
+            final vaultDocs =
+                ref.watch(companyDocumentsStreamProvider).valueOrNull ?? [];
+            final projectCertificates = vaultDocs
+                .where((d) =>
+                    d.docType == CompanyDocType.experienceCertificate &&
+                    (d.projectCode?.toLowerCase() ==
+                            project.projectCode.toLowerCase() ||
+                        d.title
+                            .toLowerCase()
+                            .contains(project.projectCode.toLowerCase())))
+                .toList();
+
+            return _buildContentCard(
+              title: 'Completion Certificate & Experience Store',
+              icon: Icons.verified_outlined,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Upload project completion certificates here. They are automatically saved into the Company Vault as Experience Certificates for future tender BQR participation.',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF9CC70A),
+                        foregroundColor: const Color(0xFF414A51),
+                      ),
+                      onPressed: () =>
+                          _showUploadCompletionCertificateDialog(project),
+                      icon: const Icon(Icons.upload_file_rounded, size: 16),
+                      label: const Text('Upload Certificate'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (projectCertificates.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 6),
+                    child: Text(
+                      'No completion certificate uploaded for this project yet.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  )
+                else
+                  ...projectCertificates.map(
+                    (cert) => Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAF8),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE5E8E2)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.verified_rounded,
+                              size: 20, color: Color(0xFF9CC70A)),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              cert.title,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.visibility_outlined,
+                                size: 18),
+                            tooltip: 'View Certificate',
+                            onPressed: () =>
+                                _launchDocumentUrl(cert.document.downloadUrl),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -2729,6 +2827,102 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                 await ref.read(projectRepositoryProvider).addIncident(inc, pickedPhoto);
               },
               child: const Text('Confirm Incident Log'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showUploadCompletionCertificateDialog(SiteProject project) async {
+    PlatformFile? pickedFile;
+    final titleCtrl = TextEditingController(
+      text: '${project.projectCode} Completion Certificate',
+    );
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Upload Completion Certificate'),
+          content: SizedBox(
+            width: 440,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Once uploaded, this certificate will be automatically saved into the Company Document Vault as an Experience Certificate for future tenders.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: titleCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Certificate Title *',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final res = await FilePicker.pickFiles(withData: true);
+                    if (res != null && res.files.isNotEmpty) {
+                      setDialogState(() => pickedFile = res.files.first);
+                    }
+                  },
+                  icon: const Icon(Icons.attach_file),
+                  label: Text(pickedFile == null
+                      ? 'Attach Certificate File *'
+                      : pickedFile!.name),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF9CC70A),
+                foregroundColor: const Color(0xFF414A51),
+              ),
+              onPressed: () async {
+                if (pickedFile == null) return;
+                Navigator.of(ctx).pop();
+                try {
+                  await ref.read(companyDocumentRepositoryProvider).addDocument(
+                        docType: CompanyDocType.experienceCertificate,
+                        title: titleCtrl.text.trim().isEmpty
+                            ? '${project.projectCode} Completion Certificate'
+                            : titleCtrl.text.trim(),
+                        file: pickedFile!,
+                        projectCode: project.projectCode,
+                      );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Completion Certificate uploaded and saved to Company Vault under Experience Certificates (${project.projectCode})',
+                        ),
+                        backgroundColor: const Color(0xFF2E7D32),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to save certificate: $e'),
+                        backgroundColor: Colors.red.shade700,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Save to Vault'),
             ),
           ],
         ),

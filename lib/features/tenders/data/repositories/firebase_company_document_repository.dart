@@ -56,7 +56,22 @@ class FirebaseCompanyDocumentRepository implements CompanyDocumentRepository {
     final ref = _storage.ref().child(storagePath);
 
     final bytes = file.bytes ?? Uint8List(0);
-    await ref.putData(bytes);
+    String contentType = 'application/octet-stream';
+    final lower = file.name.toLowerCase();
+    if (lower.endsWith('.png')) {
+      contentType = 'image/png';
+    } else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+      contentType = 'image/jpeg';
+    } else if (lower.endsWith('.webp')) {
+      contentType = 'image/webp';
+    } else if (lower.endsWith('.pdf')) {
+      contentType = 'application/pdf';
+    }
+
+    await ref.putData(
+      bytes,
+      SettableMetadata(contentType: contentType),
+    );
     final url = await ref.getDownloadURL();
 
     final projectDoc = ProjectDocument(

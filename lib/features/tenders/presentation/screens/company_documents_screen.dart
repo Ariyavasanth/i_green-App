@@ -1,10 +1,12 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../domain/models/company_document_item.dart';
 import '../../providers/company_document_providers.dart';
+import '../widgets/tender_document_actions.dart';
 
 class CompanyDocumentsScreen extends ConsumerStatefulWidget {
   const CompanyDocumentsScreen({super.key});
@@ -201,6 +203,16 @@ class _CompanyDocumentsScreenState
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF414A51),
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF414A51)),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/projects/tenders');
+            }
+          },
+        ),
         title: const Text(
           'Company Document Vault',
           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
@@ -316,6 +328,10 @@ class _CompanyDocumentsScreenState
                   (doc) => Card(
                     margin: const EdgeInsets.only(bottom: 10),
                     child: ListTile(
+                      onTap: () => TenderDocumentActions.viewDocument(
+                        context,
+                        doc.document,
+                      ),
                       leading: const Icon(Icons.description_outlined,
                           color: Color(0xFF414A51)),
                       title: Text(
@@ -330,11 +346,56 @@ class _CompanyDocumentsScreenState
                         if (doc.expiryDate != null)
                           'Expiry: ${DateFormat("dd-MM-yyyy").format(doc.expiryDate!)}',
                       ].join(' • ')),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
-                        onPressed: () => ref
-                            .read(companyDocumentRepositoryProvider)
-                            .deleteDocument(doc.id),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.visibility_outlined,
+                                color: Color(0xFF414A51)),
+                            tooltip: 'View Document',
+                            onPressed: () => TenderDocumentActions.viewDocument(
+                              context,
+                              doc.document,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline,
+                                color: Colors.red),
+                            tooltip: 'Delete Document',
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Delete Document'),
+                                  content: Text(
+                                    'Are you sure you want to delete "${doc.title}"?',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(ctx).pop(false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.red,
+                                        foregroundColor: Colors.white,
+                                      ),
+                                      onPressed: () =>
+                                          Navigator.of(ctx).pop(true),
+                                      child: const Text('Delete'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirm == true) {
+                                await ref
+                                    .read(companyDocumentRepositoryProvider)
+                                    .deleteDocument(doc.id);
+                              }
+                            },
+                          ),
+                        ],
                       ),
                     ),
                   ),
