@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../employee/providers/employee_providers.dart';
 import '../../../tenders/domain/models/company_document_item.dart';
 import '../../../tenders/domain/models/tender.dart';
 import '../../../tenders/providers/company_document_providers.dart';
@@ -1743,6 +1744,21 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                       'Status',
                       isApproved ? 'Approved' : 'Pending Approval (Backdated > 2 days)',
                     ),
+                    if (!isApproved) ...[
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF9CC70A),
+                            foregroundColor: const Color(0xFF414A51),
+                          ),
+                          onPressed: () => _handleApproveProgress(latest),
+                          icon: const Icon(Icons.check_circle_outline, size: 16),
+                          label: const Text('Approve This Entry'),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -1788,31 +1804,68 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                                       color: Color(0xFF414A51),
                                     ),
                                   ),
+                                if (approved && (entry.approvedBy?.isNotEmpty ?? false))
+                                  Text(
+                                    'Approved by: ${entry.approvedBy}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF16A34A),
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: (approved
-                                      ? const Color(0xFF16A34A)
-                                      : const Color(0xFFD97706))
-                                  .withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              approved ? 'Approved' : 'Pending Approval',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: approved
-                                    ? const Color(0xFF16A34A)
-                                    : const Color(0xFFD97706),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: (approved
+                                          ? const Color(0xFF16A34A)
+                                          : const Color(0xFFD97706))
+                                      .withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  approved ? 'Approved' : 'Pending Approval',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: approved
+                                        ? const Color(0xFF16A34A)
+                                        : const Color(0xFFD97706),
+                                  ),
+                                ),
                               ),
-                            ),
+                              if (!approved) ...[
+                                const SizedBox(width: 8),
+                                FilledButton.icon(
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: const Color(0xFF9CC70A),
+                                    foregroundColor: const Color(0xFF414A51),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
+                                    minimumSize: const Size(0, 32),
+                                  ),
+                                  onPressed: () => _handleApproveProgress(entry),
+                                  icon: const Icon(Icons.check, size: 14),
+                                  label: const Text(
+                                    'Approve',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ],
                       ),
@@ -1825,6 +1878,63 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _handleApproveProgress(DailyProgressEntry entry) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Approve Daily Progress'),
+        content: Text(
+          'Approve daily progress entry for ${DateFormat("dd MMM yyyy").format(entry.date)} '
+          '(${entry.quantityDone.toStringAsFixed(entry.quantityDone.truncateToDouble() == entry.quantityDone ? 0 : 1)} / '
+          '${entry.totalQuantity.toStringAsFixed(entry.totalQuantity.truncateToDouble() == entry.totalQuantity ? 0 : 1)} ${entry.unit})?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF9CC70A),
+              foregroundColor: const Color(0xFF414A51),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Approve'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final currentEmp = ref.read(currentEmployeeProvider);
+      final approverName =
+          currentEmp?.fullName ?? currentEmp?.name ?? 'Project Manager';
+      await ref.read(projectRepositoryProvider).approveDailyProgress(
+            entry.id,
+            approverName,
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Daily progress entry approved successfully.'),
+            backgroundColor: Color(0xFF16A34A),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to approve daily progress: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _showAddDailyProgressDialog(String projectCode) async {
@@ -1940,6 +2050,9 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                   if (qDone <= 0 || qTotal <= 0) return;
 
                   Navigator.of(ctx).pop();
+                  final currentEmp = ref.read(currentEmployeeProvider);
+                  final creatorName =
+                      currentEmp?.fullName ?? currentEmp?.name ?? 'Supervisor';
                   final entry = DailyProgressEntry(
                     id: '',
                     projectCode: projectCode,
@@ -1950,10 +2063,26 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                         ? unitCtrl.text.trim()
                         : 'metres',
                     remarks: remarksCtrl.text.trim(),
-                    createdBy: 'Supervisor',
+                    createdBy: creatorName,
                     createdAt: DateTime.now(),
                   );
-                  await ref.read(projectRepositoryProvider).addDailyProgress(entry);
+                  await ref
+                      .read(projectRepositoryProvider)
+                      .addDailyProgress(entry);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          isOver2Days
+                              ? 'Daily progress saved (routed for Manager Approval).'
+                              : 'Daily progress recorded successfully.',
+                        ),
+                        backgroundColor: isOver2Days
+                            ? const Color(0xFFD97706)
+                            : const Color(0xFF16A34A),
+                      ),
+                    );
+                  }
                 },
                 child: const Text('Save Progress'),
               ),

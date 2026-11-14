@@ -607,10 +607,14 @@ class FirebaseProjectRepository implements ProjectRepository {
   Stream<List<DailyProgressEntry>> watchDailyProgress(String projectCode) {
     return _dailyProgressRef
         .where('project_code', isEqualTo: projectCode)
-        .orderBy('date', descending: true)
         .snapshots()
-        .map((snap) =>
-            snap.docs.map((d) => DailyProgressEntry.fromJson(d.data(), d.id)).toList());
+        .map((snap) {
+      final list = snap.docs
+          .map((d) => DailyProgressEntry.fromJson(d.data(), d.id))
+          .toList();
+      list.sort((a, b) => b.date.compareTo(a.date));
+      return list;
+    });
   }
 
   @override
@@ -668,11 +672,14 @@ class FirebaseProjectRepository implements ProjectRepository {
   Stream<List<ProjectPermission>> watchPermissions(String projectCode) {
     return _permissionsRef
         .where('project_code', isEqualTo: projectCode)
-        .orderBy('valid_to', descending: false)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => ProjectPermission.fromJson(d.data(), d.id))
-            .toList());
+        .map((snap) {
+      final list = snap.docs
+          .map((d) => ProjectPermission.fromJson(d.data(), d.id))
+          .toList();
+      list.sort((a, b) => a.validTo.compareTo(b.validTo));
+      return list;
+    });
   }
 
   @override
@@ -701,11 +708,14 @@ class FirebaseProjectRepository implements ProjectRepository {
   Stream<List<ProjectInsurance>> watchInsurance(String projectCode) {
     return _insuranceRef
         .where('project_code', isEqualTo: projectCode)
-        .orderBy('expiry_date', descending: false)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => ProjectInsurance.fromJson(d.data(), d.id))
-            .toList());
+        .map((snap) {
+      final list = snap.docs
+          .map((d) => ProjectInsurance.fromJson(d.data(), d.id))
+          .toList();
+      list.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
+      return list;
+    });
   }
 
   @override
@@ -734,11 +744,14 @@ class FirebaseProjectRepository implements ProjectRepository {
   Stream<List<IncidentLogEntry>> watchIncidents(String projectCode) {
     return _incidentsRef
         .where('project_code', isEqualTo: projectCode)
-        .orderBy('incident_date', descending: true)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => IncidentLogEntry.fromJson(d.data(), d.id))
-            .toList());
+        .map((snap) {
+      final list = snap.docs
+          .map((d) => IncidentLogEntry.fromJson(d.data(), d.id))
+          .toList();
+      list.sort((a, b) => b.incidentDate.compareTo(a.incidentDate));
+      return list;
+    });
   }
 
   @override
