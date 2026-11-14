@@ -80,6 +80,7 @@ abstract class ProjectRepository {
   // ── Project Inventory ──
   Stream<List<ProjectInventoryItem>> watchProjectInventory(String projectCode);
   Future<void> updateProjectInventory(ProjectInventoryItem item);
+  Future<void> deleteProjectInventory(String id, String projectCode);
 
   // ── Compliance (Permissions, Insurance, Incidents) ──
   Stream<List<ProjectPermission>> watchPermissions(String projectCode);

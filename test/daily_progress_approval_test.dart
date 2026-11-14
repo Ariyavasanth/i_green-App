@@ -96,6 +96,8 @@ class _FakeProgressProjectRepository implements ProjectRepository {
   @override
   Future<void> updateProjectInventory(ProjectInventoryItem item) async {}
   @override
+  Future<void> deleteProjectInventory(String id, String projectCode) async {}
+  @override
   Stream<List<ProjectPermission>> watchPermissions(String projectCode) => Stream.value([]);
   @override
   Future<void> addPermission(ProjectPermission record) async {}

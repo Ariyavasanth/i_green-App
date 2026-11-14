@@ -662,6 +662,41 @@ class FirebaseProjectRepository implements ProjectRepository {
     data['id'] = docId;
     data['updated_at'] = DateTime.now().toIso8601String();
     await _inventoryRef.doc(docId).set(data, SetOptions(merge: true));
+    await _syncProjectSettlementStatus(item.projectCode);
+  }
+
+  @override
+  Future<void> deleteProjectInventory(String id, String projectCode) async {
+    await _inventoryRef.doc(id).delete();
+    await _syncProjectSettlementStatus(projectCode);
+  }
+
+  Future<void> _syncProjectSettlementStatus(String projectCode) async {
+    final cleanCode = projectCode.trim();
+    if (cleanCode.isEmpty) return;
+    try {
+      final snap = await _inventoryRef
+          .where('project_code', isEqualTo: cleanCode)
+          .get();
+      final items = snap.docs
+          .map((d) => ProjectInventoryItem.fromJson(d.data(), d.id))
+          .toList();
+      final allSettled = items.isNotEmpty && items.every((i) => i.isSettled);
+
+      final projSnap = await _projectsRef
+          .where('project_code', isEqualTo: cleanCode)
+          .limit(1)
+          .get();
+      if (projSnap.docs.isNotEmpty) {
+        await _projectsRef.doc(projSnap.docs.first.id).update({
+          'supervisor_material_balance_settled': allSettled,
+          'updated_at': DateTime.now().toIso8601String(),
+        });
+      }
+    } catch (e, stack) {
+      developer.log('Error syncing project settlement status: $e',
+          name: 'FirebaseProjectRepository', error: e, stackTrace: stack);
+    }
   }
 
   // ── Permissions Register ──

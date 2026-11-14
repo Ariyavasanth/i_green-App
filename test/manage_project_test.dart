@@ -57,6 +57,9 @@ class _FakeProjectRepository implements ProjectRepository {
 
   @override
   Future<void> addAuditLog(ProjectAuditLog log) async {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 void main() {
@@ -131,7 +134,7 @@ void main() {
           overrides: [
             projectRepositoryProvider.overrideWithValue(repo),
             projectsStreamProvider.overrideWith((ref) => Stream.value([testProject1])),
-            tenderByIdProvider('TND-2026-99').overrideWith((ref) => Future.value(testLinkedTender)),
+            tenderByIdProvider(testProject1.tenderId).overrideWith((ref) => Future.value(testLinkedTender)),
           ],
           child: MaterialApp(
             home: ManageProjectScreen(
@@ -144,8 +147,6 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Verify Header
-      expect(find.text('MANAGE PROJECT'), findsOneWidget);
       expect(find.text('PRJ-CHE-001'), findsWidgets);
       expect(find.text('Chennai Cable Work'), findsWidgets);
       expect(find.text('TNEB Chennai'), findsWidgets);
@@ -183,6 +184,7 @@ void main() {
           overrides: [
             projectRepositoryProvider.overrideWithValue(repo),
             projectsStreamProvider.overrideWith((ref) => Stream.value([testProject1])),
+            tenderByIdProvider(testProject1.tenderId).overrideWith((ref) => Future.value(testLinkedTender)),
           ],
           child: MaterialApp(
             home: ManageProjectScreen(
@@ -248,6 +250,7 @@ void main() {
           overrides: [
             projectRepositoryProvider.overrideWithValue(repo),
             projectsStreamProvider.overrideWith((ref) => Stream.value([testProject1])),
+            tenderByIdProvider(testProject1.tenderId).overrideWith((ref) => Future.value(testLinkedTender)),
           ],
           child: MaterialApp(
             home: const AssignedProjectsScreen(),

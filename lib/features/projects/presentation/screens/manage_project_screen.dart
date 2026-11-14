@@ -2096,6 +2096,13 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION 4 — PROJECT INVENTORY TAB
   // ═══════════════════════════════════════════════════════════════════════════
+  String _formatQty(double val) {
+    if (val == val.roundToDouble()) {
+      return val.toInt().toString();
+    }
+    return val.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '');
+  }
+
   Widget _buildProjectInventoryTab(SiteProject project, bool isMobile) {
     final code = project.projectCode.trim();
     if (code.isEmpty) {
@@ -2110,22 +2117,24 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  'Project Material Inventory',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF414A51),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    'Project Material Inventory',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF414A51),
+                    ),
                   ),
-                ),
-                Text(
-                  'Material issued, used and returned tagged under the supervisor in charge.',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF718096)),
-                ),
-              ],
+                  Text(
+                    'Material issued, used and returned tagged under the supervisor in charge.',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF718096)),
+                  ),
+                ],
+              ),
             ),
             FilledButton.icon(
               style: FilledButton.styleFrom(
@@ -2153,10 +2162,51 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                   children: [
                     _buildDetailRow('Total Tracked Material Items', '${items.length}'),
                     _buildDetailRow(
-                      'Settlement State',
-                      unsettledCount == 0
-                          ? 'All Supervisor Material Balances Settled (0 Balance)'
-                          : '$unsettledCount item(s) have pending supervisor balance. Project cannot close until balance is 0.',
+                      'Unsettled Balances',
+                      unsettledCount == 0 ? '0' : '$unsettledCount supervisor item(s)',
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: unsettledCount == 0
+                            ? const Color(0xFFF0FDF4)
+                            : const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: unsettledCount == 0
+                              ? const Color(0xFFBBF7D0)
+                              : const Color(0xFFFECACA),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            unsettledCount == 0
+                                ? Icons.check_circle_outline_rounded
+                                : Icons.warning_amber_rounded,
+                            size: 20,
+                            color: unsettledCount == 0
+                                ? const Color(0xFF16A34A)
+                                : const Color(0xFFDC2626),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              unsettledCount == 0
+                                  ? 'All supervisor material balances are settled (0 Balance). Project closure requirement is satisfied.'
+                                  : '$unsettledCount item(s) have pending supervisor material balance. Project cannot close until balance is 0 (Settled).',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: unsettledCount == 0
+                                    ? const Color(0xFF16A34A)
+                                    : const Color(0xFFDC2626),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -2177,68 +2227,170 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                           )
                         ]
                       : items.map((item) {
+                          final balanceFormatted = _formatQty(item.balanceQty);
+                          final issuedFormatted = _formatQty(item.issuedQty);
+                          final usedFormatted = _formatQty(item.usedQty);
+                          final returnedFormatted = _formatQty(item.returnedQty);
+
                           return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(12),
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF9FAF8),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFFE5E8E2)),
+                              border: Border.all(
+                                color: item.isSettled
+                                    ? const Color(0xFFE5E8E2)
+                                    : const Color(0xFFFCA5A5),
+                              ),
                             ),
-                            child: Row(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        item.itemName,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 13,
-                                          color: Color(0xFF414A51),
-                                        ),
-                                      ),
-                                      Text(
-                                        'Supervisor: ${item.supervisorName}',
-                                        style: const TextStyle(
-                                          fontSize: 11.5,
-                                          color: Color(0xFF718096),
-                                        ),
-                                      ),
-                                      Text(
-                                        'Issued: ${item.issuedQty} • Used: ${item.usedQty} • Returned: ${item.returnedQty} ${item.unit}',
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: Color(0xFF414A51),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                Row(
                                   children: [
-                                    Text(
-                                      'Balance: ${item.balanceQty.toStringAsFixed(1)} ${item.unit}',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w800,
-                                        color: item.isSettled
-                                            ? const Color(0xFF16A34A)
-                                            : const Color(0xFFDC2626),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Text(
+                                                item.itemName,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 14,
+                                                  color: Color(0xFF414A51),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 2,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: item.isSettled
+                                                      ? const Color(0xFFDCFCE7)
+                                                      : const Color(0xFFFEE2E2),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  border: Border.all(
+                                                    color: item.isSettled
+                                                        ? const Color(0xFF86EFAC)
+                                                        : const Color(0xFFFCA5A5),
+                                                  ),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      item.isSettled
+                                                          ? Icons.check_circle_rounded
+                                                          : Icons.schedule_rounded,
+                                                      size: 11,
+                                                      color: item.isSettled
+                                                          ? const Color(0xFF16A34A)
+                                                          : const Color(0xFFDC2626),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      item.isSettled
+                                                          ? 'Settled'
+                                                          : 'Unsettled',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.w700,
+                                                        color: item.isSettled
+                                                            ? const Color(0xFF16A34A)
+                                                            : const Color(0xFFDC2626),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'Supervisor: ${item.supervisorName}',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF718096),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    Text(
-                                      item.isSettled ? 'Settled' : 'Unsettled',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: item.isSettled
-                                            ? const Color(0xFF16A34A)
-                                            : const Color(0xFFDC2626),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text(
+                                          'Balance: $balanceFormatted ${item.unit}',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w800,
+                                            color: item.isSettled
+                                                ? const Color(0xFF16A34A)
+                                                : const Color(0xFFDC2626),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_outlined, size: 18),
+                                      tooltip: 'Edit Material Record',
+                                      color: const Color(0xFF414A51),
+                                      onPressed: () => _showAddInventoryItemDialog(
+                                        code,
+                                        existingItem: item,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, size: 18),
+                                      tooltip: 'Delete Material Record',
+                                      color: const Color(0xFFDC2626),
+                                      onPressed: () => _confirmDeleteInventoryItem(
+                                        item.id,
+                                        code,
+                                        item.itemName,
                                       ),
                                     ),
                                   ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Text(
+                                      'Issued: $issuedFormatted • Used: $usedFormatted • Returned: $returnedFormatted ${item.unit}',
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        color: Color(0xFF414A51),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'Calculation: $issuedFormatted - ($usedFormatted + $returnedFormatted) = $balanceFormatted ${item.unit}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontFamily: 'monospace',
+                                      color: Color(0xFF475569),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
@@ -2253,115 +2405,294 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
     );
   }
 
-  Future<void> _showAddInventoryItemDialog(String projectCode) async {
-    final supCtrl = TextEditingController();
-    final itemCtrl = TextEditingController();
-    final issuedCtrl = TextEditingController();
-    final usedCtrl = TextEditingController();
-    final returnedCtrl = TextEditingController();
-    final unitCtrl = TextEditingController(text: 'units');
-
-    await showDialog(
+  Future<void> _confirmDeleteInventoryItem(
+    String id,
+    String projectCode,
+    String itemName,
+  ) async {
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Record Material Allocation'),
-        content: SizedBox(
-          width: 420,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: supCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Supervisor In-Charge Name *',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: itemCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Material / Item Name *',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: issuedCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Issued Quantity',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: usedCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Used Quantity',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: returnedCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Returned Quantity',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: unitCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Unit (e.g. units, metres, bags)',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+        title: const Text('Delete Material Record'),
+        content: Text('Are you sure you want to delete the record for "$itemName"?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
+            onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('Cancel'),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF9CC70A),
-              foregroundColor: const Color(0xFF414A51),
+              backgroundColor: const Color(0xFFDC2626),
             ),
-            onPressed: () async {
-              if (supCtrl.text.trim().isEmpty || itemCtrl.text.trim().isEmpty) {
-                return;
-              }
-              Navigator.of(ctx).pop();
-              final issued = double.tryParse(issuedCtrl.text.trim()) ?? 0.0;
-              final used = double.tryParse(usedCtrl.text.trim()) ?? 0.0;
-              final returned = double.tryParse(returnedCtrl.text.trim()) ?? 0.0;
-
-              final item = ProjectInventoryItem(
-                id: '',
-                projectCode: projectCode,
-                supervisorId: supCtrl.text.trim().toLowerCase().replaceAll(' ', '_'),
-                supervisorName: supCtrl.text.trim(),
-                itemId: itemCtrl.text.trim().toLowerCase().replaceAll(' ', '_'),
-                itemName: itemCtrl.text.trim(),
-                unit: unitCtrl.text.trim(),
-                issuedQty: issued,
-                usedQty: used,
-                returnedQty: returned,
-                updatedAt: DateTime.now(),
-              );
-              await ref.read(projectRepositoryProvider).updateProjectInventory(item);
-            },
-            child: const Text('Save Material Record'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
           ),
         ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await ref
+          .read(projectRepositoryProvider)
+          .deleteProjectInventory(id, projectCode);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Record for "$itemName" removed.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showAddInventoryItemDialog(
+    String projectCode, {
+    ProjectInventoryItem? existingItem,
+  }) async {
+    final supCtrl = TextEditingController(text: existingItem?.supervisorName ?? '');
+    final itemCtrl = TextEditingController(text: existingItem?.itemName ?? '');
+    final issuedCtrl = TextEditingController(
+      text: existingItem != null ? _formatQty(existingItem.issuedQty) : '',
+    );
+    final usedCtrl = TextEditingController(
+      text: existingItem != null ? _formatQty(existingItem.usedQty) : '',
+    );
+    final returnedCtrl = TextEditingController(
+      text: existingItem != null ? _formatQty(existingItem.returnedQty) : '',
+    );
+    final unitCtrl = TextEditingController(
+      text: existingItem?.unit ?? 'bags',
+    );
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final issued = double.tryParse(issuedCtrl.text.trim()) ?? 0.0;
+          final used = double.tryParse(usedCtrl.text.trim()) ?? 0.0;
+          final returned = double.tryParse(returnedCtrl.text.trim()) ?? 0.0;
+          final balance = issued - (used + returned);
+          final isSettled = balance <= 0.0001;
+          final unit = unitCtrl.text.trim().isNotEmpty
+              ? unitCtrl.text.trim()
+              : 'bags';
+
+          return AlertDialog(
+            title: Text(
+              existingItem != null
+                  ? 'Edit Material Record'
+                  : 'Record Material',
+            ),
+            content: SizedBox(
+              width: 440,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: supCtrl,
+                      onChanged: (_) => setDialogState(() {}),
+                      decoration: const InputDecoration(
+                        labelText: 'Supervisor In-Charge Name *',
+                        hintText: 'e.g. Kumar',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: itemCtrl,
+                      onChanged: (_) => setDialogState(() {}),
+                      decoration: const InputDecoration(
+                        labelText: 'Material / Item Name *',
+                        hintText: 'e.g. cement bags',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: issuedCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            onChanged: (_) => setDialogState(() {}),
+                            decoration: const InputDecoration(
+                              labelText: 'Issued Quantity',
+                              hintText: 'e.g. 100',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: usedCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            onChanged: (_) => setDialogState(() {}),
+                            decoration: const InputDecoration(
+                              labelText: 'Used Quantity',
+                              hintText: 'e.g. 60',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: returnedCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            onChanged: (_) => setDialogState(() {}),
+                            decoration: const InputDecoration(
+                              labelText: 'Returned Quantity',
+                              hintText: 'e.g. 10',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: unitCtrl,
+                            onChanged: (_) => setDialogState(() {}),
+                            decoration: const InputDecoration(
+                              labelText: 'Unit',
+                              hintText: 'e.g. bags, metres, units',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    // Live Calculation Card
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isSettled
+                            ? const Color(0xFFF0FDF4)
+                            : const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isSettled
+                              ? const Color(0xFFBBF7D0)
+                              : const Color(0xFFFECACA),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Remaining Balance: ${_formatQty(balance)} $unit',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: isSettled
+                                        ? const Color(0xFF16A34A)
+                                        : const Color(0xFFDC2626),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isSettled
+                                      ? const Color(0xFFDCFCE7)
+                                      : const Color(0xFFFEE2E2),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  isSettled ? 'Settled' : 'Unsettled',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: isSettled
+                                        ? const Color(0xFF16A34A)
+                                        : const Color(0xFFDC2626),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Calculation: ${_formatQty(issued)} - (${_formatQty(used)} + ${_formatQty(returned)}) = ${_formatQty(balance)} $unit',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                              color: Color(0xFF475569),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF9CC70A),
+                  foregroundColor: const Color(0xFF414A51),
+                ),
+                onPressed: () async {
+                  if (supCtrl.text.trim().isEmpty || itemCtrl.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please fill in supervisor and material name.'),
+                      ),
+                    );
+                    return;
+                  }
+                  Navigator.of(ctx).pop();
+
+                  final item = ProjectInventoryItem(
+                    id: existingItem?.id ?? '',
+                    projectCode: projectCode,
+                    supervisorId: existingItem?.supervisorId ??
+                        supCtrl.text.trim().toLowerCase().replaceAll(' ', '_'),
+                    supervisorName: supCtrl.text.trim(),
+                    itemId: existingItem?.itemId ??
+                        itemCtrl.text.trim().toLowerCase().replaceAll(' ', '_'),
+                    itemName: itemCtrl.text.trim(),
+                    unit: unitCtrl.text.trim().isNotEmpty
+                        ? unitCtrl.text.trim()
+                        : 'bags',
+                    issuedQty: issued,
+                    usedQty: used,
+                    returnedQty: returned,
+                    updatedAt: DateTime.now(),
+                  );
+                  await ref
+                      .read(projectRepositoryProvider)
+                      .updateProjectInventory(item);
+                },
+                child: const Text('Save Material Record'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
