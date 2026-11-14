@@ -113,6 +113,9 @@ class _FakeProgressProjectRepository implements ProjectRepository {
   Stream<List<ProjectDocument>> watchProjectDocuments(String projectCode) => Stream.value([]);
   @override
   Future<void> addProjectDocument(ProjectDocument doc) async {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 void main() {

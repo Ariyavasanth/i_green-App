@@ -7,6 +7,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../employee/providers/employee_providers.dart';
+import '../../../employee/services/offer_letter_save_stub.dart'
+    if (dart.library.html) '../../../employee/services/offer_letter_save_web.dart'
+    if (dart.library.io) '../../../employee/services/offer_letter_save_io.dart';
 import '../../../tenders/domain/models/company_document_item.dart';
 import '../../../tenders/domain/models/tender.dart';
 import '../../../tenders/providers/company_document_providers.dart';
@@ -103,6 +106,30 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
     final uri = Uri.tryParse(url.trim());
     if (uri != null) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _handleDownloadDocument(ProjectDocument doc) async {
+    final url = doc.downloadUrl.trim();
+    if (url.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Document link not available for ${doc.name}'),
+            backgroundColor: const Color(0xFFDC2626),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (mounted) {
+      await downloadFileFromUrl(
+        context: context,
+        url: url,
+        fileName: doc.name.isNotEmpty ? doc.name : 'project_document',
+        docTitle: doc.name,
+      );
     }
   }
 
@@ -2760,28 +2787,81 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                     )
                   ]
                 : perms.map((p) {
+                    final hasDoc = p.document != null && p.document!.downloadUrl.isNotEmpty;
                     return ListTile(
                       dense: true,
                       leading: const Icon(Icons.verified_outlined,
                           color: Color(0xFF414A51)),
                       title: Text('${p.authority} - ${p.title}'),
-                      subtitle: Text(
-                        'Validity: ${DateFormat("dd-MM-yyyy").format(p.validFrom)} to ${DateFormat("dd-MM-yyyy").format(p.validTo)}',
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Validity: ${DateFormat("dd-MM-yyyy").format(p.validFrom)} to ${DateFormat("dd-MM-yyyy").format(p.validTo)}',
+                          ),
+                          if (hasDoc) ...[
+                            const SizedBox(height: 3),
+                            InkWell(
+                              onTap: () => _launchDocumentUrl(p.document!.downloadUrl),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.attach_file, size: 13, color: Color(0xFF718096)),
+                                  const SizedBox(width: 4),
+                                  Flexible(
+                                    child: Text(
+                                      p.document!.name.isNotEmpty ? p.document!.name : 'Attached Document',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF0284C7),
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                      trailing: p.isExpired
-                          ? const Chip(
-                              label: Text('EXPIRED', style: TextStyle(color: Colors.white, fontSize: 10)),
-                              backgroundColor: Colors.red,
-                            )
-                          : p.isExpiringSoon
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (hasDoc) ...[
+                            IconButton(
+                              icon: const Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF414A51)),
+                              tooltip: 'View Document',
+                              onPressed: () => _launchDocumentUrl(p.document!.downloadUrl),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.download_rounded, size: 18, color: Color(0xFF0284C7)),
+                              tooltip: 'Download Document',
+                              onPressed: () => _handleDownloadDocument(p.document!),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          p.isExpired
                               ? const Chip(
-                                  label: Text('EXPIRING SOON', style: TextStyle(fontSize: 10)),
-                                  backgroundColor: Colors.amber,
+                                  label: Text('EXPIRED', style: TextStyle(color: Colors.white, fontSize: 10)),
+                                  backgroundColor: Colors.red,
                                 )
-                              : const Chip(
-                                  label: Text('VALID', style: TextStyle(color: Colors.white, fontSize: 10)),
-                                  backgroundColor: Colors.green,
-                                ),
+                              : p.isExpiringSoon
+                                  ? const Chip(
+                                      label: Text('EXPIRING SOON', style: TextStyle(fontSize: 10)),
+                                      backgroundColor: Colors.amber,
+                                    )
+                                  : const Chip(
+                                      label: Text('VALID', style: TextStyle(color: Colors.white, fontSize: 10)),
+                                      backgroundColor: Colors.green,
+                                    ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFDC2626)),
+                            tooltip: 'Delete Permission',
+                            onPressed: () => _confirmDeletePermission(p),
+                          ),
+                        ],
+                      ),
                     );
                   }).toList(),
           ),
@@ -2835,28 +2915,81 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                     )
                   ]
                 : ins.map((i) {
+                    final hasDoc = i.document != null && i.document!.downloadUrl.isNotEmpty;
                     return ListTile(
                       dense: true,
                       leading: const Icon(Icons.policy_outlined,
                           color: Color(0xFF414A51)),
                       title: Text('${i.policyType}: ${i.policyNumber}'),
-                      subtitle: Text(
-                        'Insurer: ${i.insurerName} • Expiry: ${DateFormat("dd-MM-yyyy").format(i.expiryDate)}',
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Insurer: ${i.insurerName} • Expiry: ${DateFormat("dd-MM-yyyy").format(i.expiryDate)}',
+                          ),
+                          if (hasDoc) ...[
+                            const SizedBox(height: 3),
+                            InkWell(
+                              onTap: () => _launchDocumentUrl(i.document!.downloadUrl),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.attach_file, size: 13, color: Color(0xFF718096)),
+                                  const SizedBox(width: 4),
+                                  Flexible(
+                                    child: Text(
+                                      i.document!.name.isNotEmpty ? i.document!.name : 'Attached Document',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF0284C7),
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                      trailing: i.isExpired
-                          ? const Chip(
-                              label: Text('EXPIRED', style: TextStyle(color: Colors.white, fontSize: 10)),
-                              backgroundColor: Colors.red,
-                            )
-                          : i.isExpiringSoon
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (hasDoc) ...[
+                            IconButton(
+                              icon: const Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF414A51)),
+                              tooltip: 'View Insurance Document',
+                              onPressed: () => _launchDocumentUrl(i.document!.downloadUrl),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.download_rounded, size: 18, color: Color(0xFF0284C7)),
+                              tooltip: 'Download Insurance Document',
+                              onPressed: () => _handleDownloadDocument(i.document!),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          i.isExpired
                               ? const Chip(
-                                  label: Text('EXPIRING SOON', style: TextStyle(fontSize: 10)),
-                                  backgroundColor: Colors.amber,
+                                  label: Text('EXPIRED', style: TextStyle(color: Colors.white, fontSize: 10)),
+                                  backgroundColor: Colors.red,
                                 )
-                              : const Chip(
-                                  label: Text('ACTIVE', style: TextStyle(color: Colors.white, fontSize: 10)),
-                                  backgroundColor: Colors.green,
-                                ),
+                              : i.isExpiringSoon
+                                  ? const Chip(
+                                      label: Text('EXPIRING SOON', style: TextStyle(fontSize: 10)),
+                                      backgroundColor: Colors.amber,
+                                    )
+                                  : const Chip(
+                                      label: Text('ACTIVE', style: TextStyle(color: Colors.white, fontSize: 10)),
+                                      backgroundColor: Colors.green,
+                                    ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFDC2626)),
+                            tooltip: 'Delete Insurance Policy',
+                            onPressed: () => _confirmDeleteInsurance(i),
+                          ),
+                        ],
+                      ),
                     );
                   }).toList(),
           ),
@@ -2915,6 +3048,9 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                     )
                   ]
                 : incs.map((inc) {
+                    final photoCount = inc.photoUrls.isNotEmpty
+                        ? inc.photoUrls.length
+                        : (inc.photoUrl.trim().isNotEmpty ? 1 : 0);
                     return Container(
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.all(10),
@@ -2955,8 +3091,45 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                                     color: Color(0xFFDC2626),
                                   ),
                                 ),
+                                if (photoCount > 0) ...[
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.photo_library_outlined, size: 13, color: Color(0xFFDC2626)),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '$photoCount photo${photoCount > 1 ? 's' : ''} attached',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFFDC2626),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ],
                             ),
+                          ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (photoCount > 0) ...[
+                                IconButton(
+                                  icon: const Icon(Icons.visibility_outlined,
+                                      size: 18, color: Color(0xFFDC2626)),
+                                  tooltip: 'View Incident Photos ($photoCount attached)',
+                                  onPressed: () => _viewIncidentPhotos(inc),
+                                ),
+                              ],
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline,
+                                    size: 18, color: Color(0xFFDC2626)),
+                                tooltip: 'Delete Incident Log',
+                                onPressed: () => _confirmDeleteIncident(inc),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -2966,6 +3139,190 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
         ),
       ],
     );
+  }
+
+  void _viewIncidentPhotos(IncidentLogEntry inc) {
+    final urls = inc.photoUrls.isNotEmpty
+        ? inc.photoUrls
+        : (inc.photoUrl.trim().isNotEmpty ? [inc.photoUrl] : <String>[]);
+    if (urls.isEmpty) return;
+    if (urls.length == 1) {
+      _launchDocumentUrl(urls.first);
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Incident Photos (${urls.length})'),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: urls.asMap().entries.map((entry) {
+                final idx = entry.key;
+                final url = entry.value;
+                return Container(
+                  width: 140,
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: const Color(0xFFE5E8E2)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Image.network(
+                          url,
+                          height: 90,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            height: 90,
+                            color: Colors.grey.shade100,
+                            alignment: Alignment.center,
+                            child: const Icon(Icons.broken_image, color: Colors.grey),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.visibility_outlined, size: 16),
+                            tooltip: 'View Photo ${idx + 1}',
+                            onPressed: () => _launchDocumentUrl(url),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.download_rounded, size: 16),
+                            tooltip: 'Download Photo ${idx + 1}',
+                            onPressed: () => downloadFileFromUrl(
+                              context: ctx,
+                              url: url,
+                              fileName: 'incident_photo_${idx + 1}.jpg',
+                              docTitle: 'Incident Photo ${idx + 1}',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteIncident(IncidentLogEntry inc) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Incident Log?'),
+        content: const Text(
+          'Are you sure you want to delete this incident log? If no other incidents exist, the project incentive eligibility will be restored.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await ref.read(projectRepositoryProvider).deleteIncident(inc.id, inc.projectCode);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Incident log deleted successfully.'),
+            backgroundColor: Color(0xFF16A34A),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDeletePermission(ProjectPermission perm) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Permission?'),
+        content: Text('Are you sure you want to delete "${perm.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await ref.read(projectRepositoryProvider).deletePermission(perm.id, perm.projectCode);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Permission deleted successfully.'),
+            backgroundColor: Color(0xFF16A34A),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteInsurance(ProjectInsurance ins) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Insurance Policy?'),
+        content: Text('Are you sure you want to delete "${ins.policyType}: ${ins.policyNumber}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await ref.read(projectRepositoryProvider).deleteInsurance(ins.id, ins.projectCode);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Insurance policy deleted successfully.'),
+            backgroundColor: Color(0xFF16A34A),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _showAddPermissionDialog(String projectCode) async {
@@ -3056,8 +3413,37 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                       }
                     },
                     icon: const Icon(Icons.attach_file),
-                    label: Text(pickedFile == null ? 'Attach Document' : pickedFile!.name),
+                    label: Text(pickedFile == null ? 'Attach Document' : 'Change Document (${pickedFile!.name})'),
                   ),
+                  if (pickedFile != null) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.description_outlined, size: 16, color: Color(0xFF414A51)),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              pickedFile!.name,
+                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                            tooltip: 'Remove attached file',
+                            onPressed: () => setDialogState(() => pickedFile = null),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -3161,8 +3547,37 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                       }
                     },
                     icon: const Icon(Icons.attach_file),
-                    label: Text(pickedFile == null ? 'Attach Document' : pickedFile!.name),
+                    label: Text(pickedFile == null ? 'Attach Document' : 'Change Document (${pickedFile!.name})'),
                   ),
+                  if (pickedFile != null) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.description_outlined, size: 16, color: Color(0xFF414A51)),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              pickedFile!.name,
+                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                            tooltip: 'Remove attached file',
+                            onPressed: () => setDialogState(() => pickedFile = null),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -3198,7 +3613,7 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
     final remarksCtrl = TextEditingController();
     final costCtrl = TextEditingController();
     DateTime incidentDate = DateTime.now();
-    PlatformFile? pickedPhoto;
+    final List<PlatformFile> pickedPhotos = [];
 
     await showDialog(
       context: context,
@@ -3206,10 +3621,11 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
         builder: (ctx, setDialogState) => AlertDialog(
           title: const Text('Log Site Incident (Utility Damage / Accident)'),
           content: SizedBox(
-            width: 420,
+            width: 440,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
                     'Warning: Logging an incident disqualifies this project from receiving incentives. Restoration cost will be calculated separately.',
@@ -3252,14 +3668,130 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                   const SizedBox(height: 10),
                   OutlinedButton.icon(
                     onPressed: () async {
-                      final res = await FilePicker.pickFiles(type: FileType.image, withData: true);
+                      final res = await FilePicker.pickFiles(
+                        type: FileType.image,
+                        allowMultiple: true,
+                        withData: true,
+                      );
                       if (res != null && res.files.isNotEmpty) {
-                        setDialogState(() => pickedPhoto = res.files.first);
+                        setDialogState(() {
+                          for (final file in res.files) {
+                            if (!pickedPhotos.any((f) => f.name == file.name)) {
+                              pickedPhotos.add(file);
+                            }
+                          }
+                        });
                       }
                     },
                     icon: const Icon(Icons.photo_camera_outlined),
-                    label: Text(pickedPhoto == null ? 'Attach Incident Photo *' : pickedPhoto!.name),
+                    label: Text(pickedPhotos.isEmpty
+                        ? 'Attach Incident Photos *'
+                        : '+ Add More Photos (${pickedPhotos.length} attached)'),
                   ),
+                  if (pickedPhotos.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFFECACA)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.photo_library_outlined, size: 14, color: Color(0xFFDC2626)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${pickedPhotos.length} Photo${pickedPhotos.length > 1 ? 's' : ''} Attached',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF991B1B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              TextButton(
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(50, 20),
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  foregroundColor: Colors.red,
+                                ),
+                                onPressed: () {
+                                  setDialogState(() => pickedPhotos.clear());
+                                },
+                                child: const Text('Clear All', style: TextStyle(fontSize: 11)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          ...pickedPhotos.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final file = entry.value;
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFE5E8E2)),
+                              ),
+                              child: Row(
+                                children: [
+                                  if (file.bytes != null)
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: Image.memory(
+                                        file.bytes!,
+                                        width: 32,
+                                        height: 32,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    )
+                                  else
+                                    const Icon(Icons.photo_outlined, size: 20, color: Color(0xFF414A51)),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          file.name,
+                                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        Text(
+                                          '${(file.size / 1024).toStringAsFixed(1)} KB',
+                                          style: const TextStyle(fontSize: 10, color: Color(0xFF718096)),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                    tooltip: 'Delete attached photo',
+                                    onPressed: () {
+                                      setDialogState(() {
+                                        pickedPhotos.removeAt(idx);
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -3280,11 +3812,12 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                   projectCode: projectCode,
                   incidentDate: incidentDate,
                   photoUrl: '',
+                  photoUrls: const [],
                   remarks: remarksCtrl.text.trim(),
                   restorationCost: cost,
                   createdAt: DateTime.now(),
                 );
-                await ref.read(projectRepositoryProvider).addIncident(inc, pickedPhoto);
+                await ref.read(projectRepositoryProvider).addIncident(inc, pickedPhotos);
               },
               child: const Text('Confirm Incident Log'),
             ),

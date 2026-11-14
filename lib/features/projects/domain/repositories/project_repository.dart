@@ -85,10 +85,13 @@ abstract class ProjectRepository {
   // ── Compliance (Permissions, Insurance, Incidents) ──
   Stream<List<ProjectPermission>> watchPermissions(String projectCode);
   Future<void> addPermission(ProjectPermission permission, [PlatformFile? file]);
+  Future<void> deletePermission(String id, String projectCode);
 
   Stream<List<ProjectInsurance>> watchInsurance(String projectCode);
   Future<void> addInsurance(ProjectInsurance insurance, [PlatformFile? file]);
+  Future<void> deleteInsurance(String id, String projectCode);
 
   Stream<List<IncidentLogEntry>> watchIncidents(String projectCode);
-  Future<void> addIncident(IncidentLogEntry incident, [PlatformFile? photoFile]);
+  Future<void> addIncident(IncidentLogEntry incident, [dynamic photoFileOrFiles]);
+  Future<void> deleteIncident(String id, String projectCode);
 }

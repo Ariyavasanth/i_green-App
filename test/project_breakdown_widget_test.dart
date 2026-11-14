@@ -85,6 +85,9 @@ class FakeProjectRepository implements ProjectRepository {
 
   @override
   Future<void> addAuditLog(ProjectAuditLog log) async {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 void main() {

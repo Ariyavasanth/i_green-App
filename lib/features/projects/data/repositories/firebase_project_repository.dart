@@ -735,6 +735,12 @@ class FirebaseProjectRepository implements ProjectRepository {
     await docRef.set(data);
   }
 
+  @override
+  Future<void> deletePermission(String id, String projectCode) async {
+    if (id.trim().isEmpty) return;
+    await _permissionsRef.doc(id).delete();
+  }
+
   // ── Insurance Policies ──
   CollectionReference<Map<String, dynamic>> get _insuranceRef =>
       _firestore.collection('project_insurance');
@@ -771,6 +777,12 @@ class FirebaseProjectRepository implements ProjectRepository {
     await docRef.set(data);
   }
 
+  @override
+  Future<void> deleteInsurance(String id, String projectCode) async {
+    if (id.trim().isEmpty) return;
+    await _insuranceRef.doc(id).delete();
+  }
+
   // ── Incident Log ──
   CollectionReference<Map<String, dynamic>> get _incidentsRef =>
       _firestore.collection('project_incidents');
@@ -792,18 +804,36 @@ class FirebaseProjectRepository implements ProjectRepository {
   @override
   Future<void> addIncident(
     IncidentLogEntry incident, [
-    PlatformFile? photoFile,
+    dynamic photoFileOrFiles,
   ]) async {
     final docRef = _incidentsRef.doc();
-    String photoUrl = incident.photoUrl;
-    if (photoFile != null) {
+    final List<String> photoUrls = List<String>.from(incident.photoUrls);
+    List<PlatformFile> filesToUpload = [];
+    if (photoFileOrFiles is PlatformFile) {
+      filesToUpload = [photoFileOrFiles];
+    } else if (photoFileOrFiles is List<PlatformFile>) {
+      filesToUpload = photoFileOrFiles;
+    }
+
+    if (filesToUpload.isNotEmpty) {
       final safeFolder = incident.projectCode.replaceAll('/', '_');
-      final uploaded = await _uploadFiles(safeFolder, 'incident_photos', [photoFile]);
-      if (uploaded.isNotEmpty) photoUrl = uploaded.first.downloadUrl;
+      final uploaded = await _uploadFiles(safeFolder, 'incident_photos', filesToUpload);
+      for (final doc in uploaded) {
+        if (doc.downloadUrl.isNotEmpty) {
+          photoUrls.add(doc.downloadUrl);
+        }
+      }
     }
     final data = incident.toJson();
     data['id'] = docRef.id;
-    data['photo_url'] = photoUrl;
+    data['photo_url'] = photoUrls.isNotEmpty ? photoUrls.first : incident.photoUrl;
+    data['photo_urls'] = photoUrls;
     await docRef.set(data);
+  }
+
+  @override
+  Future<void> deleteIncident(String id, String projectCode) async {
+    if (id.trim().isEmpty) return;
+    await _incidentsRef.doc(id).delete();
   }
 }

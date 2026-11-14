@@ -115,6 +115,7 @@ class IncidentLogEntry {
   final String projectCode;
   final DateTime incidentDate;
   final String photoUrl;
+  final List<String> photoUrls;
   final String remarks;
   final double restorationCost;
   final DateTime createdAt;
@@ -124,6 +125,7 @@ class IncidentLogEntry {
     required this.projectCode,
     required this.incidentDate,
     required this.photoUrl,
+    this.photoUrls = const [],
     required this.remarks,
     this.restorationCost = 0.0,
     required this.createdAt,
@@ -134,24 +136,36 @@ class IncidentLogEntry {
         'project_code': projectCode,
         'incident_date': incidentDate.toIso8601String(),
         'photo_url': photoUrl,
+        'photo_urls': photoUrls,
         'remarks': remarks,
         'restoration_cost': restorationCost,
         'created_at': createdAt.toIso8601String(),
       };
 
-  factory IncidentLogEntry.fromJson(Map<String, dynamic> json, [String? docId]) =>
-      IncidentLogEntry(
-        id: docId ?? json['id'] as String? ?? '',
-        projectCode: json['project_code'] as String? ?? '',
-        incidentDate: json['incident_date'] != null
-            ? DateTime.tryParse(json['incident_date'].toString()) ?? DateTime.now()
-            : DateTime.now(),
-        photoUrl: json['photo_url'] as String? ?? '',
-        remarks: json['remarks'] as String? ?? '',
-        restorationCost: (json['restoration_cost'] as num?)?.toDouble() ?? 0.0,
-        createdAt: json['created_at'] != null
-            ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
-            : DateTime.now(),
-      );
+  factory IncidentLogEntry.fromJson(Map<String, dynamic> json, [String? docId]) {
+    final rawUrls = json['photo_urls'];
+    List<String> urls = [];
+    if (rawUrls is List) {
+      urls = rawUrls.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
+    }
+    final singleUrl = json['photo_url'] as String? ?? '';
+    if (urls.isEmpty && singleUrl.isNotEmpty) {
+      urls = [singleUrl];
+    }
+    return IncidentLogEntry(
+      id: docId ?? json['id'] as String? ?? '',
+      projectCode: json['project_code'] as String? ?? '',
+      incidentDate: json['incident_date'] != null
+          ? DateTime.tryParse(json['incident_date'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+      photoUrl: urls.isNotEmpty ? urls.first : singleUrl,
+      photoUrls: urls,
+      remarks: json['remarks'] as String? ?? '',
+      restorationCost: (json['restoration_cost'] as num?)?.toDouble() ?? 0.0,
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+    );
+  }
 }
 
