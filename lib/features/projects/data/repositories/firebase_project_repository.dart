@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io' as io;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 
 import '../../domain/models/daily_progress_entry.dart';
 import '../../domain/models/project_audit_log.dart';
@@ -74,6 +76,7 @@ class FirebaseProjectRepository implements ProjectRepository {
       final otherRetentionDocs = List<ProjectDocument>.from(project.otherRetentionDocuments);
       final wrpoDocs = List<ProjectDocument>.from(project.wrpoDocuments);
       final tenderLostDocs = List<ProjectDocument>.from(project.tenderLostDocuments);
+      final mBookDocs = List<ProjectDocument>.from(project.mBookDocuments);
 
       if (filesByCategory != null) {
         Future<void> uploadCategory(String key, List<ProjectDocument> target) async {
@@ -101,6 +104,7 @@ class FirebaseProjectRepository implements ProjectRepository {
         await uploadCategory('wrpo', wrpoDocs);
         await uploadCategory('purchase_order', wrpoDocs);
         await uploadCategory('tender_lost', tenderLostDocs);
+        await uploadCategory('m_book', mBookDocs);
       }
 
       // 3. Assemble final project
@@ -122,6 +126,7 @@ class FirebaseProjectRepository implements ProjectRepository {
         otherRetentionDocuments: otherRetentionDocs,
         wrpoDocuments: wrpoDocs,
         tenderLostDocuments: tenderLostDocs,
+        mBookDocuments: mBookDocs,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -164,12 +169,22 @@ class FirebaseProjectRepository implements ProjectRepository {
           final timestamp = DateTime.now().millisecondsSinceEpoch;
           storagePath =
               'site_projects/$projectId/$category/${timestamp}_$cleanFileName';
-          final ref = _storage.ref().child(storagePath);
-          final uploadTask = await ref.putData(
-            bytes,
-            SettableMetadata(contentType: _getContentType(file.extension)),
-          );
-          downloadUrl = await uploadTask.ref.getDownloadURL();
+          try {
+            final ref = _storage.ref().child(storagePath);
+            final uploadTask = await ref.putData(
+              bytes,
+              SettableMetadata(contentType: _getContentType(file.extension)),
+            );
+            downloadUrl = await uploadTask.ref.getDownloadURL();
+          } catch (storageErr) {
+            developer.log(
+              'Firebase Storage putData failed ($storageErr). Saving as data URI fallback.',
+              name: 'FirebaseProjectRepository',
+            );
+            final mime = _getContentType(file.extension);
+            final base64Str = base64Encode(bytes);
+            downloadUrl = 'data:$mime;base64,$base64Str';
+          }
         }
       } catch (e) {
         developer.log('Storage upload fallback for ${file.name}: $e',
@@ -306,6 +321,7 @@ class FirebaseProjectRepository implements ProjectRepository {
       final otherRetentionDocs = List<ProjectDocument>.from(project.otherRetentionDocuments);
       final wrpoDocs = List<ProjectDocument>.from(project.wrpoDocuments);
       final tenderLostDocs = List<ProjectDocument>.from(project.tenderLostDocuments);
+      final mBookDocs = List<ProjectDocument>.from(project.mBookDocuments);
 
       if (filesByCategory != null) {
         Future<void> uploadCategory(String key, List<ProjectDocument> target) async {
@@ -333,6 +349,7 @@ class FirebaseProjectRepository implements ProjectRepository {
         await uploadCategory('wrpo', wrpoDocs);
         await uploadCategory('purchase_order', wrpoDocs);
         await uploadCategory('tender_lost', tenderLostDocs);
+        await uploadCategory('m_book', mBookDocs);
       }
 
       var finalProject = project.copyWith(
@@ -352,6 +369,7 @@ class FirebaseProjectRepository implements ProjectRepository {
         otherRetentionDocuments: otherRetentionDocs,
         wrpoDocuments: wrpoDocs,
         tenderLostDocuments: tenderLostDocs,
+        mBookDocuments: mBookDocs,
         updatedAt: DateTime.now(),
       );
 
@@ -835,5 +853,68 @@ class FirebaseProjectRepository implements ProjectRepository {
   Future<void> deleteIncident(String id, String projectCode) async {
     if (id.trim().isEmpty) return;
     await _incidentsRef.doc(id).delete();
+  }
+
+  // ── Project Completion and M-Book ──
+  @override
+  Future<void> recordProjectCompletion({
+    required String projectId,
+    required DateTime completionDate,
+    required List<PlatformFile> mBookPhotos,
+    String? recordedBy,
+    String? remarks,
+  }) async {
+    try {
+      final existingProject = await getProjectById(projectId);
+      final safeFolder = (existingProject?.projectCode.isNotEmpty == true
+              ? existingProject!.projectCode
+              : projectId)
+          .replaceAll('/', '_');
+
+      final uploadedDocs = <ProjectDocument>[];
+      if (mBookPhotos.isNotEmpty) {
+        final docs = await _uploadFiles(safeFolder, 'm_book', mBookPhotos);
+        uploadedDocs.addAll(docs);
+      }
+
+      final existingMBookDocs = existingProject != null
+          ? List<ProjectDocument>.from(existingProject.mBookDocuments)
+          : <ProjectDocument>[];
+      existingMBookDocs.addAll(uploadedDocs);
+
+      final now = DateTime.now();
+      final updateData = <String, dynamic>{
+        'actual_completion_date': completionDate.toIso8601String(),
+        'm_book_documents': existingMBookDocs.map((d) => d.toJson()).toList(),
+        'm_book_recorded_at': now.toIso8601String(),
+        'status': 'Completed',
+        'updated_at': now.toIso8601String(),
+      };
+      if (recordedBy != null && recordedBy.isNotEmpty) {
+        updateData['m_book_recorded_by'] = recordedBy;
+        updateData['updated_by'] = recordedBy;
+      }
+
+      await _projectsRef.doc(projectId).update(updateData);
+
+      // Record audit history log
+      final auditDoc = _auditLogsRef(projectId).doc();
+      final log = ProjectAuditLog(
+        id: auditDoc.id,
+        projectId: projectId,
+        employeeId: recordedBy ?? 'EMP-UNKNOWN',
+        employeeName: recordedBy ?? 'Staff',
+        designation: 'Site Operations',
+        changeNote: remarks != null && remarks.trim().isNotEmpty
+            ? 'Completed project work. Completion Date: ${DateFormat('dd-MM-yyyy').format(completionDate)}. Attached ${uploadedDocs.length} M-Book photo(s). Remarks: $remarks'
+            : 'Completed project work. Completion Date: ${DateFormat('dd-MM-yyyy').format(completionDate)}. Attached ${uploadedDocs.length} M-Book photo(s).',
+        timestamp: now,
+      );
+      await auditDoc.set(log.toJson());
+    } catch (e, stack) {
+      developer.log('Error recording project completion: $e',
+          name: 'FirebaseProjectRepository', error: e, stackTrace: stack);
+      rethrow;
+    }
   }
 }

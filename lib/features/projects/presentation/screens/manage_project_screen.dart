@@ -1,4 +1,6 @@
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/smart_network_image.dart';
 import '../../../employee/providers/employee_providers.dart';
 import '../../../employee/services/offer_letter_save_stub.dart'
     if (dart.library.html) '../../../employee/services/offer_letter_save_web.dart'
@@ -61,6 +64,7 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
     (number: 11, title: 'EMD & Retention', icon: Icons.account_balance_outlined),
     (number: 12, title: 'Project Expenses', icon: Icons.receipt_outlined),
     (number: 13, title: 'Project Profit / Loss', icon: Icons.assessment_outlined),
+    (number: 14, title: 'Project Completion & M-Book', icon: Icons.assignment_turned_in_outlined),
   ];
 
   @override
@@ -173,33 +177,13 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
               ),
             ),
             const SizedBox(width: 12),
-            Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'MANAGE PROJECT',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF414A51),
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  if (project != null)
-                    Text(
-                      project.projectCode.isNotEmpty
-                          ? project.projectCode
-                          : (project.id.isNotEmpty ? project.id : 'Project'),
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textSecondary,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                ],
+            const Text(
+              'MANAGE PROJECT',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF414A51),
+                letterSpacing: 0.5,
               ),
             ),
           ],
@@ -375,66 +359,6 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Breadcrumb Trail
-          Row(
-            children: [
-              InkWell(
-                onTap: () => context.go('/module/project'),
-                borderRadius: BorderRadius.circular(4),
-                child: const Text(
-                  'New Project',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF414A51),
-                  ),
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 6),
-                child: Icon(
-                  Icons.chevron_right_rounded,
-                  size: 14,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              InkWell(
-                onTap: () => context.go('/projects/assigned'),
-                borderRadius: BorderRadius.circular(4),
-                child: const Text(
-                  'Project List',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF414A51),
-                  ),
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 6),
-                child: Icon(
-                  Icons.chevron_right_rounded,
-                  size: 14,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              Flexible(
-                child: Text(
-                  project.projectCode.isNotEmpty
-                      ? project.projectCode
-                      : displayName,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF9CC70A),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
           // Main Title & Status
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -679,6 +603,8 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
         return _buildSection9Expenses(project, isMobile);
       case 12:
         return _buildSection10ProfitLoss(project, isMobile);
+      case 13:
+        return _buildSection14ProjectCompletion(project, isMobile);
       default:
         return _buildSection1Overview(project, isMobile);
     }
@@ -1458,6 +1384,903 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
           ],
         ),
       ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION 14 — PROJECT COMPLETION & M-BOOK
+  // ═══════════════════════════════════════════════════════════════════════════
+  Widget _buildSection14ProjectCompletion(SiteProject project, bool isMobile) {
+    final isCompleted = project.actualCompletionDate != null || project.status == 'Completed';
+    final completionDateText = project.actualCompletionDate != null
+        ? DateFormat('dd-MM-yyyy').format(project.actualCompletionDate!)
+        : 'Not Completed';
+    final recordedAtText = project.mBookRecordedAt != null
+        ? DateFormat('dd-MM-yyyy hh:mm a').format(project.mBookRecordedAt!)
+        : '—';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Top KPI Cards
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final colCount = constraints.maxWidth >= 900 ? 3 : (constraints.maxWidth >= 550 ? 2 : 1);
+            final cardWidth = (constraints.maxWidth - (colCount - 1) * 14) / colCount;
+            return Wrap(
+              spacing: 14,
+              runSpacing: 14,
+              children: [
+                _buildInfoKpiCard(
+                  title: 'Project Completion Status',
+                  value: isCompleted ? 'Completed' : project.status,
+                  icon: isCompleted ? Icons.check_circle_rounded : Icons.pending_actions_rounded,
+                  color: isCompleted ? const Color(0xFF9CC70A) : const Color(0xFF414A51),
+                  width: cardWidth,
+                ),
+                _buildInfoKpiCard(
+                  title: 'Project Completion Date',
+                  value: completionDateText,
+                  icon: Icons.event_available_rounded,
+                  color: const Color(0xFF0284C7),
+                  width: cardWidth,
+                ),
+                _buildInfoKpiCard(
+                  title: 'Recorded At (Auto Timestamp)',
+                  value: recordedAtText,
+                  icon: Icons.access_time_rounded,
+                  color: const Color(0xFF414A51),
+                  width: cardWidth,
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 18),
+
+        // Completion & M-Book Details Card
+        _buildContentCard(
+          title: 'Project Completion & Measurement Book (M-Book)',
+          icon: Icons.assignment_turned_in_outlined,
+          headerTrailing: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF9CC70A),
+              foregroundColor: const Color(0xFF414A51),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () => _showRecordProjectCompletionDialog(project),
+            icon: const Icon(Icons.add_photo_alternate_rounded, size: 16),
+            label: Text(
+              project.actualCompletionDate != null
+                  ? 'Update Completion & M-Book'
+                  : 'Record Completion & Upload M-Book',
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
+            ),
+          ),
+          children: [
+            _buildDetailRow('Project Code', project.projectCode),
+            _buildDetailRow('Completion Date', completionDateText),
+            _buildDetailRow('Recorded Timestamp', recordedAtText),
+            if (project.mBookRecordedBy != null && project.mBookRecordedBy!.isNotEmpty)
+              _buildDetailRow('Recorded By', project.mBookRecordedBy!),
+            const SizedBox(height: 14),
+            const Divider(height: 1, color: Color(0xFFE5E8E2)),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                const Icon(Icons.photo_library_outlined, size: 18, color: Color(0xFF414A51)),
+                const SizedBox(width: 8),
+                const Text(
+                  'M-Book (Measurement Book) Photos',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF22282D),
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF414A51).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${project.mBookDocuments.length} Photos',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF414A51),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (project.mBookDocuments.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAF8),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE5E8E2)),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.menu_book_rounded, size: 40, color: Colors.grey.shade400),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'No M-Book photos uploaded yet.',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF414A51),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'When work is completed, tap "Record Completion & Upload M-Book" above to enter completion date and attach measurement book photos.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: project.mBookDocuments.map((doc) {
+                  final isImageUrl = doc.downloadUrl.isNotEmpty &&
+                      (doc.downloadUrl.toLowerCase().contains('.jpg') ||
+                          doc.downloadUrl.toLowerCase().contains('.jpeg') ||
+                          doc.downloadUrl.toLowerCase().contains('.png') ||
+                          doc.downloadUrl.toLowerCase().contains('.webp') ||
+                          doc.name.toLowerCase().endsWith('.jpg') ||
+                          doc.name.toLowerCase().endsWith('.jpeg') ||
+                          doc.name.toLowerCase().endsWith('.png'));
+
+                  return Container(
+                    width: isMobile ? double.infinity : 240,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9FAF8),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE5E8E2)),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Image Thumbnail
+                        if (isImageUrl)
+                          InkWell(
+                            onTap: () => _showNetworkImagePreview(
+                                context, doc.downloadUrl, doc.name),
+                            child: Container(
+                              height: 140,
+                              color: const Color(0xFFE5E8E2),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  SmartNetworkImage(
+                                    url: doc.downloadUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_) => const Center(
+                                      child: Icon(Icons.broken_image_rounded, size: 36, color: Colors.grey),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    right: 6,
+                                    bottom: 6,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.6),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Icon(Icons.zoom_in, color: Colors.white, size: 14),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        else
+                          Container(
+                            height: 100,
+                            color: const Color(0xFFE5E8E2),
+                            child: const Center(
+                              child: Icon(Icons.description_rounded, size: 36, color: Color(0xFF414A51)),
+                            ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                doc.name.isNotEmpty ? doc.name : 'M-Book Page',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF22282D),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  if (doc.downloadUrl.isNotEmpty) ...[
+                                    IconButton(
+                                      icon: const Icon(Icons.visibility_outlined, size: 18),
+                                      tooltip: 'View Photo',
+                                      color: const Color(0xFF414A51),
+                                      onPressed: () => isImageUrl
+                                          ? _showNetworkImagePreview(
+                                              context, doc.downloadUrl, doc.name)
+                                          : _launchDocumentUrl(doc.downloadUrl),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.download_rounded, size: 18),
+                                      tooltip: 'Download',
+                                      color: const Color(0xFF0284C7),
+                                      onPressed: () => _handleDownloadDocument(doc),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _showImageMemoryPreview(BuildContext context, Uint8List bytes, String title) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 850, maxHeight: 680),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                color: const Color(0xFF414A51),
+                child: Row(
+                  children: [
+                    const Icon(Icons.photo_outlined, color: Color(0xFF9CC70A), size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: Container(
+                  color: const Color(0xFF0F172A),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.all(12),
+                  child: InteractiveViewer(
+                    clipBehavior: Clip.none,
+                    minScale: 0.5,
+                    maxScale: 4.0,
+                    child: Image.memory(
+                      bytes,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Text(
+                          'Unable to render image preview',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showNetworkImagePreview(BuildContext context, String imageUrl, String title) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 850, maxHeight: 680),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                color: const Color(0xFF414A51),
+                child: Row(
+                  children: [
+                    const Icon(Icons.menu_book_rounded, color: Color(0xFF9CC70A), size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.open_in_new_rounded, color: Colors.white, size: 18),
+                      tooltip: 'Open in new tab',
+                      onPressed: () => _launchDocumentUrl(imageUrl),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: Container(
+                  color: const Color(0xFF0F172A),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.all(12),
+                  child: InteractiveViewer(
+                    clipBehavior: Clip.none,
+                    minScale: 0.5,
+                    maxScale: 4.0,
+                    child: SmartNetworkImage(
+                      url: imageUrl,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_) => const Center(
+                        child: Text(
+                          'Unable to load image preview',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showRecordProjectCompletionDialog(SiteProject project) async {
+    DateTime selectedDate = project.actualCompletionDate ?? DateTime.now();
+    final autoTimestamp = DateTime.now();
+    final remarksCtrl = TextEditingController();
+    List<PlatformFile> pickedFiles = [];
+    bool isSubmitting = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: !isSubmitting,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.assignment_turned_in_rounded,
+                  color: Color(0xFF414A51),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Record Project Completion & M-Book',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF22282D),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 500,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF4F6F3),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE5E8E2)),
+                    ),
+                    child: const Text(
+                      'When project work is completed, enter the completion date and upload photos of the Measurement Book (M-Book).',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Color(0xFF414A51),
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Field 1: Project Completion Date
+                  const Text(
+                    'Project Completion Date *',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF414A51),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: isSubmitting
+                        ? null
+                        : () async {
+                            final picked = await showDatePicker(
+                              context: ctx,
+                              initialDate: selectedDate,
+                              firstDate: DateTime(2000),
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                            );
+                            if (picked != null) {
+                              setDialogState(() => selectedDate = picked);
+                            }
+                          },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.white,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_month_rounded,
+                              size: 18, color: Color(0xFF414A51)),
+                          const SizedBox(width: 10),
+                          Text(
+                            DateFormat('dd-MM-yyyy').format(selectedDate),
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF22282D),
+                            ),
+                          ),
+                          const Spacer(),
+                          const Text(
+                            'Change',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF0284C7),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Field 2: Automatic Date / Time
+                  const Text(
+                    'Automatic Date / Time',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF414A51),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.schedule_rounded,
+                            size: 18, color: Color(0xFF64748B)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            DateFormat('dd-MM-yyyy hh:mm a').format(autoTimestamp),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF475569),
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'Auto',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF414A51),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Field 3: M-Book Photo Upload
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'M-Book Photo Upload *',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF414A51),
+                        ),
+                      ),
+                      if (pickedFiles.isNotEmpty)
+                        Text(
+                          '${pickedFiles.length} selected',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF0284C7),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onPressed: isSubmitting
+                        ? null
+                        : () async {
+                            final res = await FilePicker.pickFiles(
+                              type: FileType.image,
+                              allowMultiple: true,
+                              withData: true,
+                            );
+                            if (res != null && res.files.isNotEmpty) {
+                              setDialogState(() {
+                                pickedFiles.addAll(res.files);
+                              });
+                            }
+                          },
+                    icon: const Icon(Icons.add_a_photo_outlined, size: 18),
+                    label: const Text('Select M-Book Photos'),
+                  ),
+                  if (pickedFiles.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Column(
+                      children: pickedFiles.asMap().entries.map((entry) {
+                        final idx = entry.key;
+                        final f = entry.value;
+                        final hasBytes = f.bytes != null && f.bytes!.isNotEmpty;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.02),
+                                blurRadius: 4,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              // Clickable Thumbnail Preview
+                              InkWell(
+                                onTap: hasBytes
+                                    ? () => _showImageMemoryPreview(ctx, f.bytes!, f.name)
+                                    : null,
+                                borderRadius: BorderRadius.circular(6),
+                                child: Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                                  ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: hasBytes
+                                      ? Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            Image.memory(
+                                              f.bytes!,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) => const Center(
+                                                child: Icon(Icons.broken_image_rounded, size: 20, color: Colors.grey),
+                                              ),
+                                            ),
+                                            Positioned(
+                                              right: 2,
+                                              bottom: 2,
+                                              child: Container(
+                                                padding: const EdgeInsets.all(2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black.withValues(alpha: 0.6),
+                                                  borderRadius: BorderRadius.circular(3),
+                                                ),
+                                                child: const Icon(Icons.zoom_in, color: Colors.white, size: 11),
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : const Center(
+                                          child: Icon(Icons.image_outlined, size: 22, color: Color(0xFF64748B)),
+                                        ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              // File details
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      f.name,
+                                      style: const TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF1E293B),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          '${(f.size / 1024).toStringAsFixed(1)} KB',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF64748B),
+                                          ),
+                                        ),
+                                        if (hasBytes) ...[
+                                          const SizedBox(width: 8),
+                                          InkWell(
+                                            onTap: () => _showImageMemoryPreview(ctx, f.bytes!, f.name),
+                                            child: const Text(
+                                              '• Tap to preview',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                                color: Color(0xFF0284C7),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              // Preview button
+                              if (hasBytes)
+                                IconButton(
+                                  icon: const Icon(Icons.visibility_outlined, size: 18),
+                                  color: const Color(0xFF414A51),
+                                  tooltip: 'Preview Image',
+                                  onPressed: () => _showImageMemoryPreview(ctx, f.bytes!, f.name),
+                                ),
+                              // Remove button
+                              IconButton(
+                                icon: const Icon(Icons.close_rounded, size: 18),
+                                color: Colors.red.shade700,
+                                tooltip: 'Remove',
+                                onPressed: isSubmitting
+                                    ? null
+                                    : () {
+                                        setDialogState(() {
+                                          pickedFiles.removeAt(idx);
+                                        });
+                                      },
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+
+                  // Field 4: Optional Remarks
+                  const Text(
+                    'Completion Remarks (Optional)',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF414A51),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: remarksCtrl,
+                    maxLines: 2,
+                    enabled: !isSubmitting,
+                    decoration: InputDecoration(
+                      hintText: 'Enter any handover or measurement details...',
+                      hintStyle: const TextStyle(fontSize: 12.5, color: Color(0xFF94A3B8)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                      ),
+                      contentPadding: const EdgeInsets.all(12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF9CC70A),
+                foregroundColor: const Color(0xFF414A51),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      if (pickedFiles.isEmpty && project.mBookDocuments.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please select at least one M-Book photo to upload.'),
+                            backgroundColor: Color(0xFFDC2626),
+                          ),
+                        );
+                        return;
+                      }
+
+                      setDialogState(() => isSubmitting = true);
+                      try {
+                        await ref.read(projectRepositoryProvider).recordProjectCompletion(
+                              projectId: project.id,
+                              completionDate: selectedDate,
+                              mBookPhotos: pickedFiles,
+                              remarks: remarksCtrl.text.trim(),
+                            );
+                        if (ctx.mounted) Navigator.of(ctx).pop();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Project Completion & M-Book recorded successfully.'),
+                              backgroundColor: Color(0xFF2E7D32),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() => isSubmitting = false);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to record completion: $e'),
+                              backgroundColor: Colors.red.shade700,
+                            ),
+                          );
+                        }
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF414A51)),
+                    )
+                  : const Text(
+                      'Save & Complete',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

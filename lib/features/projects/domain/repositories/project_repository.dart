@@ -94,4 +94,15 @@ abstract class ProjectRepository {
   Stream<List<IncidentLogEntry>> watchIncidents(String projectCode);
   Future<void> addIncident(IncidentLogEntry incident, [dynamic photoFileOrFiles]);
   Future<void> deleteIncident(String id, String projectCode);
+
+  // ── Project Completion and M-Book ──
+  /// Records project completion date, uploads M-Book (Measurement Book) photo(s),
+  /// and automatically timestamps the entry.
+  Future<void> recordProjectCompletion({
+    required String projectId,
+    required DateTime completionDate,
+    required List<PlatformFile> mBookPhotos,
+    String? recordedBy,
+    String? remarks,
+  });
 }

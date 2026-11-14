@@ -143,6 +143,11 @@ class SiteProject {
     this.otherRetentionDate,
     this.otherRetentionDocuments = const [],
     this.otherRetentionDocumentLabel = '',
+    // Section 27 – Project Completion & M-Book
+    this.actualCompletionDate,
+    this.mBookDocuments = const [],
+    this.mBookRecordedAt,
+    this.mBookRecordedBy,
     // Metadata
     this.status = 'Active',
     this.supervisorMaterialBalanceSettled = false,
@@ -332,6 +337,12 @@ class SiteProject {
   final List<ProjectDocument> otherRetentionDocuments;
   final String otherRetentionDocumentLabel;
 
+  // Section 27 – Project Completion & M-Book
+  final DateTime? actualCompletionDate;
+  final List<ProjectDocument> mBookDocuments;
+  final DateTime? mBookRecordedAt;
+  final String? mBookRecordedBy;
+
   // Metadata
   final String status;
   final bool supervisorMaterialBalanceSettled;
@@ -504,6 +515,11 @@ class SiteProject {
         'other_retention_documents':
             otherRetentionDocuments.map((d) => d.toJson()).toList(),
         'other_retention_document_label': otherRetentionDocumentLabel,
+        // Section 27 – Project Completion & M-Book
+        'actual_completion_date': actualCompletionDate?.toIso8601String(),
+        'm_book_documents': mBookDocuments.map((d) => d.toJson()).toList(),
+        'm_book_recorded_at': mBookRecordedAt?.toIso8601String(),
+        'm_book_recorded_by': mBookRecordedBy,
         // Metadata
         'status': status,
         'supervisor_material_balance_settled': supervisorMaterialBalanceSettled,
@@ -752,6 +768,15 @@ class SiteProject {
           parseDocList(json['other_retention_documents']),
       otherRetentionDocumentLabel:
           json['other_retention_document_label'] as String? ?? '',
+      // Section 27 – Project Completion & M-Book
+      actualCompletionDate: json['actual_completion_date'] != null
+          ? DateTime.tryParse(json['actual_completion_date'].toString())
+          : null,
+      mBookDocuments: parseDocList(json['m_book_documents']),
+      mBookRecordedAt: json['m_book_recorded_at'] != null
+          ? DateTime.tryParse(json['m_book_recorded_at'].toString())
+          : null,
+      mBookRecordedBy: json['m_book_recorded_by'] as String?,
       // Metadata
       status: json['status'] as String? ?? 'Active',
       supervisorMaterialBalanceSettled:
@@ -894,6 +919,11 @@ class SiteProject {
     DateTime? otherRetentionDate,
     List<ProjectDocument>? otherRetentionDocuments,
     String? otherRetentionDocumentLabel,
+    // Section 27 – Project Completion & M-Book
+    DateTime? actualCompletionDate,
+    List<ProjectDocument>? mBookDocuments,
+    DateTime? mBookRecordedAt,
+    String? mBookRecordedBy,
     // Metadata
     String? status,
     bool? supervisorMaterialBalanceSettled,
@@ -1017,6 +1047,10 @@ class SiteProject {
           otherRetentionDocuments ?? this.otherRetentionDocuments,
       otherRetentionDocumentLabel:
           otherRetentionDocumentLabel ?? this.otherRetentionDocumentLabel,
+      actualCompletionDate: actualCompletionDate ?? this.actualCompletionDate,
+      mBookDocuments: mBookDocuments ?? this.mBookDocuments,
+      mBookRecordedAt: mBookRecordedAt ?? this.mBookRecordedAt,
+      mBookRecordedBy: mBookRecordedBy ?? this.mBookRecordedBy,
       status: status ?? this.status,
       supervisorMaterialBalanceSettled:
           supervisorMaterialBalanceSettled ??
