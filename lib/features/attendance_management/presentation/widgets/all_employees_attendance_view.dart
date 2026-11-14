@@ -458,27 +458,21 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
           date: _selectedDate,
         );
 
-        if (_selectedStatusFilter == 'Office & Site' && !unifiedStatus.contains('Office & Site')) {
-          return false;
-        }
-        if (_selectedStatusFilter == 'Office Present' &&
-            !unifiedStatus.contains('Office Present') &&
-            !unifiedStatus.contains('Late (Office)')) {
-          return false;
-        }
-        if (_selectedStatusFilter == 'Site Active' && !unifiedStatus.contains('Site Active')) {
-          return false;
-        }
-        if (_selectedStatusFilter == 'On Duty' && unifiedStatus != 'On Duty') {
-          return false;
-        }
-        if (_selectedStatusFilter == 'On Leave' && unifiedStatus != 'On Leave') {
-          return false;
-        }
-        if (_selectedStatusFilter == 'Absent' &&
-            unifiedStatus != 'Absent' &&
-            unifiedStatus != 'Not Checked In') {
-          return false;
+        if (_selectedStatusFilter == 'Office Present') {
+          final isOffice = unifiedStatus.contains('Office Present') ||
+              unifiedStatus.contains('Late (Office)') ||
+              unifiedStatus == 'Office & Site';
+          if (!isOffice) return false;
+        } else if (_selectedStatusFilter == 'Site Active') {
+          final isSite = unifiedStatus.contains('Site Active') ||
+              unifiedStatus == 'Office & Site';
+          if (!isSite) return false;
+        } else if (_selectedStatusFilter == 'Both (Office+Site)' || _selectedStatusFilter == 'Office & Site') {
+          if (unifiedStatus != 'Office & Site') return false;
+        } else if (_selectedStatusFilter == 'On Duty / Leave' || _selectedStatusFilter == 'On Duty') {
+          if (unifiedStatus != 'On Duty' && unifiedStatus != 'On Leave') return false;
+        } else if (_selectedStatusFilter == 'Absent / Unmarked' || _selectedStatusFilter == 'Absent') {
+          if (unifiedStatus != 'Absent' && unifiedStatus != 'Not Checked In') return false;
         }
       }
 
@@ -1188,12 +1182,12 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
     required int absent,
   }) {
     final kpis = [
-      _KpiItem('Total Staff', '$totalStaff', 'All registered', Icons.people_outline, const Color(0xFF2563EB), const Color(0xFFEFF6FF)),
-      _KpiItem('Office Present', '$officePresent', 'Checked in office', Icons.storefront_outlined, const Color(0xFF16A34A), const Color(0xFFF0FDF4)),
-      _KpiItem('Site Active', '$siteEmployees', '$siteVisitsCount visits logged', Icons.location_on_outlined, const Color(0xFF0D9488), const Color(0xFFF0FDFA)),
-      _KpiItem('Both (Office+Site)', '$dualPresence', 'Dual presence', Icons.domain_verification_rounded, AllEmployeesAttendanceView.primaryGreen, const Color(0xFFF7FEE7)),
-      _KpiItem('On Duty / Leave', '$odOrLeave', 'Authorized out', Icons.badge_outlined, const Color(0xFFCA8A04), const Color(0xFFFEFCE8)),
-      _KpiItem('Absent / Unmarked', '$absent', 'No attendance punch', Icons.cancel_outlined, const Color(0xFFDC2626), const Color(0xFFFEF2F2)),
+      _KpiItem('Total Staff', '$totalStaff', 'All registered', Icons.people_outline, const Color(0xFF2563EB), const Color(0xFFEFF6FF), filterKey: 'All'),
+      _KpiItem('Office Present', '$officePresent', 'Checked in office', Icons.storefront_outlined, const Color(0xFF16A34A), const Color(0xFFF0FDF4), filterKey: 'Office Present'),
+      _KpiItem('Site Active', '$siteEmployees', '$siteVisitsCount visits logged', Icons.location_on_outlined, const Color(0xFF0D9488), const Color(0xFFF0FDFA), filterKey: 'Site Active'),
+      _KpiItem('Both (Office+Site)', '$dualPresence', 'Dual presence', Icons.domain_verification_rounded, AllEmployeesAttendanceView.primaryGreen, const Color(0xFFF7FEE7), filterKey: 'Both (Office+Site)'),
+      _KpiItem('On Duty / Leave', '$odOrLeave', 'Authorized out', Icons.badge_outlined, const Color(0xFFCA8A04), const Color(0xFFFEFCE8), filterKey: 'On Duty / Leave'),
+      _KpiItem('Absent / Unmarked', '$absent', 'No attendance punch', Icons.cancel_outlined, const Color(0xFFDC2626), const Color(0xFFFEF2F2), filterKey: 'Absent / Unmarked'),
     ];
 
     if (widget.isMobile) {
@@ -1224,65 +1218,104 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
   }
 
   Widget _buildKpiCard(_KpiItem kpi) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    final isSelected = _selectedStatusFilter == kpi.filterKey;
+    final isAllSelected = _selectedStatusFilter == 'All';
+    final isActive = isSelected || (kpi.filterKey == 'All' && isAllSelected);
+
+    return Tooltip(
+      message: isActive && kpi.filterKey != 'All'
+          ? 'Active filter: ${kpi.label}. Click to show all'
+          : 'Filter by ${kpi.label}',
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            if (isSelected && kpi.filterKey != 'All') {
+              _selectedStatusFilter = 'All';
+            } else {
+              _selectedStatusFilter = kpi.filterKey;
+            }
+            _currentPage = 1;
+          });
+        },
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: kpi.bgColor,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(kpi.icon, color: kpi.iconColor, size: 17),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      kpi.value,
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      kpi.label,
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
+        mouseCursor: SystemMouseCursors.click,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isActive ? kpi.bgColor.withValues(alpha: 0.45) : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isActive ? kpi.iconColor : const Color(0xFFE2E8F0),
+              width: isActive ? 2 : 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: isActive ? kpi.iconColor.withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.02),
+                blurRadius: isActive ? 8 : 6,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            kpi.subtitle,
-            style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: kpi.bgColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(kpi.icon, color: kpi.iconColor, size: 17),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              kpi.value,
+                              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (isActive && kpi.filterKey != 'All') ...[
+                              const SizedBox(width: 4),
+                              Icon(Icons.check_circle_rounded, size: 14, color: kpi.iconColor),
+                            ],
+                          ],
+                        ),
+                        Text(
+                          kpi.label,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
+                            color: isActive ? kpi.iconColor : const Color(0xFF64748B),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                kpi.subtitle,
+                style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1524,46 +1557,9 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
                   },
                 ),
               ),
-
-              _buildFilterChip('All', 'All'),
-              _buildFilterChip('Office & Site', 'Office & Site'),
-              _buildFilterChip('Office Present', 'Office'),
-              _buildFilterChip('Site Active', 'Site'),
-              _buildFilterChip('On Duty', 'On Duty'),
-              _buildFilterChip('On Leave', 'On Leave'),
-              _buildFilterChip('Absent', 'Absent'),
             ],
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildFilterChip(String value, String label) {
-    final isSelected = _selectedStatusFilter == value;
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _selectedStatusFilter = isSelected && value != 'All' ? 'All' : value;
-          _currentPage = 1;
-        });
-      },
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: isSelected ? AllEmployeesAttendanceView.darkSlate : const Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? AllEmployeesAttendanceView.darkSlate : const Color(0xFFE2E8F0)),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            color: isSelected ? Colors.white : const Color(0xFF475569),
-          ),
-        ),
       ),
     );
   }
@@ -1591,6 +1587,35 @@ class _AllEmployeesAttendanceViewState extends State<AllEmployeesAttendanceView>
                 color: Color(0xFF1E293B),
               ),
             ),
+            if (_selectedStatusFilter != 'All') ...[
+              const SizedBox(width: 10),
+              InkWell(
+                onTap: () => setState(() {
+                  _selectedStatusFilter = 'All';
+                  _currentPage = 1;
+                }),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Filtered: $_selectedStatusFilter',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.close, size: 13, color: Color(0xFF64748B)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
 
@@ -2356,6 +2381,15 @@ class _KpiItem {
   final IconData icon;
   final Color iconColor;
   final Color bgColor;
+  final String filterKey;
 
-  _KpiItem(this.label, this.value, this.subtitle, this.icon, this.iconColor, this.bgColor);
+  _KpiItem(
+    this.label,
+    this.value,
+    this.subtitle,
+    this.icon,
+    this.iconColor,
+    this.bgColor, {
+    required this.filterKey,
+  });
 }

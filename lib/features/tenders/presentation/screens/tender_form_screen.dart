@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +10,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/app_searchable_dropdown.dart';
 import '../../../employee/providers/employee_providers.dart';
+import '../../../on_duty/presentation/widgets/destination_map_picker.dart';
 import '../../../projects/domain/models/project_document.dart';
 import '../../domain/models/bqr_requirement_item.dart';
 import '../../domain/models/site_visit_record.dart';
@@ -1598,52 +1602,274 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
         if (_siteVisits.isNotEmpty) ...[
           const SizedBox(height: 10),
           ..._siteVisits.map(
-            (v) => Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9FAF8),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFE5E8E2)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.verified_outlined,
-                      size: 18, color: Color(0xFF16A34A)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
+            (v) {
+              final photos = v.allPhotos;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAF8),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE5E8E2)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Visited by ${v.visitedBy} • ${DateFormat("dd-MM-yyyy hh:mm a").format(v.visitDateTime)}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF414A51),
+                        const Icon(Icons.verified_outlined,
+                            size: 18, color: Color(0xFF16A34A)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Visited by ${v.visitedBy} • ${DateFormat("dd-MM-yyyy hh:mm a").format(v.visitDateTime)}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF414A51),
+                                ),
+                              ),
+                              if (v.locationAddress.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    'Location: ${v.locationAddress}',
+                                    style: const TextStyle(
+                                        fontSize: 11, color: Color(0xFF718096)),
+                                  ),
+                                ),
+                              if (v.latitude != null && v.longitude != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    'GPS: ${v.latitude!.toStringAsFixed(4)}, ${v.longitude!.toStringAsFixed(4)}',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF9CC70A),
+                                    ),
+                                  ),
+                                ),
+                              if (v.remarks.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    v.remarks,
+                                    style: const TextStyle(
+                                        fontSize: 11, color: Color(0xFF414A51)),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
-                        if (v.locationAddress.isNotEmpty)
-                          Text(
-                            'Location: ${v.locationAddress}',
-                            style: const TextStyle(
-                                fontSize: 11, color: Color(0xFF718096)),
+                        // Photo count badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: photos.isNotEmpty
+                                ? const Color(0xFF9CC70A).withOpacity(0.15)
+                                : const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: photos.isNotEmpty
+                                  ? const Color(0xFF9CC70A).withOpacity(0.4)
+                                  : const Color(0xFFCBD5E1),
+                            ),
                           ),
-                        if (v.remarks.isNotEmpty)
-                          Text(
-                            v.remarks,
-                            style: const TextStyle(
-                                fontSize: 11, color: Color(0xFF414A51)),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.photo_library_outlined,
+                                size: 13,
+                                color: photos.isNotEmpty
+                                    ? const Color(0xFF414A51)
+                                    : const Color(0xFF94A3B8),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                photos.isEmpty
+                                    ? 'No photo'
+                                    : '${photos.length} Photo${photos.length > 1 ? "s" : ""}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: photos.isNotEmpty
+                                      ? const Color(0xFF414A51)
+                                      : const Color(0xFF94A3B8),
+                                ),
+                              ),
+                            ],
                           ),
+                        ),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline,
+                              size: 18, color: Colors.redAccent),
+                          tooltip: 'Remove site visit',
+                          onPressed: () {
+                            setState(() {
+                              _siteVisits.remove(v);
+                            });
+                          },
+                        ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-            ),
+                    // Thumbnails list
+                    if (photos.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: photos.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final url = entry.value;
+                          return Tooltip(
+                            message: 'Click to preview photo #${idx + 1}',
+                            child: _buildPhotoThumbnail(
+                              url,
+                              size: 56,
+                              onTap: () => _showPhotoPreview(
+                                context,
+                                url,
+                                'Site Visit Photo #${idx + 1} (${v.visitedBy})',
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildPhotoThumbnail(String url, {double size = 52, VoidCallback? onTap}) {
+    Uint8List? memoryBytes;
+    if (url.startsWith('data:')) {
+      final comma = url.indexOf(',');
+      final b64 = comma != -1 ? url.substring(comma + 1) : url;
+      try {
+        memoryBytes = base64Decode(b64);
+      } catch (_) {}
+    }
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFFCBD5E1)),
+          color: const Color(0xFFF1F5F9),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: memoryBytes != null
+            ? Image.memory(memoryBytes, fit: BoxFit.cover)
+            : (url.isNotEmpty
+                ? Image.network(
+                    url,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.broken_image_outlined,
+                      size: 20,
+                      color: Color(0xFF94A3B8),
+                    ),
+                  )
+                : const Icon(
+                    Icons.image_outlined,
+                    size: 20,
+                    color: Color(0xFF94A3B8),
+                  )),
+      ),
+    );
+  }
+
+  void _showPhotoPreview(BuildContext context, String url, String title) {
+    Uint8List? memoryBytes;
+    if (url.startsWith('data:')) {
+      final comma = url.indexOf(',');
+      final b64 = comma != -1 ? url.substring(comma + 1) : url;
+      try {
+        memoryBytes = base64Decode(b64);
+      } catch (_) {}
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 700, maxHeight: 600),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.photo_outlined, size: 20, color: Color(0xFF9CC70A)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF414A51),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Container(
+                  color: const Color(0xFF0F172A),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.all(8),
+                  child: InteractiveViewer(
+                    maxScale: 4.0,
+                    child: memoryBytes != null
+                        ? Image.memory(memoryBytes, fit: BoxFit.contain)
+                        : (url.isNotEmpty
+                            ? Image.network(
+                                url,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => const Center(
+                                  child: Text('Unable to load photo', style: TextStyle(color: Colors.white70)),
+                                ),
+                              )
+                            : const Center(
+                                child: Text('No image data', style: TextStyle(color: Colors.white70)),
+                              )),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1651,117 +1877,357 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
     final visitedByCtrl = TextEditingController();
     final locationCtrl = TextEditingController();
     final remarksCtrl = TextEditingController();
-    PlatformFile? photoFile;
+    SelectedDestination? selectedDestination;
+    List<PlatformFile> photoFiles = [];
     final visitTimestamp = DateTime.now();
 
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Record Site Visit'),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Timestamp: ${DateFormat("dd-MM-yyyy hh:mm a").format(visitTimestamp)}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF414A51),
-                  ),
+        builder: (ctx, setDialogState) {
+          Future<void> pickLocationOnMap() async {
+            final result = await Navigator.of(context).push<SelectedDestination>(
+              MaterialPageRoute(
+                builder: (mapCtx) => DestinationMapPickerScreen(
+                  initialDestination: selectedDestination,
+                  primaryColor: const Color(0xFF9CC70A),
+                  darkTextColor: const Color(0xFF414A51),
                 ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: visitedByCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Visited By (Name) *',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: locationCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Location / Coordinates Stamp *',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: remarksCtrl,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Short Remarks *',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    final res = await FilePicker.pickFiles(
-                      type: FileType.image,
-                      withData: true,
-                    );
-                    if (res != null && res.files.isNotEmpty) {
-                      setDialogState(() => photoFile = res.files.first);
-                    }
-                  },
-                  icon: const Icon(Icons.photo_camera_outlined),
-                  label: Text(
-                    photoFile == null ? 'Select Site Visit Photo *' : photoFile!.name,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF9CC70A),
-                foregroundColor: const Color(0xFF414A51),
               ),
-              onPressed: () async {
-                if (visitedByCtrl.text.trim().isEmpty ||
-                    remarksCtrl.text.trim().isEmpty ||
-                    photoFile == null) {
-                  return;
-                }
-                Navigator.of(ctx).pop();
-                final doc = await ref
-                    .read(tenderRepositoryProvider)
-                    .uploadTenderAttachment(
-                      _tenderIdController.text.trim(),
-                      'site_visit',
-                      photoFile!,
-                    );
-                if (!mounted) return;
-                setState(() {
-                  _siteVisits.add(
-                    SiteVisitRecord(
-                      id: DateTime.now().millisecondsSinceEpoch.toString(),
-                      tenderId: _tenderIdController.text.trim(),
-                      photoUrl: doc.downloadUrl,
-                      visitDateTime: visitTimestamp,
-                      locationAddress: locationCtrl.text.trim(),
-                      visitedBy: visitedByCtrl.text.trim(),
-                      remarks: remarksCtrl.text.trim(),
-                      createdAt: DateTime.now(),
+            );
+            if (result != null) {
+              setDialogState(() {
+                selectedDestination = result;
+                locationCtrl.text = result.fullDisplayText;
+              });
+            }
+          }
+
+          return AlertDialog(
+            title: const Text('Record Site Visit'),
+            content: SizedBox(
+              width: 440,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Timestamp: ${DateFormat("dd-MM-yyyy hh:mm a").format(visitTimestamp)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF414A51),
+                      ),
                     ),
-                  );
-                });
-              },
-              child: const Text('Save Site Visit'),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: visitedByCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Visited By (Name) *',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Interactive Map Picker trigger card
+                    InkWell(
+                      onTap: pickLocationOnMap,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: selectedDestination != null
+                              ? const Color(0xFF9CC70A).withOpacity(0.08)
+                              : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: selectedDestination != null
+                                ? const Color(0xFF9CC70A)
+                                : const Color(0xFFCBD5E1),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: selectedDestination != null
+                                    ? const Color(0xFF9CC70A).withOpacity(0.2)
+                                    : const Color(0xFFE2E8F0),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.location_on_rounded,
+                                size: 22,
+                                color: selectedDestination != null
+                                    ? const Color(0xFF414A51)
+                                    : const Color(0xFF64748B),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    selectedDestination != null
+                                        ? (selectedDestination!.name.isNotEmpty
+                                            ? selectedDestination!.name
+                                            : 'Selected Location')
+                                        : 'Site Location *',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: selectedDestination != null
+                                          ? const Color(0xFF414A51)
+                                          : const Color(0xFF475569),
+                                    ),
+                                  ),
+                                  if (selectedDestination != null &&
+                                      selectedDestination!.address.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      selectedDestination!.address,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                  if (selectedDestination != null) ...[
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF9CC70A)
+                                            .withOpacity(0.25),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        'Lat: ${selectedDestination!.latitude.toStringAsFixed(4)} | Lng: ${selectedDestination!.longitude.toStringAsFixed(4)}',
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF414A51),
+                                        ),
+                                      ),
+                                    ),
+                                  ] else ...[
+                                    const SizedBox(height: 2),
+                                    const Text(
+                                      'Search or pick location on map (GPS supported)',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              selectedDestination != null
+                                  ? Icons.edit_location_alt_outlined
+                                  : Icons.map_outlined,
+                              size: 20,
+                              color: const Color(0xFF414A51),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: remarksCtrl,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'Short Remarks *',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Photo upload with multiple image support & preview
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final res = await FilePicker.pickFiles(
+                          type: FileType.image,
+                          withData: true,
+                          allowMultiple: true,
+                        );
+                        if (res != null && res.files.isNotEmpty) {
+                          setDialogState(() {
+                            photoFiles = [...photoFiles, ...res.files];
+                          });
+                        }
+                      },
+                      icon: const Icon(Icons.add_a_photo_outlined),
+                      label: Text(
+                        photoFiles.isEmpty
+                            ? 'Select Site Visit Photo(s) *'
+                            : 'Add More Photos (${photoFiles.length} selected)',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (photoFiles.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text(
+                            'Attached Photos (${photoFiles.length}):',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF414A51),
+                            ),
+                          ),
+                          const Spacer(),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              foregroundColor: Colors.redAccent,
+                            ),
+                            onPressed: () => setDialogState(() => photoFiles.clear()),
+                            child: const Text('Clear All', style: TextStyle(fontSize: 11)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      SizedBox(
+                        height: 72,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: photoFiles.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 8),
+                          itemBuilder: (ctx, idx) {
+                            final f = photoFiles[idx];
+                            return Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Container(
+                                  width: 68,
+                                  height: 68,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                                    color: const Color(0xFFF1F5F9),
+                                  ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: f.bytes != null
+                                      ? Image.memory(f.bytes!, fit: BoxFit.cover)
+                                      : const Center(
+                                          child: Icon(Icons.image, size: 24, color: Color(0xFF94A3B8)),
+                                        ),
+                                ),
+                                Positioned(
+                                  top: -4,
+                                  right: -4,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      setDialogState(() {
+                                        photoFiles.removeAt(idx);
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.redAccent,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.close, size: 12, color: Colors.white),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF9CC70A),
+                  foregroundColor: const Color(0xFF414A51),
+                ),
+                onPressed: () async {
+                  if (visitedByCtrl.text.trim().isEmpty ||
+                      remarksCtrl.text.trim().isEmpty ||
+                      photoFiles.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please fill all required fields and attach at least one site visit photo.'),
+                        backgroundColor: Colors.redAccent,
+                      ),
+                    );
+                    return;
+                  }
+                  if (selectedDestination == null && locationCtrl.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please select a site location on the map.'),
+                        backgroundColor: Colors.redAccent,
+                      ),
+                    );
+                    return;
+                  }
+                  Navigator.of(ctx).pop();
+
+                  final uploadedUrls = <String>[];
+                  for (final file in photoFiles) {
+                    final doc = await ref
+                        .read(tenderRepositoryProvider)
+                        .uploadTenderAttachment(
+                          _tenderIdController.text.trim(),
+                          'site_visit',
+                          file,
+                        );
+                    if (doc.downloadUrl.isNotEmpty) {
+                      uploadedUrls.add(doc.downloadUrl);
+                    }
+                  }
+
+                  if (!mounted) return;
+                  setState(() {
+                    _siteVisits.add(
+                      SiteVisitRecord(
+                        id: DateTime.now().millisecondsSinceEpoch.toString(),
+                        tenderId: _tenderIdController.text.trim(),
+                        photoUrl: uploadedUrls.isNotEmpty ? uploadedUrls.first : '',
+                        photoUrls: uploadedUrls,
+                        visitDateTime: visitTimestamp,
+                        latitude: selectedDestination?.latitude,
+                        longitude: selectedDestination?.longitude,
+                        locationAddress: selectedDestination != null
+                            ? selectedDestination!.fullDisplayText
+                            : locationCtrl.text.trim(),
+                        visitedBy: visitedByCtrl.text.trim(),
+                        remarks: remarksCtrl.text.trim(),
+                        createdAt: DateTime.now(),
+                      ),
+                    );
+                  });
+                },
+                child: const Text('Save Site Visit'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

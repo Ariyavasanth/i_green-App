@@ -3114,6 +3114,16 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                   Icons.my_location,
                   'GPS Coordinates',
                   '${v.latitude.toStringAsFixed(6)}, ${v.longitude.toStringAsFixed(6)}',
+                  isLink: (v.latitude != 0 || v.longitude != 0),
+                  onTap: (v.latitude != 0 || v.longitude != 0)
+                      ? () async {
+                          final mapsUrl = Uri.parse(
+                              'https://www.google.com/maps/search/?api=1&query=${v.latitude},${v.longitude}');
+                          if (await canLaunchUrl(mapsUrl)) {
+                            await launchUrl(mapsUrl, mode: LaunchMode.externalApplication);
+                          }
+                        }
+                      : null,
                 ),
                 if (v.notes.isNotEmpty)
                   _buildDetailRowItem(Icons.notes_outlined, 'Purpose / Notes', v.notes),
@@ -3139,13 +3149,19 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     );
   }
 
-  Widget _buildDetailRowItem(IconData icon, String label, String value) {
+  Widget _buildDetailRowItem(
+    IconData icon,
+    String label,
+    String value, {
+    VoidCallback? onTap,
+    bool isLink = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: const Color(0xFF64748B)),
+          Icon(icon, size: 18, color: isLink ? const Color(0xFF2563EB) : const Color(0xFF64748B)),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -3156,10 +3172,40 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                ),
+                if (onTap != null)
+                  InkWell(
+                    onTap: onTap,
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 1),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              value,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: isLink ? const Color(0xFF2563EB) : const Color(0xFF0F172A),
+                                decoration: isLink ? TextDecoration.underline : TextDecoration.none,
+                                decorationColor: const Color(0xFF2563EB),
+                              ),
+                            ),
+                          ),
+                          if (isLink) ...[
+                            const SizedBox(width: 6),
+                            const Icon(Icons.open_in_new_rounded, size: 14, color: Color(0xFF2563EB)),
+                          ],
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  Text(
+                    value,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  ),
               ],
             ),
           ),
