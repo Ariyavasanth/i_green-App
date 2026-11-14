@@ -1,8 +1,11 @@
 import 'package:file_picker/file_picker.dart';
 
+import '../models/daily_progress_entry.dart';
 import '../models/project_audit_log.dart';
 import '../models/project_breakdown_item.dart';
 import '../models/project_budget.dart';
+import '../models/project_compliance_record.dart';
+import '../models/project_inventory_item.dart';
 import '../models/site_project.dart';
 
 abstract class ProjectRepository {
@@ -68,4 +71,23 @@ abstract class ProjectRepository {
 
   /// Records an audit log entry for a project.
   Future<void> addAuditLog(ProjectAuditLog log);
+
+  // ── Daily Progress ──
+  Stream<List<DailyProgressEntry>> watchDailyProgress(String projectCode);
+  Future<void> addDailyProgress(DailyProgressEntry entry);
+  Future<void> approveDailyProgress(String entryId, String approvedBy);
+
+  // ── Project Inventory ──
+  Stream<List<ProjectInventoryItem>> watchProjectInventory(String projectCode);
+  Future<void> updateProjectInventory(ProjectInventoryItem item);
+
+  // ── Compliance (Permissions, Insurance, Incidents) ──
+  Stream<List<ProjectPermission>> watchPermissions(String projectCode);
+  Future<void> addPermission(ProjectPermission permission, [PlatformFile? file]);
+
+  Stream<List<ProjectInsurance>> watchInsurance(String projectCode);
+  Future<void> addInsurance(ProjectInsurance insurance, [PlatformFile? file]);
+
+  Stream<List<IncidentLogEntry>> watchIncidents(String projectCode);
+  Future<void> addIncident(IncidentLogEntry incident, [PlatformFile? photoFile]);
 }

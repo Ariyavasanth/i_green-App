@@ -5,10 +5,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../domain/models/daily_progress_entry.dart';
 import '../../domain/models/project_audit_log.dart';
 import '../../domain/models/project_breakdown_item.dart';
 import '../../domain/models/project_budget.dart';
+import '../../domain/models/project_compliance_record.dart';
 import '../../domain/models/project_document.dart';
+import '../../domain/models/project_inventory_item.dart';
 import '../../domain/models/site_project.dart';
 import '../../domain/repositories/project_repository.dart';
 
@@ -215,7 +218,12 @@ class FirebaseProjectRepository implements ProjectRepository {
     try {
       final snap = await _projectsRef.orderBy('created_at', descending: true).get();
       return snap.docs
-          .map((doc) => SiteProject.fromJson(doc.data(), docId: doc.id))
+          .map((doc) {
+            final p = SiteProject.fromJson(doc.data(), docId: doc.id);
+            return p.shouldAutoReopenForRetention
+                ? p.copyWith(status: 'Active')
+                : p;
+          })
           .toList();
     } catch (e, stack) {
       developer.log('Error fetching site projects: $e',
@@ -240,7 +248,10 @@ class FirebaseProjectRepository implements ProjectRepository {
       final list = <SiteProject>[];
       for (final doc in snap.docs) {
         try {
-          list.add(SiteProject.fromJson(doc.data(), docId: doc.id));
+          final p = SiteProject.fromJson(doc.data(), docId: doc.id);
+          list.add(
+            p.shouldAutoReopenForRetention ? p.copyWith(status: 'Active') : p,
+          );
         } catch (e, stack) {
           developer.log('Error parsing project doc ${doc.id}: $e',
               name: 'FirebaseProjectRepository', error: e, stackTrace: stack);
@@ -324,7 +335,7 @@ class FirebaseProjectRepository implements ProjectRepository {
         await uploadCategory('tender_lost', tenderLostDocs);
       }
 
-      final finalProject = project.copyWith(
+      var finalProject = project.copyWith(
         tenderSpecDocuments: tenderDocs,
         bqrDocuments: bqrDocs,
         emdDocuments: emdDocs,
@@ -343,6 +354,23 @@ class FirebaseProjectRepository implements ProjectRepository {
         tenderLostDocuments: tenderLostDocs,
         updatedAt: DateTime.now(),
       );
+
+      // Enforce project closure & auto-close rules
+      if (finalProject.status == 'Closed' && !finalProject.canBeClosed) {
+        if (!finalProject.supervisorMaterialBalanceSettled) {
+          throw StateError(
+            'Project cannot be closed until the supervisor material balance is settled.',
+          );
+        }
+        throw StateError(
+          'Project cannot be closed until the bill is uploaded and payment is received.',
+        );
+      }
+      if (finalProject.status != 'Closed' &&
+          finalProject.canBeClosed &&
+          !finalProject.shouldAutoReopenForRetention) {
+        finalProject = finalProject.copyWith(status: 'Closed');
+      }
 
       final data = finalProject.toJson();
       data['updated_at'] = DateTime.now().toIso8601String();
@@ -569,5 +597,165 @@ class FirebaseProjectRepository implements ProjectRepository {
         return 1;
       }
     }
+  }
+
+  // ── Daily Progress ──
+  CollectionReference<Map<String, dynamic>> get _dailyProgressRef =>
+      _firestore.collection('daily_progress');
+
+  @override
+  Stream<List<DailyProgressEntry>> watchDailyProgress(String projectCode) {
+    return _dailyProgressRef
+        .where('project_code', isEqualTo: projectCode)
+        .orderBy('date', descending: true)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => DailyProgressEntry.fromJson(d.data(), d.id)).toList());
+  }
+
+  @override
+  Future<void> addDailyProgress(DailyProgressEntry entry) async {
+    final status = DailyProgressEntry.isBackdatedBeyondLimit(entry.date)
+        ? 'pending_approval'
+        : 'approved';
+    final docRef = _dailyProgressRef.doc();
+    final data = entry.toJson();
+    data['id'] = docRef.id;
+    data['approval_status'] = status;
+    await docRef.set(data);
+  }
+
+  @override
+  Future<void> approveDailyProgress(String entryId, String approvedBy) async {
+    await _dailyProgressRef.doc(entryId).update({
+      'approval_status': 'approved',
+      'approved_by': approvedBy,
+      'approved_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  // ── Project Inventory ──
+  CollectionReference<Map<String, dynamic>> get _inventoryRef =>
+      _firestore.collection('project_inventory');
+
+  @override
+  Stream<List<ProjectInventoryItem>> watchProjectInventory(String projectCode) {
+    return _inventoryRef
+        .where('project_code', isEqualTo: projectCode)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => ProjectInventoryItem.fromJson(d.data(), d.id))
+            .toList());
+  }
+
+  @override
+  Future<void> updateProjectInventory(ProjectInventoryItem item) async {
+    final docId = item.id.isNotEmpty
+        ? item.id
+        : '${item.projectCode}_${item.supervisorId}_${item.itemId}'
+            .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
+    final data = item.toJson();
+    data['id'] = docId;
+    data['updated_at'] = DateTime.now().toIso8601String();
+    await _inventoryRef.doc(docId).set(data, SetOptions(merge: true));
+  }
+
+  // ── Permissions Register ──
+  CollectionReference<Map<String, dynamic>> get _permissionsRef =>
+      _firestore.collection('project_permissions');
+
+  @override
+  Stream<List<ProjectPermission>> watchPermissions(String projectCode) {
+    return _permissionsRef
+        .where('project_code', isEqualTo: projectCode)
+        .orderBy('valid_to', descending: false)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => ProjectPermission.fromJson(d.data(), d.id))
+            .toList());
+  }
+
+  @override
+  Future<void> addPermission(
+    ProjectPermission permission, [
+    PlatformFile? file,
+  ]) async {
+    final docRef = _permissionsRef.doc();
+    ProjectDocument? doc = permission.document;
+    if (file != null) {
+      final safeFolder = permission.projectCode.replaceAll('/', '_');
+      final uploaded = await _uploadFiles(safeFolder, 'permissions', [file]);
+      if (uploaded.isNotEmpty) doc = uploaded.first;
+    }
+    final data = permission.toJson();
+    data['id'] = docRef.id;
+    if (doc != null) data['document'] = doc.toJson();
+    await docRef.set(data);
+  }
+
+  // ── Insurance Policies ──
+  CollectionReference<Map<String, dynamic>> get _insuranceRef =>
+      _firestore.collection('project_insurance');
+
+  @override
+  Stream<List<ProjectInsurance>> watchInsurance(String projectCode) {
+    return _insuranceRef
+        .where('project_code', isEqualTo: projectCode)
+        .orderBy('expiry_date', descending: false)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => ProjectInsurance.fromJson(d.data(), d.id))
+            .toList());
+  }
+
+  @override
+  Future<void> addInsurance(
+    ProjectInsurance insurance, [
+    PlatformFile? file,
+  ]) async {
+    final docRef = _insuranceRef.doc();
+    ProjectDocument? doc = insurance.document;
+    if (file != null) {
+      final safeFolder = insurance.projectCode.replaceAll('/', '_');
+      final uploaded = await _uploadFiles(safeFolder, 'insurance', [file]);
+      if (uploaded.isNotEmpty) doc = uploaded.first;
+    }
+    final data = insurance.toJson();
+    data['id'] = docRef.id;
+    if (doc != null) data['document'] = doc.toJson();
+    await docRef.set(data);
+  }
+
+  // ── Incident Log ──
+  CollectionReference<Map<String, dynamic>> get _incidentsRef =>
+      _firestore.collection('project_incidents');
+
+  @override
+  Stream<List<IncidentLogEntry>> watchIncidents(String projectCode) {
+    return _incidentsRef
+        .where('project_code', isEqualTo: projectCode)
+        .orderBy('incident_date', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => IncidentLogEntry.fromJson(d.data(), d.id))
+            .toList());
+  }
+
+  @override
+  Future<void> addIncident(
+    IncidentLogEntry incident, [
+    PlatformFile? photoFile,
+  ]) async {
+    final docRef = _incidentsRef.doc();
+    String photoUrl = incident.photoUrl;
+    if (photoFile != null) {
+      final safeFolder = incident.projectCode.replaceAll('/', '_');
+      final uploaded = await _uploadFiles(safeFolder, 'incident_photos', [photoFile]);
+      if (uploaded.isNotEmpty) photoUrl = uploaded.first.downloadUrl;
+    }
+    final data = incident.toJson();
+    data['id'] = docRef.id;
+    data['photo_url'] = photoUrl;
+    await docRef.set(data);
   }
 }

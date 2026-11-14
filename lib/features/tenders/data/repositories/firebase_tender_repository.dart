@@ -28,6 +28,18 @@ class FirebaseTenderRepository implements TenderRepository {
       _firestore.collection('tenders');
 
   @override
+  Future<ProjectDocument> uploadTenderAttachment(
+    String tenderId,
+    String category,
+    PlatformFile file,
+  ) async {
+    final folder = (tenderId.trim().isNotEmpty ? tenderId.trim() : 'draft')
+        .replaceAll('/', '_');
+    final uploaded = await _uploadFiles(folder, category, [file]);
+    return uploaded.first;
+  }
+
+  @override
   Future<String> generateNextTenderId() async {
     try {
       final now = DateTime.now();
@@ -59,9 +71,21 @@ class FirebaseTenderRepository implements TenderRepository {
       final noticeDocs = List<ProjectDocument>.from(tender.tenderNoticeDocuments);
       final specDocs = List<ProjectDocument>.from(tender.tenderSpecDocuments);
       final bqrDocs = List<ProjectDocument>.from(tender.bqrDocuments);
+      final financialBidDocs =
+          List<ProjectDocument>.from(tender.financialBidDocuments);
       final emdDocs = List<ProjectDocument>.from(tender.emdDocuments);
       final emdExemptionDocs = List<ProjectDocument>.from(tender.emdExemptionDocuments);
       final awardDocs = List<ProjectDocument>.from(tender.awardDocuments);
+
+      final hasTenderDocUploads = (filesByCategory?['tender_notice']?.isNotEmpty ?? false) ||
+          (filesByCategory?['tender_spec']?.isNotEmpty ?? false) ||
+          (filesByCategory?['bqr']?.isNotEmpty ?? false) ||
+          (filesByCategory?['financial_bid']?.isNotEmpty ?? false);
+      if (hasTenderDocUploads && !tender.hasSiteVisit) {
+        throw StateError(
+          'A Site Visit photo and details must be recorded before uploading tender documents.',
+        );
+      }
 
       DateTime? noticeUploadedAt = tender.noticeUploadedAt;
 
@@ -82,6 +106,7 @@ class FirebaseTenderRepository implements TenderRepository {
         }
         await uploadCategory('tender_spec', specDocs);
         await uploadCategory('bqr', bqrDocs);
+        await uploadCategory('financial_bid', financialBidDocs);
         await uploadCategory('emd', emdDocs);
         await uploadCategory('emd_exemption', emdExemptionDocs);
         await uploadCategory('award_documents', awardDocs);
@@ -95,6 +120,7 @@ class FirebaseTenderRepository implements TenderRepository {
         noticeUploadedAt: noticeUploadedAt,
         tenderSpecDocuments: specDocs,
         bqrDocuments: bqrDocs,
+        financialBidDocuments: financialBidDocs,
         emdDocuments: emdDocs,
         emdExemptionDocuments: emdExemptionDocs,
         awardDocuments: awardDocs,
@@ -125,9 +151,21 @@ class FirebaseTenderRepository implements TenderRepository {
       final noticeDocs = List<ProjectDocument>.from(tender.tenderNoticeDocuments);
       final specDocs = List<ProjectDocument>.from(tender.tenderSpecDocuments);
       final bqrDocs = List<ProjectDocument>.from(tender.bqrDocuments);
+      final financialBidDocs =
+          List<ProjectDocument>.from(tender.financialBidDocuments);
       final emdDocs = List<ProjectDocument>.from(tender.emdDocuments);
       final emdExemptionDocs = List<ProjectDocument>.from(tender.emdExemptionDocuments);
       final awardDocs = List<ProjectDocument>.from(tender.awardDocuments);
+
+      final hasTenderDocUploads = (filesByCategory?['tender_notice']?.isNotEmpty ?? false) ||
+          (filesByCategory?['tender_spec']?.isNotEmpty ?? false) ||
+          (filesByCategory?['bqr']?.isNotEmpty ?? false) ||
+          (filesByCategory?['financial_bid']?.isNotEmpty ?? false);
+      if (hasTenderDocUploads && !tender.hasSiteVisit) {
+        throw StateError(
+          'A Site Visit photo and details must be recorded before uploading tender documents.',
+        );
+      }
 
       DateTime? noticeUploadedAt = tender.noticeUploadedAt;
 
@@ -148,6 +186,7 @@ class FirebaseTenderRepository implements TenderRepository {
         }
         await uploadCategory('tender_spec', specDocs);
         await uploadCategory('bqr', bqrDocs);
+        await uploadCategory('financial_bid', financialBidDocs);
         await uploadCategory('emd', emdDocs);
         await uploadCategory('emd_exemption', emdExemptionDocs);
         await uploadCategory('award_documents', awardDocs);
@@ -158,6 +197,7 @@ class FirebaseTenderRepository implements TenderRepository {
         noticeUploadedAt: noticeUploadedAt,
         tenderSpecDocuments: specDocs,
         bqrDocuments: bqrDocs,
+        financialBidDocuments: financialBidDocs,
         emdDocuments: emdDocs,
         emdExemptionDocuments: emdExemptionDocs,
         awardDocuments: awardDocs,

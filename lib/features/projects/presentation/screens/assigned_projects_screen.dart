@@ -118,7 +118,7 @@ class _AssignedProjectsScreenState
 
   @override
   Widget build(BuildContext context) {
-    final projectsAsync = ref.watch(projectsStreamProvider);
+    final projectsAsync = ref.watch(filteredProjectsByDivisionProvider);
 
     final screenWidth = MediaQuery.of(context).size.width;
     final horizontalPadding = screenWidth > 1200
@@ -357,6 +357,36 @@ class _AssignedProjectsScreenState
                   ),
                   border: InputBorder.none,
                 ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFCBD2DA)),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: ref.watch(selectedDivisionFilterProvider) ?? 'All',
+                icon: const Icon(Icons.filter_list_rounded,
+                    size: 18, color: Color(0xFF414A51)),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF414A51),
+                ),
+                items: ['All', ...ProjectDivisions.values]
+                    .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                    .toList(),
+                onChanged: (val) {
+                  ref.read(selectedDivisionFilterProvider.notifier).state =
+                      (val == null || val == 'All') ? null : val;
+                  setState(() => _currentPage = 0);
+                },
               ),
             ),
           ),

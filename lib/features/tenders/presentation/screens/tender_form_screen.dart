@@ -8,7 +8,10 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/app_searchable_dropdown.dart';
 import '../../../employee/providers/employee_providers.dart';
 import '../../../projects/domain/models/project_document.dart';
+import '../../domain/models/bqr_requirement_item.dart';
+import '../../domain/models/site_visit_record.dart';
 import '../../domain/models/tender.dart';
+import '../../providers/company_document_providers.dart';
 import '../../providers/tender_providers.dart';
 import '../widgets/tender_document_actions.dart';
 
@@ -36,6 +39,11 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
   String _tenderType = 'Open';
   final _tenderAmountController = TextEditingController();
 
+  // Pre-Tender: Site Visit & Financial Bid
+  List<SiteVisitRecord> _siteVisits = [];
+  final List<PlatformFile> _financialBidFiles = [];
+  List<ProjectDocument> _existingFinancialBidDocs = [];
+
   // Section 3: Tender Notice
   final List<PlatformFile> _tenderNoticeFiles = [];
   List<ProjectDocument> _existingTenderNoticeDocs = [];
@@ -60,6 +68,7 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
   final _bqrRemarkController = TextEditingController();
   final List<PlatformFile> _bqrFiles = [];
   List<ProjectDocument> _existingBqrDocs = [];
+  List<BqrRequirementItem> _bqrRequirements = [];
 
   // Section 8: EMD / EMD Exemption
   String _isEmdExempted = 'No';
@@ -114,8 +123,11 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
       }
       _closingDateRemarkController.text = t.closingDateRemark;
 
+      _siteVisits = List.from(t.siteVisits);
+      _existingFinancialBidDocs = List.from(t.financialBidDocuments);
       _bqrRemarkController.text = t.bqrRemark;
       _existingBqrDocs = List.from(t.bqrDocuments);
+      _bqrRequirements = List.from(t.bqrRequirements);
 
       _isEmdExempted = t.isEmdExempted.isNotEmpty ? t.isEmdExempted : 'No';
       if (t.emdAmount > 0) {
@@ -416,6 +428,8 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
         tenderType: _tenderType,
         qualified: _tenderType == 'Qualified' ? 'Yes' : 'No',
         tenderAmount: _parseNumber(_tenderAmountController.text),
+        siteVisits: _siteVisits,
+        financialBidDocuments: _existingFinancialBidDocs,
         tenderNoticeDocuments: _existingTenderNoticeDocs,
         noticeUploadedAt: _noticeUploadedAt ??
             (_tenderNoticeFiles.isNotEmpty ? DateTime.now() : null),
@@ -427,6 +441,7 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
         closingDateRemark: _closingDateRemarkController.text.trim(),
         bqrRemark: _bqrRemarkController.text.trim(),
         bqrDocuments: _existingBqrDocs,
+        bqrRequirements: _bqrRequirements,
         isEmdExempted: _isEmdExempted,
         emdAmount: _isEmdExempted == 'No'
             ? _parseNumber(_emdAmountController.text)
@@ -452,10 +467,23 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
         lastModifiedBy: userName,
       );
 
+      final hasNewTenderDocs = _tenderNoticeFiles.isNotEmpty ||
+          _tenderSpecFiles.isNotEmpty ||
+          _bqrFiles.isNotEmpty ||
+          _financialBidFiles.isNotEmpty;
+      if (hasNewTenderDocs && _siteVisits.isEmpty) {
+        _showToast(
+          'Please record a Site Visit (photo, visited by, date & remarks) before uploading tender documents.',
+          isError: true,
+        );
+        return;
+      }
+
       final filesByCategory = <String, List<PlatformFile>>{
         'tender_notice': _tenderNoticeFiles,
         'tender_spec': _tenderSpecFiles,
         'bqr': _bqrFiles,
+        'financial_bid': _financialBidFiles,
         'emd': _emdFiles,
         'emd_exemption': _emdExemptionFiles,
       };
@@ -906,6 +934,28 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
                   ),
                   const SizedBox(height: 18),
 
+                  // SECTION 2.1: MANDATORY SITE VISIT (Pre-requisite for uploading tender)
+                  _buildSectionCard(
+                    sectionNumber: 'PRE-REQUISITE',
+                    sectionTitle: 'SITE VISIT RECORD',
+                    icon: Icons.camera_alt_outlined,
+                    child: _buildSiteVisitSection(),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // SECTION 2.2: FINANCIAL BID UPLOAD
+                  _buildSectionCard(
+                    sectionNumber: 'FINANCIAL BID',
+                    sectionTitle: 'FINANCIAL BID UPLOAD',
+                    icon: Icons.monetization_on_outlined,
+                    child: _buildFileUploadWidget(
+                      label: 'Financial Bid Document (Must be uploaded first)',
+                      files: _financialBidFiles,
+                      existingDocs: _existingFinancialBidDocs,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
                   // SECTION 3: TENDER NOTICE (Client Requirement: Separate Notice PDF)
                   _buildSectionCard(
                     sectionNumber: 'SECTION 3',
@@ -1108,6 +1158,8 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
                           minLines: 3,
                           maxLines: 8,
                         ),
+                        const SizedBox(height: 14),
+                        _buildBqrLineItemsSection(),
                         const SizedBox(height: 14),
                         _buildFileUploadWidget(
                           label: 'BQR Documents',
@@ -1509,6 +1561,410 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSiteVisitSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                _siteVisits.isEmpty
+                    ? 'Required before uploading tender documents (auto date/time & location).'
+                    : '${_siteVisits.length} site visit(s) recorded.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: _siteVisits.isEmpty
+                      ? const Color(0xFFB45309)
+                      : const Color(0xFF16A34A),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF9CC70A),
+                foregroundColor: const Color(0xFF414A51),
+              ),
+              onPressed: _showAddSiteVisitDialog,
+              icon: const Icon(Icons.add_a_photo_outlined, size: 16),
+              label: const Text('Add Site Visit'),
+            ),
+          ],
+        ),
+        if (_siteVisits.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          ..._siteVisits.map(
+            (v) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAF8),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE5E8E2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.verified_outlined,
+                      size: 18, color: Color(0xFF16A34A)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Visited by ${v.visitedBy} • ${DateFormat("dd-MM-yyyy hh:mm a").format(v.visitDateTime)}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF414A51),
+                          ),
+                        ),
+                        if (v.locationAddress.isNotEmpty)
+                          Text(
+                            'Location: ${v.locationAddress}',
+                            style: const TextStyle(
+                                fontSize: 11, color: Color(0xFF718096)),
+                          ),
+                        if (v.remarks.isNotEmpty)
+                          Text(
+                            v.remarks,
+                            style: const TextStyle(
+                                fontSize: 11, color: Color(0xFF414A51)),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _showAddSiteVisitDialog() async {
+    final visitedByCtrl = TextEditingController();
+    final locationCtrl = TextEditingController();
+    final remarksCtrl = TextEditingController();
+    PlatformFile? photoFile;
+    final visitTimestamp = DateTime.now();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Record Site Visit'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Timestamp: ${DateFormat("dd-MM-yyyy hh:mm a").format(visitTimestamp)}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF414A51),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: visitedByCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Visited By (Name) *',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: locationCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Location / Coordinates Stamp *',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: remarksCtrl,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Short Remarks *',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final res = await FilePicker.pickFiles(
+                      type: FileType.image,
+                      withData: true,
+                    );
+                    if (res != null && res.files.isNotEmpty) {
+                      setDialogState(() => photoFile = res.files.first);
+                    }
+                  },
+                  icon: const Icon(Icons.photo_camera_outlined),
+                  label: Text(
+                    photoFile == null ? 'Select Site Visit Photo *' : photoFile!.name,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF9CC70A),
+                foregroundColor: const Color(0xFF414A51),
+              ),
+              onPressed: () async {
+                if (visitedByCtrl.text.trim().isEmpty ||
+                    remarksCtrl.text.trim().isEmpty ||
+                    photoFile == null) {
+                  return;
+                }
+                Navigator.of(ctx).pop();
+                final doc = await ref
+                    .read(tenderRepositoryProvider)
+                    .uploadTenderAttachment(
+                      _tenderIdController.text.trim(),
+                      'site_visit',
+                      photoFile!,
+                    );
+                if (!mounted) return;
+                setState(() {
+                  _siteVisits.add(
+                    SiteVisitRecord(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      tenderId: _tenderIdController.text.trim(),
+                      photoUrl: doc.downloadUrl,
+                      visitDateTime: visitTimestamp,
+                      locationAddress: locationCtrl.text.trim(),
+                      visitedBy: visitedByCtrl.text.trim(),
+                      remarks: remarksCtrl.text.trim(),
+                      createdAt: DateTime.now(),
+                    ),
+                  );
+                });
+              },
+              child: const Text('Save Site Visit'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBqrLineItemsSection() {
+    final pendingCount = _bqrRequirements.where((r) => !r.isUploaded).length;
+    final daysUntilClose = _closingDate?.difference(DateTime.now()).inDays;
+    final showClosingReminder =
+        daysUntilClose != null && daysUntilClose >= 0 && daysUntilClose <= 5;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (showClosingReminder)
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFBEB),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFF59E0B)),
+            ),
+            child: Text(
+              'Closing Reminder: $daysUntilClose day(s) left • $pendingCount pending BQR document(s).',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF92400E),
+              ),
+            ),
+          ),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'BQR Line-Item Checklist',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF414A51),
+                ),
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final companyDocs =
+                    ref.read(companyDocumentsStreamProvider).valueOrNull ??
+                        await ref
+                            .read(companyDocumentRepositoryProvider)
+                            .getDocuments();
+                if (!mounted) return;
+                setState(() {
+                  _bqrRequirements =
+                      matchCompanyDocsToBqr(_bqrRequirements, companyDocs);
+                });
+                _showToast('AI matched available company documents to BQR items.');
+              },
+              icon: const Icon(Icons.auto_awesome, size: 16),
+              label: const Text('AI Fetch Docs'),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF9CC70A),
+                foregroundColor: const Color(0xFF414A51),
+              ),
+              onPressed: _showAddBqrRequirementDialog,
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Add BQR Item'),
+            ),
+          ],
+        ),
+        if (_bqrRequirements.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          ...List.generate(_bqrRequirements.length, (index) {
+            final item = _bqrRequirements[index];
+            final isDone = item.isUploaded;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAF8),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE5E8E2)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF414A51),
+                          ),
+                        ),
+                        Text(
+                          '${item.documents.length} file(s) attached',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF718096),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: (isDone
+                              ? const Color(0xFF16A34A)
+                              : const Color(0xFFD97706))
+                          .withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      isDone ? 'Uploaded' : 'Pending',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: isDone
+                            ? const Color(0xFF16A34A)
+                            : const Color(0xFFD97706),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Upload BQR Item File',
+                    icon: const Icon(Icons.upload_file_rounded,
+                        size: 18, color: Color(0xFF414A51)),
+                    onPressed: () async {
+                      final res = await FilePicker.pickFiles(
+                        withData: true,
+                      );
+                      if (res == null || res.files.isEmpty) return;
+                      final doc = await ref
+                          .read(tenderRepositoryProvider)
+                          .uploadTenderAttachment(
+                            _tenderIdController.text.trim(),
+                            'bqr_${item.id}',
+                            res.files.first,
+                          );
+                      if (!mounted) return;
+                      setState(() {
+                        final updatedDocs = [...item.documents, doc];
+                        _bqrRequirements[index] = item.copyWith(
+                          documents: updatedDocs,
+                          status: 'uploaded',
+                        );
+                      });
+                    },
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _showAddBqrRequirementDialog() async {
+    final titleCtrl = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add BQR Requirement'),
+        content: TextField(
+          controller: titleCtrl,
+          decoration: const InputDecoration(
+            labelText: 'Requirement (e.g. ITR 3 Years, GST, Experience Cert)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final text = titleCtrl.text.trim();
+              if (text.isEmpty) return;
+              Navigator.of(ctx).pop();
+              setState(() {
+                _bqrRequirements.add(
+                  BqrRequirementItem(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    title: text,
+                    status: 'pending',
+                  ),
+                );
+              });
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
     );
   }
 

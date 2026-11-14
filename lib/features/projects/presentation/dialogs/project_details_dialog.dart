@@ -1,20 +1,48 @@
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../task_management/providers/task_providers.dart';
 import '../../domain/models/project_document.dart';
 import '../../domain/models/site_project.dart';
+import '../../providers/project_providers.dart';
 import '../../../employee/services/offer_letter_save_stub.dart'
     if (dart.library.html) '../../../employee/services/offer_letter_save_web.dart'
     if (dart.library.io) '../../../employee/services/offer_letter_save_io.dart';
 
-class ProjectDetailsDialog extends StatelessWidget {
+class ProjectDetailsDialog extends ConsumerWidget {
   const ProjectDetailsDialog({required this.project, super.key});
 
   final SiteProject project;
+
+  static Future<void> openByCode(
+    BuildContext context,
+    WidgetRef ref,
+    String projectCode,
+  ) async {
+    final code = projectCode.trim().toLowerCase();
+    if (code.isEmpty) return;
+    final projects = ref.read(projectsStreamProvider).valueOrNull ??
+        await ref.read(projectRepositoryProvider).getProjects();
+    final matches = projects.where(
+      (p) => p.projectCode.trim().toLowerCase() == code,
+    );
+    if (!context.mounted) return;
+    if (matches.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No project found for code "$projectCode".')),
+      );
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (_) => ProjectDetailsDialog(project: matches.first),
+    );
+  }
 
   static String? _formatStorageError(dynamic e) {
     if (e == null) return null;
@@ -213,7 +241,7 @@ class ProjectDetailsDialog extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
 
@@ -313,6 +341,7 @@ class ProjectDetailsDialog extends StatelessWidget {
                             _InfoPair('Tender ID', project.tenderId),
                           if (project.wrpoRemark.isNotEmpty)
                             _InfoPair('WRPO Remark', project.wrpoRemark),
+                          _InfoPair('Division', project.division.isNotEmpty ? project.division : '—'),
                           _InfoPair('State', project.state.isNotEmpty ? project.state : '—'),
                           _InfoPair('District', project.district.isNotEmpty ? project.district : '—'),
                           _InfoPair('Area', project.area.isNotEmpty ? project.area : '—'),
@@ -438,6 +467,8 @@ class ProjectDetailsDialog extends StatelessWidget {
                         ),
                       ],
                       const SizedBox(height: 14),
+                      _buildProjectTasksSection(ref),
+                      const SizedBox(height: 14),
                       Text(
                         'Created on ${DateFormat('dd MMM yyyy, hh:mm a').format(project.createdAt)} by ${project.createdBy.isNotEmpty ? project.createdBy : project.employeeName}',
                         style: const TextStyle(
@@ -497,6 +528,115 @@ class ProjectDetailsDialog extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildProjectTasksSection(WidgetRef ref) {
+    final code = project.projectCode.trim();
+    if (code.isEmpty) return const SizedBox.shrink();
+
+    final tasksAsync = ref.watch(
+      tasksProvider((assignedTo: null, projectOrOfficeCode: code, status: null)),
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAF8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E8E2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'PROJECT TASKS',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF9CC70A),
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 8),
+          tasksAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+            error: (err, _) => Text(
+              'Could not load tasks: $err',
+              style: const TextStyle(fontSize: 12, color: Colors.red),
+            ),
+            data: (tasks) {
+              if (tasks.isEmpty) {
+                return const Text(
+                  'No tasks assigned to this project code yet.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF718096)),
+                );
+              }
+              return Column(
+                children: tasks.map((t) {
+                  final statusColor = t.status == 'COMPLETED'
+                      ? const Color(0xFF16A34A)
+                      : t.status == 'IN_PROGRESS'
+                          ? const Color(0xFF2563EB)
+                          : const Color(0xFFD97706);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            t.title,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF414A51),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          t.assignedTo,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF718096),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            t.status.replaceAll('_', ' '),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: statusColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
       ),
     );
   }

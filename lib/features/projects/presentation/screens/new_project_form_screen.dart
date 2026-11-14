@@ -71,6 +71,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen>
   List<ProjectDocument> _existingWrpoDocs = [];
   String _selectedState = 'Tamil Nadu';
   String _selectedDistrict = 'Chennai';
+  String _selectedDivision = '';
   final _areaController = TextEditingController();
   final _projectCodeController = TextEditingController();
   final _approximateProjectValueController = TextEditingController();
@@ -221,6 +222,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen>
     _wrpoRemarkController.text = p.wrpoRemark;
     _existingWrpoDocs = List.from(p.wrpoDocuments);
     _selectedState = p.state.isNotEmpty ? p.state : 'Tamil Nadu';
+    _selectedDivision = p.division;
     _updateDistrictsForState(_selectedState);
     _selectedDistrict =
         p.district.isNotEmpty && _districtsList.contains(p.district)
@@ -514,6 +516,11 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen>
       return;
     }
 
+    if (_selectedDivision.isEmpty) {
+      _showToast('Please select a Division *');
+      return;
+    }
+
     // Auto-generate project code if empty
     if (_projectCodeController.text.trim().isEmpty) {
       await _autoGenerateProjectCode();
@@ -556,6 +563,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen>
           tenderRefNo: _isMappedToTender == 'Yes' ? _tenderRefNoController.text.trim() : '',
           wrpoRemark: _wrpoRemarkController.text.trim(),
           wrpoDocuments: _existingWrpoDocs,
+          division: _selectedDivision,
           state: _selectedState,
           district: _selectedDistrict,
           area: _areaController.text.trim(),
@@ -621,6 +629,7 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen>
           tenderRefNo: _isMappedToTender == 'Yes' ? _tenderRefNoController.text.trim() : '',
           wrpoRemark: _wrpoRemarkController.text.trim(),
           wrpoDocuments: _existingWrpoDocs,
+          division: _selectedDivision,
           state: _selectedState,
           district: _selectedDistrict,
           area: _areaController.text.trim(),
@@ -953,6 +962,8 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen>
                             const SizedBox(height: 14),
                             _buildDistrictDropdown(),
                             const SizedBox(height: 14),
+                            _buildDivisionField(),
+                            const SizedBox(height: 14),
                             _buildAreaField(),
                           ] else
                             Row(
@@ -961,6 +972,8 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen>
                                 Expanded(child: _buildStateDropdown()),
                                 const SizedBox(width: 16),
                                 Expanded(child: _buildDistrictDropdown()),
+                                const SizedBox(width: 16),
+                                Expanded(child: _buildDivisionField()),
                                 const SizedBox(width: 16),
                                 Expanded(child: _buildAreaField()),
                               ],
@@ -1556,6 +1569,75 @@ class _NewProjectFormScreenState extends ConsumerState<NewProjectFormScreen>
               ),
             ],
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDivisionField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        RichText(
+          text: const TextSpan(
+            text: 'Division',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textSecondary,
+            ),
+            children: [
+              TextSpan(
+                text: ' *',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 5),
+        DropdownButtonFormField<String>(
+          value: ProjectDivisions.values.contains(_selectedDivision)
+              ? _selectedDivision
+              : null,
+          hint: const Text(
+            'Select Division',
+            style: TextStyle(fontSize: 12, color: Color(0xFF98A2B3)),
+          ),
+          style: const TextStyle(
+            fontSize: 12,
+            color: Color(0xFF414A51),
+            fontWeight: FontWeight.w600,
+          ),
+          decoration: InputDecoration(
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(6),
+              borderSide:
+                  const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(6),
+              borderSide:
+                  const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(6),
+              borderSide:
+                  const BorderSide(color: Color(0xFF9CC70A), width: 1.2),
+            ),
+          ),
+          items: ProjectDivisions.values
+              .map((div) => DropdownMenuItem(value: div, child: Text(div)))
+              .toList(),
+          onChanged: (val) {
+            setState(() => _selectedDivision = val ?? '');
+          },
         ),
       ],
     );

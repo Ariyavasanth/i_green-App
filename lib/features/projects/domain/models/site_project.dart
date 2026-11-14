@@ -4,6 +4,17 @@ import 'project_budget.dart';
 import 'project_document.dart';
 import 'tender_description_item.dart';
 
+class ProjectDivisions {
+  static const List<String> values = [
+    'South 1',
+    'South 2',
+    'North',
+    'CDC',
+    'Central',
+    'West',
+  ];
+}
+
 class SiteProject {
   SiteProject({
     this.id = '',
@@ -20,6 +31,7 @@ class SiteProject {
     this.tenderRefNo = '',
     this.wrpoRemark = '',
     this.wrpoDocuments = const [],
+    this.division = '',
     this.state = '',
     this.district = '',
     this.area = '',
@@ -133,6 +145,7 @@ class SiteProject {
     this.otherRetentionDocumentLabel = '',
     // Metadata
     this.status = 'Active',
+    this.supervisorMaterialBalanceSettled = false,
     DateTime? createdAt,
     DateTime? updatedAt,
     this.createdBy = '',
@@ -321,11 +334,30 @@ class SiteProject {
 
   // Metadata
   final String status;
+  final bool supervisorMaterialBalanceSettled;
+  final String division;
   final DateTime createdAt;
   final DateTime updatedAt;
   final String createdBy;
   final String? updatedBy;
   final String? updatedByName;
+
+  bool get isBillUploadedAndPaid =>
+      billingDetailsDocuments.isNotEmpty && paymentAmount > 0;
+
+  bool get canBeClosed =>
+      isBillUploadedAndPaid && supervisorMaterialBalanceSettled;
+
+  bool get shouldAutoReopenForRetention {
+    if (status != 'Closed') return false;
+    final now = DateTime.now();
+    final threshold = now.add(const Duration(days: 30));
+    final dates = [sdRetentionDate, emdRetentionDate, otherRetentionDate];
+    return dates.any((d) => d != null && !d.isAfter(threshold));
+  }
+
+  String get effectiveStatus =>
+      shouldAutoReopenForRetention ? 'Active' : status;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -342,6 +374,7 @@ class SiteProject {
         'tender_ref_no': tenderRefNo,
         'wrpo_remark': wrpoRemark,
         'wrpo_documents': wrpoDocuments.map((d) => d.toJson()).toList(),
+        'division': division,
         'state': state,
         'district': district,
         'area': area,
@@ -473,6 +506,7 @@ class SiteProject {
         'other_retention_document_label': otherRetentionDocumentLabel,
         // Metadata
         'status': status,
+        'supervisor_material_balance_settled': supervisorMaterialBalanceSettled,
         'created_at': createdAt.toIso8601String(),
         'updated_at': updatedAt.toIso8601String(),
         'created_by': createdBy,
@@ -562,6 +596,7 @@ class SiteProject {
       tenderRefNo: json['tender_ref_no'] as String? ?? '',
       wrpoRemark: json['wrpo_remark'] as String? ?? '',
       wrpoDocuments: parseDocList(json['wrpo_documents']),
+      division: json['division'] as String? ?? '',
       state: json['state'] as String? ?? '',
       district: json['district'] as String? ?? '',
       area: json['area'] as String? ?? '',
@@ -719,6 +754,8 @@ class SiteProject {
           json['other_retention_document_label'] as String? ?? '',
       // Metadata
       status: json['status'] as String? ?? 'Active',
+      supervisorMaterialBalanceSettled:
+          json['supervisor_material_balance_settled'] as bool? ?? false,
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
           : DateTime.now(),
@@ -746,6 +783,7 @@ class SiteProject {
     String? tenderRefNo,
     String? wrpoRemark,
     List<ProjectDocument>? wrpoDocuments,
+    String? division,
     String? state,
     String? district,
     String? area,
@@ -858,6 +896,7 @@ class SiteProject {
     String? otherRetentionDocumentLabel,
     // Metadata
     String? status,
+    bool? supervisorMaterialBalanceSettled,
     DateTime? createdAt,
     DateTime? updatedAt,
     String? createdBy,
@@ -879,6 +918,7 @@ class SiteProject {
       tenderRefNo: tenderRefNo ?? this.tenderRefNo,
       wrpoRemark: wrpoRemark ?? this.wrpoRemark,
       wrpoDocuments: wrpoDocuments ?? this.wrpoDocuments,
+      division: division ?? this.division,
       state: state ?? this.state,
       district: district ?? this.district,
       area: area ?? this.area,
@@ -978,6 +1018,9 @@ class SiteProject {
       otherRetentionDocumentLabel:
           otherRetentionDocumentLabel ?? this.otherRetentionDocumentLabel,
       status: status ?? this.status,
+      supervisorMaterialBalanceSettled:
+          supervisorMaterialBalanceSettled ??
+              this.supervisorMaterialBalanceSettled,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       createdBy: createdBy ?? this.createdBy,

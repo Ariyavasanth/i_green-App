@@ -11,6 +11,7 @@ import '../../time_clocking/providers/clocking_providers.dart';
 import '../../attendance/providers/attendance_providers.dart';
 import '../../on_duty/providers/on_duty_providers.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../projects/presentation/dialogs/project_details_dialog.dart';
 
 class MyTasksPage extends ConsumerStatefulWidget {
   const MyTasksPage({
@@ -597,15 +598,23 @@ class _MyTasksPageState extends ConsumerState<MyTasksPage> {
                 runSpacing: 4,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: secondaryColor,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
+                  InkWell(
+                    onTap: () => ProjectDetailsDialog.openByCode(
+                      context,
+                      ref,
                       task.projectOrOfficeCode,
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                    borderRadius: BorderRadius.circular(4),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: secondaryColor,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        task.projectOrOfficeCode,
+                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
                   Container(

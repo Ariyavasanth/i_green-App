@@ -272,6 +272,27 @@ class _CreateFundRequestPageState extends ConsumerState<CreateFundRequestPage> {
       return;
     }
 
+    // Work Order Gate: tender-based projects require Work Order before fund request
+    final projectsList = ref.read(projectsStreamProvider).valueOrNull ?? [];
+    final matchingProjects = projectsList.where(
+      (p) => p.projectCode.trim() == projectCode,
+    );
+    if (matchingProjects.isNotEmpty) {
+      final selectedProject = matchingProjects.first;
+      if (selectedProject.isMappedToTender == 'Yes' &&
+          selectedProject.workOrderDocuments.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Work Order must be uploaded for tender-based projects before requesting funds.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+    }
+
     final message = _messageController.text.trim();
 
     final List<FundRequestItem> finalItems = [];

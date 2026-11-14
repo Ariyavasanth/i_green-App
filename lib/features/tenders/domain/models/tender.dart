@@ -1,4 +1,6 @@
 import '../../../projects/domain/models/project_document.dart';
+import 'bqr_requirement_item.dart';
+import 'site_visit_record.dart';
 
 class Tender {
   const Tender({
@@ -10,6 +12,8 @@ class Tender {
     this.tenderType = 'Open',
     this.qualified = 'Yes',
     this.tenderAmount = 0.0,
+    this.siteVisits = const [],
+    this.financialBidDocuments = const [],
     this.tenderNoticeDocuments = const [],
     this.noticeUploadedAt,
     this.tenderSpecRemark = '',
@@ -20,6 +24,7 @@ class Tender {
     this.closingDateRemark = '',
     this.bqrRemark = '',
     this.bqrDocuments = const [],
+    this.bqrRequirements = const [],
     this.isEmdExempted = 'No',
     this.emdAmount = 0.0,
     this.emdExemptionDocuments = const [],
@@ -51,6 +56,8 @@ class Tender {
   final String tenderType;
   final String qualified;
   final double tenderAmount;
+  final List<SiteVisitRecord> siteVisits;
+  final List<ProjectDocument> financialBidDocuments;
   final List<ProjectDocument> tenderNoticeDocuments;
   final DateTime? noticeUploadedAt;
   final String tenderSpecRemark;
@@ -61,6 +68,7 @@ class Tender {
   final String closingDateRemark;
   final String bqrRemark;
   final List<ProjectDocument> bqrDocuments;
+  final List<BqrRequirementItem> bqrRequirements;
   final String isEmdExempted;
   final double emdAmount;
   final List<ProjectDocument> emdExemptionDocuments;
@@ -87,6 +95,16 @@ class Tender {
   final String createdBy;
   final String lastModifiedBy;
 
+  bool get hasSiteVisit => siteVisits.isNotEmpty;
+  bool get hasFinancialBid => financialBidDocuments.isNotEmpty;
+  int get pendingBqrCount =>
+      bqrRequirements.where((r) => !r.isUploaded).length;
+  bool get isClosingSoon {
+    if (closingDate == null) return false;
+    final diff = closingDate!.difference(DateTime.now()).inDays;
+    return diff >= 0 && diff <= 5;
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'tender_id': tenderId,
@@ -96,6 +114,9 @@ class Tender {
         'tender_type': tenderType,
         'qualified': qualified,
         'tender_amount': tenderAmount,
+        'site_visits': siteVisits.map((v) => v.toJson()).toList(),
+        'financial_bid_documents':
+            financialBidDocuments.map((d) => d.toJson()).toList(),
         'tender_notice_documents':
             tenderNoticeDocuments.map((d) => d.toJson()).toList(),
         'notice_uploaded_at': noticeUploadedAt?.toIso8601String(),
@@ -108,6 +129,7 @@ class Tender {
         'closing_date_remark': closingDateRemark,
         'bqr_remark': bqrRemark,
         'bqr_documents': bqrDocuments.map((d) => d.toJson()).toList(),
+        'bqr_requirements': bqrRequirements.map((r) => r.toJson()).toList(),
         'is_emd_exempted': isEmdExempted,
         'emd_amount': emdAmount,
         'emd_exemption_documents':
@@ -146,6 +168,14 @@ class Tender {
         tenderType: json['tender_type'] as String? ?? 'Open',
         qualified: json['qualified'] as String? ?? 'Yes',
         tenderAmount: _parseAmount(json['tender_amount']),
+        siteVisits: (json['site_visits'] as List<dynamic>?)
+                ?.map((v) => SiteVisitRecord.fromJson(v as Map<String, dynamic>))
+                .toList() ??
+            const [],
+        financialBidDocuments: (json['financial_bid_documents'] as List<dynamic>?)
+                ?.map((d) => ProjectDocument.fromJson(d as Map<String, dynamic>))
+                .toList() ??
+            const [],
         tenderNoticeDocuments: (json['tender_notice_documents'] as List<dynamic>?)
                 ?.map((d) => ProjectDocument.fromJson(d as Map<String, dynamic>))
                 .toList() ??
@@ -169,6 +199,10 @@ class Tender {
         bqrRemark: json['bqr_remark'] as String? ?? '',
         bqrDocuments: (json['bqr_documents'] as List<dynamic>?)
                 ?.map((d) => ProjectDocument.fromJson(d as Map<String, dynamic>))
+                .toList() ??
+            const [],
+        bqrRequirements: (json['bqr_requirements'] as List<dynamic>?)
+                ?.map((r) => BqrRequirementItem.fromJson(r as Map<String, dynamic>))
                 .toList() ??
             const [],
         isEmdExempted: json['is_emd_exempted'] as String? ?? 'No',
@@ -216,6 +250,8 @@ class Tender {
     String? tenderType,
     String? qualified,
     double? tenderAmount,
+    List<SiteVisitRecord>? siteVisits,
+    List<ProjectDocument>? financialBidDocuments,
     List<ProjectDocument>? tenderNoticeDocuments,
     DateTime? noticeUploadedAt,
     String? tenderSpecRemark,
@@ -226,6 +262,7 @@ class Tender {
     String? closingDateRemark,
     String? bqrRemark,
     List<ProjectDocument>? bqrDocuments,
+    List<BqrRequirementItem>? bqrRequirements,
     String? isEmdExempted,
     double? emdAmount,
     List<ProjectDocument>? emdExemptionDocuments,
@@ -255,6 +292,9 @@ class Tender {
         tenderType: tenderType ?? this.tenderType,
         qualified: qualified ?? this.qualified,
         tenderAmount: tenderAmount ?? this.tenderAmount,
+        siteVisits: siteVisits ?? this.siteVisits,
+        financialBidDocuments:
+            financialBidDocuments ?? this.financialBidDocuments,
         tenderNoticeDocuments:
             tenderNoticeDocuments ?? this.tenderNoticeDocuments,
         noticeUploadedAt: noticeUploadedAt ?? this.noticeUploadedAt,
@@ -266,6 +306,7 @@ class Tender {
         closingDateRemark: closingDateRemark ?? this.closingDateRemark,
         bqrRemark: bqrRemark ?? this.bqrRemark,
         bqrDocuments: bqrDocuments ?? this.bqrDocuments,
+        bqrRequirements: bqrRequirements ?? this.bqrRequirements,
         isEmdExempted: isEmdExempted ?? this.isEmdExempted,
         emdAmount: emdAmount ?? this.emdAmount,
         emdExemptionDocuments:

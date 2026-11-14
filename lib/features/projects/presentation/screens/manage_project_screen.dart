@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,7 +8,10 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../tenders/domain/models/tender.dart';
 import '../../../tenders/providers/tender_providers.dart';
+import '../../domain/models/daily_progress_entry.dart';
+import '../../domain/models/project_compliance_record.dart';
 import '../../domain/models/project_document.dart';
+import '../../domain/models/project_inventory_item.dart';
 import '../../domain/models/site_project.dart';
 import '../../providers/project_providers.dart';
 
@@ -40,14 +44,17 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
   static const List<({int number, String title, IconData icon})> _sections = [
     (number: 1, title: 'Project Overview', icon: Icons.info_outline_rounded),
     (number: 2, title: 'Project Assignment', icon: Icons.assignment_ind_outlined),
-    (number: 3, title: 'Project Breakdown', icon: Icons.table_chart_outlined),
-    (number: 4, title: 'Project Budget', icon: Icons.pie_chart_outline_rounded),
-    (number: 5, title: 'Profile Drawings', icon: Icons.architecture_rounded),
-    (number: 6, title: 'Billing', icon: Icons.receipt_long_outlined),
-    (number: 7, title: 'Payment Received', icon: Icons.payments_outlined),
-    (number: 8, title: 'EMD & Retention', icon: Icons.account_balance_outlined),
-    (number: 9, title: 'Project Expenses', icon: Icons.receipt_outlined),
-    (number: 10, title: 'Project Profit / Loss', icon: Icons.trending_up_rounded),
+    (number: 3, title: 'Daily Progress', icon: Icons.trending_up_rounded),
+    (number: 4, title: 'Project Inventory', icon: Icons.inventory_2_outlined),
+    (number: 5, title: 'Permissions & Incidents', icon: Icons.security_outlined),
+    (number: 6, title: 'Project Breakdown', icon: Icons.table_chart_outlined),
+    (number: 7, title: 'Project Budget', icon: Icons.pie_chart_outline_rounded),
+    (number: 8, title: 'Profile Drawings', icon: Icons.architecture_rounded),
+    (number: 9, title: 'Billing', icon: Icons.receipt_long_outlined),
+    (number: 10, title: 'Payment Received', icon: Icons.payments_outlined),
+    (number: 11, title: 'EMD & Retention', icon: Icons.account_balance_outlined),
+    (number: 12, title: 'Project Expenses', icon: Icons.receipt_outlined),
+    (number: 13, title: 'Project Profit / Loss', icon: Icons.assessment_outlined),
   ];
 
   @override
@@ -621,20 +628,26 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
       case 1:
         return _buildSection2Assignment(project, isMobile);
       case 2:
-        return _buildSection3Breakdown(project, isMobile);
+        return _buildDailyProgressTab(project, isMobile);
       case 3:
-        return _buildSection4Budget(project, isMobile);
+        return _buildProjectInventoryTab(project, isMobile);
       case 4:
-        return _buildSection5ProfileDrawings(project, isMobile);
+        return _buildPermissionsAndIncidentsTab(project, isMobile);
       case 5:
-        return _buildSection6Billing(project, isMobile);
+        return _buildSection3Breakdown(project, isMobile);
       case 6:
-        return _buildSection7PaymentReceived(project, isMobile);
+        return _buildSection4Budget(project, isMobile);
       case 7:
-        return _buildSection8EmdRetention(project, isMobile);
+        return _buildSection5ProfileDrawings(project, isMobile);
       case 8:
-        return _buildSection9Expenses(project, isMobile);
+        return _buildSection6Billing(project, isMobile);
       case 9:
+        return _buildSection7PaymentReceived(project, isMobile);
+      case 10:
+        return _buildSection8EmdRetention(project, isMobile);
+      case 11:
+        return _buildSection9Expenses(project, isMobile);
+      case 12:
         return _buildSection10ProfitLoss(project, isMobile);
       default:
         return _buildSection1Overview(project, isMobile);
@@ -1536,6 +1549,1190 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
           );
         }),
       ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION 3 — DAILY PROGRESS TAB
+  // ═══════════════════════════════════════════════════════════════════════════
+  Widget _buildDailyProgressTab(SiteProject project, bool isMobile) {
+    final code = project.projectCode.trim();
+    if (code.isEmpty) {
+      return const Center(child: Text('Please save a valid project code first.'));
+    }
+
+    final progressAsync = ref.watch(dailyProgressStreamProvider(code));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Daily Work Progress',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF414A51),
+                  ),
+                ),
+                Text(
+                  'Entries can be made up to 2 days in the past. Older updates require approval.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF718096)),
+                ),
+              ],
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF9CC70A),
+                foregroundColor: const Color(0xFF414A51),
+              ),
+              onPressed: () => _showAddDailyProgressDialog(code),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Update Progress'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        progressAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => Center(child: Text('Error loading progress: $err')),
+          data: (entries) {
+            if (entries.isEmpty) {
+              return _buildContentCard(
+                title: 'Progress Entries',
+                icon: Icons.history_toggle_off_rounded,
+                children: const [
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text(
+                        'No daily progress updates recorded yet.',
+                        style: TextStyle(color: Color(0xFF718096)),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            final latest = entries.first;
+            final isApproved = latest.approvalStatus == 'approved';
+
+            return Column(
+              children: [
+                _buildContentCard(
+                  title: 'Latest Progress Snapshot',
+                  icon: Icons.speed_rounded,
+                  children: [
+                    _buildDetailRow(
+                      'Progress Percentage',
+                      '${latest.percentageComplete.toStringAsFixed(1)}%',
+                    ),
+                    _buildDetailRow(
+                      'Quantity Done / Total',
+                      '${latest.quantityDone} / ${latest.totalQuantity} ${latest.unit}',
+                    ),
+                    _buildDetailRow(
+                      'Date of Work',
+                      DateFormat('dd MMM yyyy').format(latest.date),
+                    ),
+                    _buildDetailRow(
+                      'Status',
+                      isApproved ? 'Approved' : 'Pending Approval (Backdated > 2 days)',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildContentCard(
+                  title: 'Daily Progress History (${entries.length} days)',
+                  icon: Icons.list_alt_rounded,
+                  children: entries.map((entry) {
+                    final approved = entry.approvalStatus == 'approved';
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAF8),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE5E8E2)),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  DateFormat('dd MMM yyyy').format(entry.date),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: Color(0xFF414A51),
+                                  ),
+                                ),
+                                Text(
+                                  '${entry.quantityDone} / ${entry.totalQuantity} ${entry.unit} (${entry.percentageComplete.toStringAsFixed(1)}%)',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF718096),
+                                  ),
+                                ),
+                                if (entry.remarks.isNotEmpty)
+                                  Text(
+                                    entry.remarks,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFF414A51),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: (approved
+                                      ? const Color(0xFF16A34A)
+                                      : const Color(0xFFD97706))
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              approved ? 'Approved' : 'Pending Approval',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: approved
+                                    ? const Color(0xFF16A34A)
+                                    : const Color(0xFFD97706),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showAddDailyProgressDialog(String projectCode) async {
+    DateTime selectedDate = DateTime.now();
+    final doneCtrl = TextEditingController();
+    final totalCtrl = TextEditingController();
+    final unitCtrl = TextEditingController(text: 'metres');
+    final remarksCtrl = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final isOver2Days = DailyProgressEntry.isBackdatedBeyondLimit(selectedDate);
+
+          return AlertDialog(
+            title: const Text('Add Daily Progress'),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: ctx,
+                          initialDate: selectedDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now(),
+                        );
+                        if (picked != null) {
+                          setDialogState(() => selectedDate = picked);
+                        }
+                      },
+                      icon: const Icon(Icons.calendar_today_rounded, size: 16),
+                      label: Text(
+                        'Date of Work: ${DateFormat("dd-MM-yyyy").format(selectedDate)}',
+                      ),
+                    ),
+                    if (isOver2Days) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFBEB),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFF59E0B)),
+                        ),
+                        child: const Text(
+                          'Note: Selected date is older than 2 days. This entry will be routed for Manager Approval.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF92400E),
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: doneCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Quantity Done Today *',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: totalCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Total Scope Quantity *',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: unitCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Unit (e.g. metres, units, pipes)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: remarksCtrl,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'Short Remarks',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF9CC70A),
+                  foregroundColor: const Color(0xFF414A51),
+                ),
+                onPressed: () async {
+                  final qDone = double.tryParse(doneCtrl.text.trim()) ?? 0.0;
+                  final qTotal = double.tryParse(totalCtrl.text.trim()) ?? 0.0;
+                  if (qDone <= 0 || qTotal <= 0) return;
+
+                  Navigator.of(ctx).pop();
+                  final entry = DailyProgressEntry(
+                    id: '',
+                    projectCode: projectCode,
+                    date: selectedDate,
+                    quantityDone: qDone,
+                    totalQuantity: qTotal,
+                    unit: unitCtrl.text.trim().isNotEmpty
+                        ? unitCtrl.text.trim()
+                        : 'metres',
+                    remarks: remarksCtrl.text.trim(),
+                    createdBy: 'Supervisor',
+                    createdAt: DateTime.now(),
+                  );
+                  await ref.read(projectRepositoryProvider).addDailyProgress(entry);
+                },
+                child: const Text('Save Progress'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION 4 — PROJECT INVENTORY TAB
+  // ═══════════════════════════════════════════════════════════════════════════
+  Widget _buildProjectInventoryTab(SiteProject project, bool isMobile) {
+    final code = project.projectCode.trim();
+    if (code.isEmpty) {
+      return const Center(child: Text('Please save a valid project code first.'));
+    }
+
+    final inventoryAsync = ref.watch(projectInventoryStreamProvider(code));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Project Material Inventory',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF414A51),
+                  ),
+                ),
+                Text(
+                  'Material issued, used and returned tagged under the supervisor in charge.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF718096)),
+                ),
+              ],
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF9CC70A),
+                foregroundColor: const Color(0xFF414A51),
+              ),
+              onPressed: () => _showAddInventoryItemDialog(code),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Record Material'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        inventoryAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => Center(child: Text('Error loading inventory: $err')),
+          data: (items) {
+            final unsettledCount = items.where((i) => !i.isSettled).length;
+
+            return Column(
+              children: [
+                _buildContentCard(
+                  title: 'Supervisor Material Settlement Status',
+                  icon: Icons.balance_rounded,
+                  children: [
+                    _buildDetailRow('Total Tracked Material Items', '${items.length}'),
+                    _buildDetailRow(
+                      'Settlement State',
+                      unsettledCount == 0
+                          ? 'All Supervisor Material Balances Settled (0 Balance)'
+                          : '$unsettledCount item(s) have pending supervisor balance. Project cannot close until balance is 0.',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildContentCard(
+                  title: 'Material Ledger per Supervisor',
+                  icon: Icons.inventory_outlined,
+                  children: items.isEmpty
+                      ? const [
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 20),
+                            child: Center(
+                              child: Text(
+                                'No material issued or returned on this project yet.',
+                                style: TextStyle(color: Color(0xFF718096)),
+                              ),
+                            ),
+                          )
+                        ]
+                      : items.map((item) {
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF9FAF8),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFE5E8E2)),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.itemName,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
+                                          color: Color(0xFF414A51),
+                                        ),
+                                      ),
+                                      Text(
+                                        'Supervisor: ${item.supervisorName}',
+                                        style: const TextStyle(
+                                          fontSize: 11.5,
+                                          color: Color(0xFF718096),
+                                        ),
+                                      ),
+                                      Text(
+                                        'Issued: ${item.issuedQty} • Used: ${item.usedQty} • Returned: ${item.returnedQty} ${item.unit}',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Color(0xFF414A51),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      'Balance: ${item.balanceQty.toStringAsFixed(1)} ${item.unit}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                        color: item.isSettled
+                                            ? const Color(0xFF16A34A)
+                                            : const Color(0xFFDC2626),
+                                      ),
+                                    ),
+                                    Text(
+                                      item.isSettled ? 'Settled' : 'Unsettled',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: item.isSettled
+                                            ? const Color(0xFF16A34A)
+                                            : const Color(0xFFDC2626),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showAddInventoryItemDialog(String projectCode) async {
+    final supCtrl = TextEditingController();
+    final itemCtrl = TextEditingController();
+    final issuedCtrl = TextEditingController();
+    final usedCtrl = TextEditingController();
+    final returnedCtrl = TextEditingController();
+    final unitCtrl = TextEditingController(text: 'units');
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Record Material Allocation'),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: supCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Supervisor In-Charge Name *',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: itemCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Material / Item Name *',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: issuedCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Issued Quantity',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: usedCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Used Quantity',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: returnedCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Returned Quantity',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: unitCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Unit (e.g. units, metres, bags)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF9CC70A),
+              foregroundColor: const Color(0xFF414A51),
+            ),
+            onPressed: () async {
+              if (supCtrl.text.trim().isEmpty || itemCtrl.text.trim().isEmpty) {
+                return;
+              }
+              Navigator.of(ctx).pop();
+              final issued = double.tryParse(issuedCtrl.text.trim()) ?? 0.0;
+              final used = double.tryParse(usedCtrl.text.trim()) ?? 0.0;
+              final returned = double.tryParse(returnedCtrl.text.trim()) ?? 0.0;
+
+              final item = ProjectInventoryItem(
+                id: '',
+                projectCode: projectCode,
+                supervisorId: supCtrl.text.trim().toLowerCase().replaceAll(' ', '_'),
+                supervisorName: supCtrl.text.trim(),
+                itemId: itemCtrl.text.trim().toLowerCase().replaceAll(' ', '_'),
+                itemName: itemCtrl.text.trim(),
+                unit: unitCtrl.text.trim(),
+                issuedQty: issued,
+                usedQty: used,
+                returnedQty: returned,
+                updatedAt: DateTime.now(),
+              );
+              await ref.read(projectRepositoryProvider).updateProjectInventory(item);
+            },
+            child: const Text('Save Material Record'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION 5 — PERMISSIONS, INSURANCE & INCIDENTS TAB
+  // ═══════════════════════════════════════════════════════════════════════════
+  Widget _buildPermissionsAndIncidentsTab(SiteProject project, bool isMobile) {
+    final code = project.projectCode.trim();
+    if (code.isEmpty) {
+      return const Center(child: Text('Please save a valid project code first.'));
+    }
+
+    final permissionsAsync = ref.watch(projectPermissionsStreamProvider(code));
+    final insuranceAsync = ref.watch(projectInsuranceStreamProvider(code));
+    final incidentsAsync = ref.watch(projectIncidentsStreamProvider(code));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── 1. Permissions Register ──
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Permissions Register',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF414A51),
+                  ),
+                ),
+                Text(
+                  'Road cut, Corporation, Highways, and Police approvals with validity alerts.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF718096)),
+                ),
+              ],
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF9CC70A),
+                foregroundColor: const Color(0xFF414A51),
+              ),
+              onPressed: () => _showAddPermissionDialog(code),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Add Permission'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        permissionsAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => Text('Error: $err'),
+          data: (perms) => _buildContentCard(
+            title: 'Stored Permissions (${perms.length})',
+            icon: Icons.gavel_rounded,
+            children: perms.isEmpty
+                ? const [
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      child: Text('No permissions recorded yet.'),
+                    )
+                  ]
+                : perms.map((p) {
+                    return ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.verified_outlined,
+                          color: Color(0xFF414A51)),
+                      title: Text('${p.authority} - ${p.title}'),
+                      subtitle: Text(
+                        'Validity: ${DateFormat("dd-MM-yyyy").format(p.validFrom)} to ${DateFormat("dd-MM-yyyy").format(p.validTo)}',
+                      ),
+                      trailing: p.isExpired
+                          ? const Chip(
+                              label: Text('EXPIRED', style: TextStyle(color: Colors.white, fontSize: 10)),
+                              backgroundColor: Colors.red,
+                            )
+                          : p.isExpiringSoon
+                              ? const Chip(
+                                  label: Text('EXPIRING SOON', style: TextStyle(fontSize: 10)),
+                                  backgroundColor: Colors.amber,
+                                )
+                              : const Chip(
+                                  label: Text('VALID', style: TextStyle(color: Colors.white, fontSize: 10)),
+                                  backgroundColor: Colors.green,
+                                ),
+                    );
+                  }).toList(),
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // ── 2. Insurance Policies ──
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Project Insurance & Workmen Compensation',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF414A51),
+                  ),
+                ),
+                Text(
+                  'Insurance policies stored with expiry dates & pre-expiry alerts.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF718096)),
+                ),
+              ],
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF9CC70A),
+                foregroundColor: const Color(0xFF414A51),
+              ),
+              onPressed: () => _showAddInsuranceDialog(code),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Add Insurance'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        insuranceAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => Text('Error: $err'),
+          data: (ins) => _buildContentCard(
+            title: 'Active Insurance Policies (${ins.length})',
+            icon: Icons.shield_outlined,
+            children: ins.isEmpty
+                ? const [
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      child: Text('No insurance policies recorded yet.'),
+                    )
+                  ]
+                : ins.map((i) {
+                    return ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.policy_outlined,
+                          color: Color(0xFF414A51)),
+                      title: Text('${i.policyType}: ${i.policyNumber}'),
+                      subtitle: Text(
+                        'Insurer: ${i.insurerName} • Expiry: ${DateFormat("dd-MM-yyyy").format(i.expiryDate)}',
+                      ),
+                      trailing: i.isExpired
+                          ? const Chip(
+                              label: Text('EXPIRED', style: TextStyle(color: Colors.white, fontSize: 10)),
+                              backgroundColor: Colors.red,
+                            )
+                          : i.isExpiringSoon
+                              ? const Chip(
+                                  label: Text('EXPIRING SOON', style: TextStyle(fontSize: 10)),
+                                  backgroundColor: Colors.amber,
+                                )
+                              : const Chip(
+                                  label: Text('ACTIVE', style: TextStyle(color: Colors.white, fontSize: 10)),
+                                  backgroundColor: Colors.green,
+                                ),
+                    );
+                  }).toList(),
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // ── 3. Incident Log ──
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Site Incident Log',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFFDC2626),
+                  ),
+                ),
+                Text(
+                  'Damage to utilities/accidents. Note: Disqualifies project from incentives.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF718096)),
+                ),
+              ],
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFDC2626),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => _showAddIncidentDialog(code),
+              icon: const Icon(Icons.warning_amber_rounded, size: 16),
+              label: const Text('Log Incident'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        incidentsAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => Text('Error: $err'),
+          data: (incs) => _buildContentCard(
+            title: incs.isEmpty
+                ? 'Incident Log (Zero Incidents - Eligible for Incentive)'
+                : 'Incident Log (${incs.length} Incident(s) Logged - INCENTIVE DISQUALIFIED)',
+            icon: Icons.report_problem_outlined,
+            children: incs.isEmpty
+                ? const [
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      child: Text(
+                        'Clean site record. No utility damage or accidents reported.',
+                        style: TextStyle(color: Color(0xFF16A34A), fontWeight: FontWeight.w600),
+                      ),
+                    )
+                  ]
+                : incs.map((inc) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFFECACA)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline_rounded,
+                              color: Color(0xFFDC2626), size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Incident on ${DateFormat("dd-MM-yyyy").format(inc.incidentDate)}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12.5,
+                                    color: Color(0xFF991B1B),
+                                  ),
+                                ),
+                                Text(
+                                  inc.remarks,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF414A51),
+                                  ),
+                                ),
+                                Text(
+                                  'Cost of Restoration: ${_currencyFormatter.format(inc.restorationCost)}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFFDC2626),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showAddPermissionDialog(String projectCode) async {
+    final titleCtrl = TextEditingController();
+    final remarksCtrl = TextEditingController();
+    String authority = 'Corporation';
+    DateTime validFrom = DateTime.now();
+    DateTime validTo = DateTime.now().add(const Duration(days: 90));
+    PlatformFile? pickedFile;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Add Project Permission'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: authority,
+                    decoration: const InputDecoration(
+                      labelText: 'Authority *',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'Corporation', child: Text('Corporation')),
+                      DropdownMenuItem(value: 'Highways', child: Text('Highways')),
+                      DropdownMenuItem(value: 'Traffic Police', child: Text('Traffic Police')),
+                      DropdownMenuItem(value: 'Other', child: Text('Other')),
+                    ],
+                    onChanged: (v) => setDialogState(() => authority = v ?? 'Corporation'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: titleCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Permission Title / Ref *',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: ctx,
+                              initialDate: validFrom,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2035),
+                            );
+                            if (picked != null) {
+                              setDialogState(() => validFrom = picked);
+                            }
+                          },
+                          child: Text('From: ${DateFormat("dd-MM-yy").format(validFrom)}'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: ctx,
+                              initialDate: validTo,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2035),
+                            );
+                            if (picked != null) {
+                              setDialogState(() => validTo = picked);
+                            }
+                          },
+                          child: Text('To: ${DateFormat("dd-MM-yy").format(validTo)}'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final res = await FilePicker.pickFiles(withData: true);
+                      if (res != null && res.files.isNotEmpty) {
+                        setDialogState(() => pickedFile = res.files.first);
+                      }
+                    },
+                    icon: const Icon(Icons.attach_file),
+                    label: Text(pickedFile == null ? 'Attach Document' : pickedFile!.name),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                if (titleCtrl.text.trim().isEmpty) return;
+                Navigator.of(ctx).pop();
+                final perm = ProjectPermission(
+                  id: '',
+                  projectCode: projectCode,
+                  authority: authority,
+                  title: titleCtrl.text.trim(),
+                  validFrom: validFrom,
+                  validTo: validTo,
+                  remarks: remarksCtrl.text.trim(),
+                );
+                await ref.read(projectRepositoryProvider).addPermission(perm, pickedFile);
+              },
+              child: const Text('Save Permission'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showAddInsuranceDialog(String projectCode) async {
+    final policyNumCtrl = TextEditingController();
+    final insurerCtrl = TextEditingController();
+    String policyType = 'Project Insurance';
+    DateTime expiryDate = DateTime.now().add(const Duration(days: 365));
+    PlatformFile? pickedFile;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Add Insurance Policy'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: policyType,
+                    decoration: const InputDecoration(
+                      labelText: 'Policy Type *',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'Project Insurance', child: Text('Project Insurance')),
+                      DropdownMenuItem(value: 'Workmen Compensation', child: Text('Workmen Compensation')),
+                    ],
+                    onChanged: (v) => setDialogState(() => policyType = v ?? 'Project Insurance'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: policyNumCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Policy Number *',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: insurerCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Insurer Name *',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final picked = await showDatePicker(
+                        context: ctx,
+                        initialDate: expiryDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2040),
+                      );
+                      if (picked != null) {
+                        setDialogState(() => expiryDate = picked);
+                      }
+                    },
+                    icon: const Icon(Icons.event),
+                    label: Text('Expiry Date: ${DateFormat("dd-MM-yyyy").format(expiryDate)}'),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final res = await FilePicker.pickFiles(withData: true);
+                      if (res != null && res.files.isNotEmpty) {
+                        setDialogState(() => pickedFile = res.files.first);
+                      }
+                    },
+                    icon: const Icon(Icons.attach_file),
+                    label: Text(pickedFile == null ? 'Attach Document' : pickedFile!.name),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                if (policyNumCtrl.text.trim().isEmpty) return;
+                Navigator.of(ctx).pop();
+                final ins = ProjectInsurance(
+                  id: '',
+                  projectCode: projectCode,
+                  policyType: policyType,
+                  policyNumber: policyNumCtrl.text.trim(),
+                  insurerName: insurerCtrl.text.trim(),
+                  expiryDate: expiryDate,
+                );
+                await ref.read(projectRepositoryProvider).addInsurance(ins, pickedFile);
+              },
+              child: const Text('Save Insurance'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showAddIncidentDialog(String projectCode) async {
+    final remarksCtrl = TextEditingController();
+    final costCtrl = TextEditingController();
+    DateTime incidentDate = DateTime.now();
+    PlatformFile? pickedPhoto;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Log Site Incident (Utility Damage / Accident)'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Warning: Logging an incident disqualifies this project from receiving incentives. Restoration cost will be calculated separately.',
+                    style: TextStyle(fontSize: 11.5, color: Colors.red, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final picked = await showDatePicker(
+                        context: ctx,
+                        initialDate: incidentDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null) {
+                        setDialogState(() => incidentDate = picked);
+                      }
+                    },
+                    icon: const Icon(Icons.calendar_today_rounded, size: 16),
+                    label: Text('Date: ${DateFormat("dd-MM-yyyy").format(incidentDate)}'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: remarksCtrl,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Incident Details / Damage Description *',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: costCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Estimated Cost of Restoration (₹)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final res = await FilePicker.pickFiles(type: FileType.image, withData: true);
+                      if (res != null && res.files.isNotEmpty) {
+                        setDialogState(() => pickedPhoto = res.files.first);
+                      }
+                    },
+                    icon: const Icon(Icons.photo_camera_outlined),
+                    label: Text(pickedPhoto == null ? 'Attach Incident Photo *' : pickedPhoto!.name),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () async {
+                if (remarksCtrl.text.trim().isEmpty) return;
+                Navigator.of(ctx).pop();
+                final cost = double.tryParse(costCtrl.text.trim()) ?? 0.0;
+                final inc = IncidentLogEntry(
+                  id: '',
+                  projectCode: projectCode,
+                  incidentDate: incidentDate,
+                  photoUrl: '',
+                  remarks: remarksCtrl.text.trim(),
+                  restorationCost: cost,
+                  createdAt: DateTime.now(),
+                );
+                await ref.read(projectRepositoryProvider).addIncident(inc, pickedPhoto);
+              },
+              child: const Text('Confirm Incident Log'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

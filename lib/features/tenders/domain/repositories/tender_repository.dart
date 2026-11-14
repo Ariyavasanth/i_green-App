@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import '../../../projects/domain/models/project_document.dart';
 import '../models/tender.dart';
 
 abstract class TenderRepository {
@@ -26,4 +27,10 @@ abstract class TenderRepository {
   Future<Tender?> getTenderById(String id);
 
   Future<String> generateNextTenderId();
+
+  Future<ProjectDocument> uploadTenderAttachment(
+    String tenderId,
+    String category,
+    PlatformFile file,
+  );
 }

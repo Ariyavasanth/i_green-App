@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../time_clocking/presentation/clocking_timeline_view.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../projects/presentation/dialogs/project_details_dialog.dart';
 import '../domain/task_item.dart';
 import '../providers/task_providers.dart';
 import 'task_form_dialog.dart';
@@ -77,15 +78,23 @@ class _TaskBoardPageState extends ConsumerState<TaskBoardPage> {
                       runSpacing: 4,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF414A51),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
+                        InkWell(
+                          onTap: () => ProjectDetailsDialog.openByCode(
+                            context,
+                            ref,
                             task.projectOrOfficeCode,
-                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF414A51),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              task.projectOrOfficeCode,
+                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
                           ),
                         ),
                         Container(
@@ -1531,15 +1540,23 @@ class _TaskBoardPageState extends ConsumerState<TaskBoardPage> {
                   runSpacing: 3,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF414A51),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
+                    InkWell(
+                      onTap: () => ProjectDetailsDialog.openByCode(
+                        context,
+                        ref,
                         task.projectOrOfficeCode,
-                        style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
+                      ),
+                      borderRadius: BorderRadius.circular(4),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF414A51),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          task.projectOrOfficeCode,
+                          style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ),
                     Container(
