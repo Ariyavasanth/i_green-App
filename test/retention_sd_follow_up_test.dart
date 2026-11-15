@@ -323,10 +323,12 @@ void main() {
 
     test('syncWithSiteProjects correctly auto-populates retention and SD records', () async {
       final repo = FakeRetentionSdRepository();
-      final projects = [
+      final projects = <SiteProject>[
         SiteProject(
           id: 'PRJ-100',
           projectCode: 'PRJ-100',
+          employeeName: 'Admin',
+          generalCode: 'GEN-100',
           clientName: 'Client Alpha',
           generalDetails: 'Feeder Separation',
           division: 'Distribution',
@@ -338,6 +340,8 @@ void main() {
         SiteProject(
           id: 'PRJ-200',
           projectCode: 'PRJ-200',
+          employeeName: 'Admin',
+          generalCode: 'GEN-200',
           clientName: 'Client Beta',
           generalDetails: 'Transformer Overhaul',
           division: 'Transmission',

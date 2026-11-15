@@ -63,6 +63,12 @@ class ProjectModuleScreen extends ConsumerStatefulWidget {
         '/projects/retention-sd',
         Color(0xFFF59E0B),
       ),
+      _SubModule(
+        'INCENTIVE ENGINE',
+        Icons.military_tech_outlined,
+        '/projects/incentives',
+        Color(0xFF9CC70A),
+      ),
     ],
   };
 

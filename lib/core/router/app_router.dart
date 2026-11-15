@@ -21,6 +21,7 @@ import '../../features/tenders/presentation/screens/tender_list_screen.dart';
 import '../../features/tenders/presentation/screens/tender_form_screen.dart';
 import '../../features/tenders/presentation/screens/company_documents_screen.dart';
 import 'package:flutter_application_1/features/retention_sd/presentation/screens/retention_sd_follow_up_screen.dart';
+import '../../features/project_incentive/presentation/screens/project_incentive_engine_screen.dart';
 
 import '../../features/app_shell/presentation/app_shell.dart';
 import '../../features/app_shell/presentation/section_page.dart';
@@ -357,6 +358,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/projects/retention-sd', builder: (_, _) => const RetentionSdFollowUpScreen()),
       GoRoute(path: '/project/retention-sd', builder: (_, _) => const RetentionSdFollowUpScreen()),
       GoRoute(path: '/retention-sd', builder: (_, _) => const RetentionSdFollowUpScreen()),
+      GoRoute(path: '/projects/incentives', builder: (_, _) => const ProjectIncentiveEngineScreen()),
+      GoRoute(path: '/project/incentives', builder: (_, _) => const ProjectIncentiveEngineScreen()),
+      GoRoute(path: '/project-incentive-engine', builder: (_, _) => const ProjectIncentiveEngineScreen()),
       GoRoute(path: '/module/factory', builder: (_, _) => const FactoryModuleScreen()),
       GoRoute(
         path: '/employee/register/:linkId',

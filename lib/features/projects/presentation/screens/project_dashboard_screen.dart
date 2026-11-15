@@ -87,6 +87,15 @@ class ProjectDashboardScreen extends ConsumerWidget {
         actions: [
           TextButton.icon(
             style: TextButton.styleFrom(foregroundColor: const Color(0xFF414A51)),
+            onPressed: () => context.push('/projects/incentives'),
+            icon: const Icon(Icons.military_tech_outlined, size: 18),
+            label: const Text(
+              'Incentives',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
+            ),
+          ),
+          TextButton.icon(
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFF414A51)),
             onPressed: () => context.push('/projects/retention-sd'),
             icon: const Icon(Icons.savings_outlined, size: 18),
             label: const Text(

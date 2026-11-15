@@ -25,6 +25,8 @@ import '../../domain/models/project_document.dart';
 import '../../domain/models/project_inventory_item.dart';
 import '../../domain/models/site_project.dart';
 import '../../providers/project_providers.dart';
+import '../../../project_incentive/presentation/widgets/project_incentive_details_dialog.dart';
+import '../../../project_incentive/providers/project_incentive_providers.dart';
 
 class ManageProjectScreen extends ConsumerStatefulWidget {
   const ManageProjectScreen({
@@ -68,6 +70,7 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
     (number: 13, title: 'Project Profit / Loss', icon: Icons.assessment_outlined),
     (number: 14, title: 'Project Completion & M-Book', icon: Icons.assignment_turned_in_outlined),
     (number: 15, title: 'Project Documents', icon: Icons.folder_open_outlined),
+    (number: 16, title: 'Incentive Engine', icon: Icons.military_tech_outlined),
   ];
 
   @override
@@ -610,6 +613,8 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
         return _buildSection14ProjectCompletion(project, isMobile);
       case 14:
         return _buildSection15ProjectDocuments(project, isMobile);
+      case 15:
+        return _buildSection16Incentives(project, isMobile);
       default:
         return _buildSection1Overview(project, isMobile);
     }
@@ -2245,6 +2250,251 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION 16 — PROJECT INCENTIVE ENGINE
+  // ═══════════════════════════════════════════════════════════════════════════
+  Widget _buildSection16Incentives(SiteProject project, bool isMobile) {
+    final incentiveAsync = ref.watch(projectIncentiveCalculationProvider(project.projectCode));
+
+    return incentiveAsync.when(
+      loading: () => const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: CircularProgressIndicator(color: Color(0xFF414A51)),
+        ),
+      ),
+      error: (err, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text('Error loading incentive calculation: $err'),
+        ),
+      ),
+      data: (rec) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildContentCard(
+            title: 'Project Incentive Engine',
+            icon: Icons.military_tech_outlined,
+            headerTrailing: FilledButton.tonalIcon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                foregroundColor: const Color(0xFF414A51),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () => context.push('/projects/incentives'),
+              icon: const Icon(Icons.dashboard_rounded, size: 16),
+              label: const Text('Incentive Dashboard'),
+            ),
+            children: [
+              // 1. Overall Eligibility / Disqualification Banner
+              if (rec.isDisqualified)
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFF87171)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.cancel_rounded, color: Color(0xFFDC2626), size: 24),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'AUTOMATICALLY DISQUALIFIED FROM INCENTIVE',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                                color: Color(0xFF991B1B),
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              rec.disqualificationReason,
+                              style: const TextStyle(fontSize: 12, color: Color(0xFFB91C1C)),
+                            ),
+                            const SizedBox(height: 5),
+                            const Text(
+                              'Under corporate policy, any recorded incident automatically disqualifies the project incentive. Site restoration costs are tracked separately below.',
+                              style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Color(0xFF7F1D1D)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF86EFAC)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 20),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Zero Site Incidents Recorded — Project is Fully Eligible for Incentive',
+                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: Color(0xFF166534)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 14),
+
+              // 2. Net Incentive Summary Card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: rec.isDisqualified ? const Color(0xFFFEF2F2) : const Color(0xFF414A51),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: rec.isDisqualified ? const Color(0xFFFCA5A5) : const Color(0xFF414A51),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'NET PAYABLE INCENTIVE',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                            color: rec.isDisqualified ? const Color(0xFF991B1B) : const Color(0xFF9CC70A),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _currencyFormatter.format(rec.netPayableIncentive),
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            color: rec.isDisqualified ? const Color(0xFFDC2626) : Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: rec.isDisqualified ? const Color(0xFFDC2626) : const Color(0xFF9CC70A),
+                        foregroundColor: rec.isDisqualified ? Colors.white : const Color(0xFF414A51),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (_) => ProjectIncentiveDetailsDialog(record: rec),
+                        );
+                      },
+                      icon: const Icon(Icons.analytics_outlined, size: 16),
+                      label: const Text('View Breakdown'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // 3. Grid of Calculation Factors
+              _buildDetailRow(
+                '1. Daily Progress Done',
+                '${rec.approvedQuantityDone.toStringAsFixed(1)} / ${rec.totalQuantityTarget.toStringAsFixed(1)} ${rec.unit} (${rec.progressCompletionPercentage.toStringAsFixed(0)}% done)',
+              ),
+              _buildDetailRow(
+                '   Base Progress Incentive',
+                _currencyFormatter.format(rec.baseProgressIncentive),
+              ),
+              const SizedBox(height: 6),
+              _buildDetailRow(
+                '2. Timely Bill Submission',
+                rec.isBillTimely ? 'On-Time (+10% Bonus)' : 'Delayed / Pending (-15% Penalty)',
+              ),
+              _buildDetailRow(
+                '   Timely Billing Adjustment',
+                (rec.timelyBillAdjustmentAmount >= 0 ? '+' : '') +
+                    _currencyFormatter.format(rec.timelyBillAdjustmentAmount),
+              ),
+              const SizedBox(height: 6),
+              _buildDetailRow(
+                '3. Client Payment Collection',
+                '${_currencyFormatter.format(rec.paymentCollectedAmount)} (${rec.paymentCollectionPercentage.toStringAsFixed(1)}% collected)',
+              ),
+              _buildDetailRow(
+                '   Collection Release Factor',
+                '${(rec.paymentCollectionFactor * 100).toStringAsFixed(0)}% payout release',
+              ),
+              const SizedBox(height: 6),
+              _buildDetailRow(
+                '4. Site Incidents Logged',
+                '${rec.incidentCount} incident(s) ${rec.isDisqualified ? "-> INCENTIVE DISQUALIFIED" : "-> Eligible"}',
+              ),
+              const Divider(height: 20, color: Color(0xFFE5E8E2)),
+
+              // 4. Dedicated Restoration Cost Tracker (Tracked Separately)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7ED),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFFED7AA)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.handyman_outlined, color: Color(0xFFEA580C), size: 18),
+                            SizedBox(width: 8),
+                            Text(
+                              'Restoration Costs (Tracked Separately)',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF9A3412),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          _currencyFormatter.format(rec.totalRestorationCost),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFFEA580C),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Restoration costs represent site utility/accident damages tracked in a dedicated ledger. They are not deducted from employee incentive pools; site incidents result in complete disqualification.',
+                      style: TextStyle(fontSize: 11.5, color: Color(0xFF7C2D12), fontStyle: FontStyle.italic),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
