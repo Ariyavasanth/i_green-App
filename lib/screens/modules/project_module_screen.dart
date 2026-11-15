@@ -57,6 +57,12 @@ class ProjectModuleScreen extends ConsumerStatefulWidget {
         '/projects/company-documents',
         Color(0xFF6366F1),
       ),
+      _SubModule(
+        'RETENTION & SD',
+        Icons.savings_outlined,
+        '/projects/retention-sd',
+        Color(0xFFF59E0B),
+      ),
     ],
   };
 

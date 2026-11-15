@@ -1350,6 +1350,19 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
             _buildDetailRow('SD Retention Date', project.sdRetentionDate != null ? DateFormat('dd-MM-yyyy').format(project.sdRetentionDate!) : '—'),
             if (project.sdRetentionRemark.isNotEmpty)
               _buildDetailRow('SD Retention Remarks', project.sdRetentionRemark),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF414A51),
+                  side: const BorderSide(color: Color(0xFFCBD5E1)),
+                ),
+                onPressed: () => context.push('/projects/retention-sd'),
+                icon: const Icon(Icons.savings_outlined, size: 16),
+                label: const Text('Open Centralized Retention & SD Follow-up'),
+              ),
+            ),
           ],
         ),
       ],

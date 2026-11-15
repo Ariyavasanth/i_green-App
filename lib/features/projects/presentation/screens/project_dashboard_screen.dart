@@ -84,6 +84,18 @@ class ProjectDashboardScreen extends ConsumerWidget {
             ),
           ],
         ),
+        actions: [
+          TextButton.icon(
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFF414A51)),
+            onPressed: () => context.push('/projects/retention-sd'),
+            icon: const Icon(Icons.savings_outlined, size: 18),
+            label: const Text(
+              'Retention & SD',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(color: const Color(0xFFE5E8E2), height: 1),

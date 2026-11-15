@@ -20,6 +20,7 @@ import '../../features/projects/domain/models/site_project.dart';
 import '../../features/tenders/presentation/screens/tender_list_screen.dart';
 import '../../features/tenders/presentation/screens/tender_form_screen.dart';
 import '../../features/tenders/presentation/screens/company_documents_screen.dart';
+import 'package:flutter_application_1/features/retention_sd/presentation/screens/retention_sd_follow_up_screen.dart';
 
 import '../../features/app_shell/presentation/app_shell.dart';
 import '../../features/app_shell/presentation/section_page.dart';
@@ -353,6 +354,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/project/tenders/new', builder: (_, _) => const TenderFormScreen()),
       GoRoute(path: '/projects/company-documents', builder: (_, _) => const CompanyDocumentsScreen()),
       GoRoute(path: '/project/company-documents', builder: (_, _) => const CompanyDocumentsScreen()),
+      GoRoute(path: '/projects/retention-sd', builder: (_, _) => const RetentionSdFollowUpScreen()),
+      GoRoute(path: '/project/retention-sd', builder: (_, _) => const RetentionSdFollowUpScreen()),
+      GoRoute(path: '/retention-sd', builder: (_, _) => const RetentionSdFollowUpScreen()),
       GoRoute(path: '/module/factory', builder: (_, _) => const FactoryModuleScreen()),
       GoRoute(
         path: '/employee/register/:linkId',
