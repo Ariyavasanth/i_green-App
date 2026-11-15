@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../../employee/providers/employee_providers.dart';
 import '../../domain/models/project_budget.dart';
+import '../../domain/models/project_budget_vs_actual.dart';
 import '../../domain/models/site_project.dart';
 import '../../providers/project_providers.dart';
 
@@ -30,6 +31,7 @@ class _ProjectBudgetScreenState extends ConsumerState<ProjectBudgetScreen> {
   bool _isSaving = false;
   String? _errorMessage;
 
+  int _currentTab = 0; // 0: Budget vs Actual, 1: Sanctioned Allocations
   BudgetStatus _status = BudgetStatus.draft;
   int _revision = 1;
   final List<ProjectBudgetItem> _items = [];
@@ -365,9 +367,13 @@ class _ProjectBudgetScreenState extends ConsumerState<ProjectBudgetScreen> {
       final statusToSave = newStatus ?? _status;
       final now = DateTime.now();
 
+      final prevBudget = _project!.budget;
+      final isReApproval = statusToSave == BudgetStatus.approved && prevBudget?.status == BudgetStatus.approved;
+      final saveRevision = isReApproval ? (prevBudget!.revision + 1) : _revision;
+
       final updatedBudget = ProjectBudget(
         status: statusToSave,
-        revision: statusToSave == BudgetStatus.approved ? _revision : _revision,
+        revision: saveRevision,
         items: List.from(_items),
         createdAt: _project!.budget?.createdAt ?? now,
         updatedAt: now,
@@ -607,18 +613,40 @@ class _ProjectBudgetScreenState extends ConsumerState<ProjectBudgetScreen> {
             ),
           ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(44),
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Color(0xFFE5E8E2), width: 1)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                _buildNavTab(0, 'Budget vs Actual Tracking', Icons.analytics_outlined),
+                const SizedBox(width: 8),
+                _buildNavTab(1, 'Sanctioned Allocations & Planner', Icons.edit_note_rounded),
+              ],
+            ),
+          ),
+        ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ─── Profitability Metrics Row ───
-            _buildProfitabilityCards(isMobile),
-            const SizedBox(height: 16),
+      body: _currentTab == 0
+          ? _buildBudgetVsActualView(
+              ref.watch(projectBudgetVsActualProvider(widget.projectId)).valueOrNull,
+              isMobile,
+            )
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // ─── Profitability Metrics Row ───
+                  _buildProfitabilityCards(isMobile),
+                  const SizedBox(height: 16),
 
-            // ─── Main Budget Container ───
-            Container(
+                  // ─── Main Budget Container ───
+                  Container(
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
@@ -1230,6 +1258,446 @@ class _ProjectBudgetScreenState extends ConsumerState<ProjectBudgetScreen> {
           );
         },
       ),
+    );
+  }
+
+  Widget _buildNavTab(int index, String label, IconData icon) {
+    final isSelected = _currentTab == index;
+    return InkWell(
+      onTap: () => setState(() => _currentTab = index),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: isSelected ? const Color(0xFF9CC70A) : Colors.transparent,
+              width: 3,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? const Color(0xFF414A51) : const Color(0xFF64748B),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected ? const Color(0xFF414A51) : const Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBudgetVsActualView(ProjectBudgetVsActual? bva, bool isMobile) {
+    if (bva == null) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF9CC70A)),
+      );
+    }
+
+    final isOver = bva.isOverBudget;
+    final isHealthy = bva.utilizationPercentage <= 85.0;
+
+    final cards = [
+      _buildMetricCard(
+        title: 'Allocated Budget',
+        value: _currencyFormatter.format(bva.allocatedBudget),
+        icon: Icons.account_balance_wallet_outlined,
+        accentColor: const Color(0xFF414A51),
+        subtitle: 'Sanctioned BOQ Baseline',
+      ),
+      _buildMetricCard(
+        title: 'Approved Funds',
+        value: _currencyFormatter.format(bva.approvedFunds),
+        icon: Icons.fact_check_outlined,
+        accentColor: const Color(0xFF0284C7),
+        subtitle: 'Released via Fund Management',
+      ),
+      _buildMetricCard(
+        title: 'Actual Expenses',
+        value: _currencyFormatter.format(bva.actualExpenses),
+        icon: Icons.receipt_long_rounded,
+        accentColor: isOver ? Colors.redAccent : const Color(0xFFEA580C),
+        subtitle: 'Recorded Project Expenses',
+      ),
+      _buildMetricCard(
+        title: 'Remaining Budget',
+        value: _currencyFormatter.format(bva.remainingBudget),
+        icon: Icons.savings_outlined,
+        accentColor: bva.remainingBudget >= 0 ? const Color(0xFF9CC70A) : Colors.redAccent,
+        subtitle: 'Allocated - Actual Expenses',
+      ),
+      _buildMetricCard(
+        title: 'Budget Utilization',
+        value: '${bva.utilizationPercentage.toStringAsFixed(1)} %',
+        icon: Icons.donut_large_rounded,
+        accentColor: isOver
+            ? Colors.redAccent
+            : (isHealthy ? const Color(0xFF9CC70A) : Colors.orangeAccent),
+        subtitleWidget: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: bva.allocatedBudget > 0
+                    ? (bva.actualExpenses / bva.allocatedBudget).clamp(0.0, 1.0)
+                    : 0.0,
+                minHeight: 5,
+                backgroundColor: const Color(0xFFE2E8F0),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  isOver
+                      ? Colors.redAccent
+                      : (isHealthy ? const Color(0xFF9CC70A) : Colors.orangeAccent),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      _buildMetricCard(
+        title: 'Unspent Disbursed Funds',
+        value: _currencyFormatter.format(bva.unspentFunds),
+        icon: Icons.payments_outlined,
+        accentColor: const Color(0xFF0D9488),
+        subtitle: 'Approved Funds - Actual Expenses',
+      ),
+    ];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // If no budget allocated yet, show a helpful alert
+          if (bva.allocatedBudget <= 0)
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFF59E0B)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 22),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'No Sanctioned Budget Allocated Yet',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF92400E)),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'To calculate utilization and remaining balance accurately, configure budget allocations in the "Sanctioned Allocations" tab.',
+                          style: TextStyle(fontSize: 11.5, color: Color(0xFF78350F)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF414A51),
+                      foregroundColor: const Color(0xFF9CC70A),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    onPressed: () => setState(() => _currentTab = 1),
+                    child: const Text('Configure Budget', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+            ),
+
+          // 6 KPI Cards Grid
+          if (isMobile)
+            Column(
+              children: cards.map((c) => Padding(padding: const EdgeInsets.only(bottom: 10), child: c)).toList(),
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final cardWidth = (constraints.maxWidth - (2 * 12)) / 3;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: cards.map((c) => SizedBox(width: cardWidth, child: c)).toList(),
+                );
+              },
+            ),
+          const SizedBox(height: 20),
+
+          // Category-wise Breakdown Table
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'CATEGORY-WISE BOQ VS ACTUAL BREAKDOWN',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF414A51),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _buildCategoryBvaTable(bva),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryBvaTable(ProjectBudgetVsActual bva) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: math.max(constraints.maxWidth, 780)),
+            child: Table(
+              columnWidths: const {
+                0: FlexColumnWidth(2.6),
+                1: FlexColumnWidth(1.6),
+                2: FlexColumnWidth(1.6),
+                3: FlexColumnWidth(1.6),
+                4: FlexColumnWidth(1.6),
+                5: FlexColumnWidth(1.8),
+              },
+              border: TableBorder(
+                horizontalInside: BorderSide(color: Colors.grey.shade200, width: 1),
+                bottom: BorderSide(color: Colors.grey.shade300, width: 1),
+              ),
+              children: [
+                // Header
+                TableRow(
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF414A51),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(8),
+                      topRight: Radius.circular(8),
+                    ),
+                  ),
+                  children: const [
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                      child: Text('CATEGORY HEAD', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                      child: Text('ALLOCATED (₹)', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                      child: Text('APPROVED (₹)', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                      child: Text('ACTUAL SPENT (₹)', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                      child: Text('REMAINING (₹)', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                      child: Text('UTILIZATION', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ),
+
+                // Category rows
+                ...bva.categoryBreakdown.map((cat) {
+                  final isOver = cat.isOverBudget;
+                  final isHealthy = cat.utilizationPercentage <= 85.0;
+
+                  return TableRow(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        child: Text(
+                          cat.category,
+                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        child: Text(
+                          _currencyFormatter.format(cat.allocatedBudget),
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF414A51)),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        child: Text(
+                          _currencyFormatter.format(cat.approvedFunds),
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF0284C7)),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        child: Text(
+                          _currencyFormatter.format(cat.actualExpenses),
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isOver ? Colors.redAccent : const Color(0xFFEA580C),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        child: Text(
+                          _currencyFormatter.format(cat.remainingBudget),
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: cat.remainingBudget >= 0 ? const Color(0xFF16A34A) : Colors.redAccent,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isOver
+                                  ? Colors.red.shade50
+                                  : (isHealthy ? Colors.green.shade50 : Colors.amber.shade50),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: isOver
+                                    ? Colors.red.shade200
+                                    : (isHealthy ? Colors.green.shade200 : Colors.amber.shade200),
+                              ),
+                            ),
+                            child: Text(
+                              cat.allocatedBudget > 0
+                                  ? '${cat.utilizationPercentage.toStringAsFixed(1)}%'
+                                  : (cat.actualExpenses > 0 ? 'UNBUDGETED' : '0.0%'),
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w800,
+                                color: isOver
+                                    ? Colors.red.shade700
+                                    : (isHealthy ? Colors.green.shade800 : Colors.amber.shade900),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+
+                // Total Row
+                TableRow(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    border: Border(top: BorderSide(color: Colors.grey.shade400, width: 1.5)),
+                  ),
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      child: Text('TOTAL PROJECT', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      child: Text(
+                        _currencyFormatter.format(bva.allocatedBudget),
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      child: Text(
+                        _currencyFormatter.format(bva.approvedFunds),
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFF0284C7)),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      child: Text(
+                        _currencyFormatter.format(bva.actualExpenses),
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          color: bva.isOverBudget ? Colors.redAccent : const Color(0xFFEA580C),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      child: Text(
+                        _currencyFormatter.format(bva.remainingBudget),
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          color: bva.remainingBudget >= 0 ? const Color(0xFF16A34A) : Colors.redAccent,
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      child: Center(
+                        child: Text(
+                          '${bva.utilizationPercentage.toStringAsFixed(1)}%',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: bva.isOverBudget
+                                ? Colors.red.shade700
+                                : (bva.utilizationPercentage <= 85 ? Colors.green.shade800 : Colors.amber.shade900),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

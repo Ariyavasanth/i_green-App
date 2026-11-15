@@ -13,3 +13,7 @@ final expensesProvider = FutureProvider<List<Expense>>(
   (ref) => ref.watch(expenseRepositoryProvider).getExpenses(),
 );
 
+final expensesStreamProvider = StreamProvider<List<Expense>>(
+  (ref) => ref.watch(expenseRepositoryProvider).watchExpenses(),
+);
+

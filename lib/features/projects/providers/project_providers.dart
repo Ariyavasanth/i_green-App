@@ -1,7 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../expenses/providers/expense_providers.dart';
+import '../../fund_requester/providers/fund_request_providers.dart';
 import '../data/repositories/firebase_project_repository.dart';
 import '../domain/models/daily_progress_entry.dart';
+import '../domain/models/project_budget_vs_actual.dart';
 import '../domain/models/project_compliance_record.dart';
 import '../domain/models/project_inventory_item.dart';
 import '../domain/models/site_project.dart';
@@ -219,4 +222,96 @@ final projectIncidentsStreamProvider =
     StreamProvider.family<List<IncidentLogEntry>, String>((ref, projectCode) {
   final repo = ref.watch(projectRepositoryProvider);
   return repo.watchIncidents(projectCode);
+});
+
+/// Real-time Budget vs Actual metrics for all site projects.
+final allProjectsBudgetVsActualProvider =
+    Provider<AsyncValue<List<ProjectBudgetVsActual>>>((ref) {
+  final projectsAsync = ref.watch(projectsStreamProvider);
+  final fundsAsync = ref.watch(allFundRequestsStreamProvider);
+  final expensesAsync = ref.watch(expensesStreamProvider);
+
+  if (projectsAsync.isLoading || fundsAsync.isLoading || expensesAsync.isLoading) {
+    return const AsyncValue.loading();
+  }
+
+  if (projectsAsync.hasError) {
+    return AsyncValue.error(projectsAsync.error!, projectsAsync.stackTrace!);
+  }
+  if (fundsAsync.hasError) {
+    return AsyncValue.error(fundsAsync.error!, fundsAsync.stackTrace!);
+  }
+  if (expensesAsync.hasError) {
+    return AsyncValue.error(expensesAsync.error!, expensesAsync.stackTrace!);
+  }
+
+  final projects = projectsAsync.value ?? [];
+  final funds = fundsAsync.value ?? [];
+  final expenses = expensesAsync.value ?? [];
+
+  final list = projects.map((p) {
+    final projCode = p.projectCode.trim().toLowerCase();
+    final projName = p.projectName.trim().toLowerCase();
+
+    // Approved & Partially Approved funds for this project
+    final matchingFunds = funds.where((f) {
+      if (f.isDeleted) return false;
+      final st = f.status.toLowerCase().trim();
+      if (st != 'approved' && st != 'partially approved') return false;
+      final fCode = f.projectCode.trim().toLowerCase();
+      final fName = f.projectName.trim().toLowerCase();
+      return (fCode.isNotEmpty && fCode == projCode) ||
+          (fName.isNotEmpty && fName == projName);
+    }).toList();
+
+    // Direct expenses tagged with this project
+    final matchingExpenses = expenses.where((e) {
+      final eCode = e.projectCode.trim().toLowerCase();
+      final eId = e.projectId.trim();
+      return (eCode.isNotEmpty && eCode == projCode) ||
+          (eId.isNotEmpty && eId == p.id);
+    }).toList();
+
+    // Category budgets
+    final catBudgets = <String, double>{
+      for (final c in ProjectBudgetVsActual.standardCategories) c: 0.0,
+    };
+    if (p.budget != null) {
+      for (final item in p.budget!.items) {
+        final cat = ProjectBudgetVsActual.normalizeCategory(item.category);
+        catBudgets[cat] = (catBudgets[cat] ?? 0.0) + item.allocatedAmount;
+      }
+    }
+
+    final allocated = p.budget?.totalBudget ?? 0.0;
+    final contract = p.actualProjectValue > 0
+        ? p.actualProjectValue
+        : p.approximateProjectValue;
+
+    return ProjectBudgetVsActual.calculate(
+      projectId: p.id,
+      projectCode: p.projectCode,
+      projectName: p.projectName,
+      contractValue: contract,
+      allocatedBudget: allocated,
+      projectApprovedFunds: matchingFunds,
+      projectDirectExpenses: matchingExpenses,
+      categoryBudgets: catBudgets,
+    );
+  }).toList();
+
+  return AsyncValue.data(list);
+});
+
+/// Real-time Budget vs Actual metrics for a specific project ID.
+final projectBudgetVsActualProvider =
+    Provider.family<AsyncValue<ProjectBudgetVsActual?>, String>((ref, projectId) {
+  final allAsync = ref.watch(allProjectsBudgetVsActualProvider);
+  return allAsync.whenData((list) {
+    try {
+      return list.firstWhere((item) => item.projectId == projectId);
+    } catch (_) {
+      return null;
+    }
+  });
 });

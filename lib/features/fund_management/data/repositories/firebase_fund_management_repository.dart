@@ -198,21 +198,12 @@ class FirebaseFundManagementRepository implements FundManagementRepository {
       }
     }
 
-    // Deduct approved amount from the project's actual value
+    // Record fund approval audit log on the project without mutating actual_project_value
     final proj = await getProjectByCode(projectCode);
     if (proj != null && approvedAmount > 0) {
       final pRef = _projectsRef;
       if (pRef != null) {
-        final currentActual = proj.actualProjectValue;
-        final newActual = (currentActual - approvedAmount).clamp(0.0, double.infinity);
-
         try {
-          await pRef.doc(proj.id).update({
-            'actual_project_value': newActual,
-            'updated_at': nowIso,
-            'updated_by_name': approvedBy,
-          });
-
           await pRef.doc(proj.id).collection('audit_logs').add(
                 ProjectAuditLog(
                   id: '',
@@ -220,12 +211,12 @@ class FirebaseFundManagementRepository implements FundManagementRepository {
                   employeeId: '',
                   employeeName: approvedBy,
                   designation: 'Fund Approver',
-                  changeNote: 'Fund ${isPartial ? "Partial Approval" : "Approval"}: Deducted ₹${approvedAmount.toStringAsFixed(2)} for Request $requestId. Remarks: ${remarks ?? "Approved"}',
+                  changeNote: 'Fund ${isPartial ? "Partial Approval" : "Approval"}: Sanctioned ₹${approvedAmount.toStringAsFixed(2)} for Request $requestId. Remarks: ${remarks ?? "Approved"}',
                   timestamp: DateTime.now(),
                 ).toJson(),
               );
         } catch (e) {
-          developer.log('Error deducting fund from project: $e');
+          developer.log('Error adding fund audit log to project: $e');
         }
       }
     }

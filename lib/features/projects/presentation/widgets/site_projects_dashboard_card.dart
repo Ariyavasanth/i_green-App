@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../domain/models/project_budget_vs_actual.dart';
 import '../../domain/models/site_project.dart';
 import '../../providers/project_providers.dart';
 import '../dialogs/project_details_dialog.dart';
@@ -26,6 +28,12 @@ class _SiteProjectsDashboardCardState
 
   int _rowsPerPage = 5;
   int _currentPage = 0;
+
+  final _currencyFormatter = NumberFormat.currency(
+    locale: 'en_IN',
+    symbol: '₹ ',
+    decimalDigits: 0,
+  );
 
   @override
   void dispose() {
@@ -116,12 +124,15 @@ class _SiteProjectsDashboardCardState
                           : startIndex + _rowsPerPage;
                       final pageItems = filtered.sublist(startIndex, endIndex);
 
+                      final bvaList = ref.watch(allProjectsBudgetVsActualProvider).valueOrNull ?? [];
+                      final bvaMap = {for (final b in bvaList) b.projectId: b};
+
                       return Column(
                         children: [
                           if (isMobile)
-                            _buildMobileCardList(pageItems)
+                            _buildMobileCardList(pageItems, bvaMap)
                           else
-                            _buildDesktopTable(pageItems),
+                            _buildDesktopTable(pageItems, bvaMap),
                           _buildPaginationBar(
                             totalItems: totalItems,
                             startIndex: startIndex,
@@ -397,7 +408,10 @@ class _SiteProjectsDashboardCardState
   }
 
   /// Desktop / Tablet Elevated Table View
-  Widget _buildDesktopTable(List<SiteProject> projects) {
+  Widget _buildDesktopTable(
+    List<SiteProject> projects,
+    Map<String, ProjectBudgetVsActual> bvaMap,
+  ) {
     return Column(
       children: [
         // Table Header
@@ -407,7 +421,7 @@ class _SiteProjectsDashboardCardState
           child: const Row(
             children: [
               Expanded(
-                flex: 5,
+                flex: 4,
                 child: Text(
                   'Project Code',
                   style: TextStyle(
@@ -421,8 +435,8 @@ class _SiteProjectsDashboardCardState
               Expanded(
                 flex: 2,
                 child: Text(
-                  'Tender Amount',
-                  textAlign: TextAlign.center,
+                  'Tender Value',
+                  textAlign: TextAlign.right,
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 13.5,
@@ -434,8 +448,34 @@ class _SiteProjectsDashboardCardState
               Expanded(
                 flex: 2,
                 child: Text(
-                  'Expense Amount',
-                  textAlign: TextAlign.center,
+                  'Approved Funds',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Actual Expenses',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Remaining Budget',
+                  textAlign: TextAlign.right,
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 13.5,
@@ -448,7 +488,7 @@ class _SiteProjectsDashboardCardState
           ),
         ),
 
-        // Table Rows - Shows only Project Code
+        // Table Rows
         ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -460,6 +500,18 @@ class _SiteProjectsDashboardCardState
           ),
           itemBuilder: (context, index) {
             final project = projects[index];
+            final bva = bvaMap[project.id];
+
+            final tenderVal = bva?.contractValue ??
+                (project.actualProjectValue > 0
+                    ? project.actualProjectValue
+                    : project.approximateProjectValue);
+            final approvedFunds = bva?.approvedFunds ?? 0.0;
+            final actualExpenses = bva?.actualExpenses ?? 0.0;
+            final remainingBudget = bva != null
+                ? bva.remainingBudget
+                : (project.budget?.totalBudget ?? 0.0);
+
             return Material(
               color: Colors.transparent,
               child: InkWell(
@@ -472,45 +524,92 @@ class _SiteProjectsDashboardCardState
                   ),
                   child: Row(
                     children: [
-                      // Project Code Only
+                      // Project Code & Client Name
                       Expanded(
-                        flex: 5,
+                        flex: 4,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              project.projectCode.isNotEmpty
+                                  ? project.projectCode
+                                  : '—',
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF22282D),
+                              ),
+                            ),
+                            if (project.clientName.isNotEmpty)
+                              Text(
+                                project.clientName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+
+                      // Tender Value
+                      Expanded(
+                        flex: 2,
                         child: Text(
-                          project.projectCode.isNotEmpty
-                              ? project.projectCode
-                              : '—',
+                          _currencyFormatter.format(tenderVal),
+                          textAlign: TextAlign.right,
                           style: const TextStyle(
-                            fontSize: 13.5,
+                            fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF22282D),
+                            color: Color(0xFF414A51),
                           ),
                         ),
                       ),
 
-                      // Tender Amount
+                      // Approved Funds
                       Expanded(
                         flex: 2,
                         child: Text(
-                          '0',
-                          textAlign: TextAlign.center,
+                          _currencyFormatter.format(approvedFunds),
+                          textAlign: TextAlign.right,
                           style: const TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF22282D),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF0284C7),
                           ),
                         ),
                       ),
 
-                      // Expense Amount
+                      // Actual Expenses
                       Expanded(
                         flex: 2,
                         child: Text(
-                          '0',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF22282D),
+                          _currencyFormatter.format(actualExpenses),
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: (bva?.isOverBudget ?? false)
+                                ? Colors.redAccent
+                                : const Color(0xFFEA580C),
+                          ),
+                        ),
+                      ),
+
+                      // Remaining Budget
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          _currencyFormatter.format(remainingBudget),
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: remainingBudget >= 0
+                                ? const Color(0xFF16A34A)
+                                : Colors.redAccent,
                           ),
                         ),
                       ),
@@ -526,7 +625,10 @@ class _SiteProjectsDashboardCardState
   }
 
   /// Mobile Responsive Card List
-  Widget _buildMobileCardList(List<SiteProject> projects) {
+  Widget _buildMobileCardList(
+    List<SiteProject> projects,
+    Map<String, ProjectBudgetVsActual> bvaMap,
+  ) {
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -535,6 +637,17 @@ class _SiteProjectsDashboardCardState
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final project = projects[index];
+        final bva = bvaMap[project.id];
+
+        final tenderVal = bva?.contractValue ??
+            (project.actualProjectValue > 0
+                ? project.actualProjectValue
+                : project.approximateProjectValue);
+        final approvedFunds = bva?.approvedFunds ?? 0.0;
+        final actualExpenses = bva?.actualExpenses ?? 0.0;
+        final remainingBudget = bva != null
+            ? bva.remainingBudget
+            : (project.budget?.totalBudget ?? 0.0);
 
         return Material(
           color: Colors.white,
@@ -572,16 +685,29 @@ class _SiteProjectsDashboardCardState
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          project.projectCode.isNotEmpty
-                              ? project.projectCode
-                              : 'Untitled Project',
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF414A51),
-                            height: 1.3,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              project.projectCode.isNotEmpty
+                                  ? project.projectCode
+                                  : 'Untitled Project',
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF414A51),
+                                height: 1.3,
+                              ),
+                            ),
+                            if (project.clientName.isNotEmpty)
+                              Text(
+                                project.clientName,
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                       const Icon(
@@ -596,13 +722,13 @@ class _SiteProjectsDashboardCardState
                   const Divider(height: 1, color: Color(0xFFE5E8E2)),
                   const SizedBox(height: 12),
 
-                  // Metrics Side-by-Side Badges
+                  // Metrics 2x2 Badges
                   Row(
                     children: [
                       Expanded(
                         child: _buildMetricStatCard(
-                          title: 'Tender Amount',
-                          value: '₹ 0',
+                          title: 'Tender Value',
+                          value: _currencyFormatter.format(tenderVal),
                           color: const Color(0xFF414A51),
                           bgColor: const Color(0xFFF4F6F3),
                         ),
@@ -610,10 +736,36 @@ class _SiteProjectsDashboardCardState
                       const SizedBox(width: 10),
                       Expanded(
                         child: _buildMetricStatCard(
-                          title: 'Expense Amount',
-                          value: '₹ 0',
-                          color: const Color(0xFF9CC70A),
-                          bgColor: const Color(0xFF9CC70A).withValues(alpha: 0.08),
+                          title: 'Approved Funds',
+                          value: _currencyFormatter.format(approvedFunds),
+                          color: const Color(0xFF0284C7),
+                          bgColor: const Color(0xFF0284C7).withValues(alpha: 0.08),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildMetricStatCard(
+                          title: 'Actual Expenses',
+                          value: _currencyFormatter.format(actualExpenses),
+                          color: const Color(0xFFEA580C),
+                          bgColor: const Color(0xFFEA580C).withValues(alpha: 0.08),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _buildMetricStatCard(
+                          title: 'Remaining Budget',
+                          value: _currencyFormatter.format(remainingBudget),
+                          color: remainingBudget >= 0
+                              ? const Color(0xFF16A34A)
+                              : Colors.redAccent,
+                          bgColor: remainingBudget >= 0
+                              ? const Color(0xFF9CC70A).withValues(alpha: 0.08)
+                              : Colors.red.shade50,
                         ),
                       ),
                     ],

@@ -9,6 +9,8 @@ class Expense {
     required this.customer,
     required this.status,
     required this.amount,
+    this.projectCode = '',
+    this.projectId = '',
   });
 
   final int id;
@@ -20,5 +22,7 @@ class Expense {
   final String customer;
   final String status;
   final double amount;
+  final String projectCode;
+  final String projectId;
 }
 

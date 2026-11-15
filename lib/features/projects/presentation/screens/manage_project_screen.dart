@@ -1099,6 +1099,13 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
     final contractVal = project.actualProjectValue > 0
         ? project.actualProjectValue
         : project.approximateProjectValue;
+
+    final bva = ref.watch(projectBudgetVsActualProvider(project.id)).valueOrNull;
+    final approvedFunds = bva?.approvedFunds ?? 0.0;
+    final actualExpenses = bva?.actualExpenses ?? 0.0;
+    final remainingBudget = bva?.remainingBudget ?? (totalBudget - actualExpenses);
+    final utilization = bva?.utilizationPercentage ?? 0.0;
+    final unspentFunds = bva?.unspentFunds ?? (approvedFunds - actualExpenses);
     final margin = contractVal > 0 ? contractVal - totalBudget : 0.0;
 
     return Column(
@@ -1106,7 +1113,8 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
-            final colCount = constraints.maxWidth >= 900 ? 3 : (constraints.maxWidth >= 550 ? 2 : 1);
+            final colCount = constraints.maxWidth >= 1000 ? 4 : (constraints.maxWidth >= 600 ? 2 : 1);
+            final cardWidth = (constraints.maxWidth - (colCount - 1) * 14) / colCount;
             return Wrap(
               spacing: 14,
               runSpacing: 14,
@@ -1114,23 +1122,30 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                 _buildInfoKpiCard(
                   title: 'Allocated Budget',
                   value: _currencyFormatter.format(totalBudget),
-                  icon: Icons.pie_chart_outline_rounded,
-                  color: const Color(0xFF0D9488),
-                  width: (constraints.maxWidth - (colCount - 1) * 14) / colCount,
-                ),
-                _buildInfoKpiCard(
-                  title: 'Contract Value',
-                  value: _currencyFormatter.format(contractVal),
-                  icon: Icons.account_balance_outlined,
+                  icon: Icons.account_balance_wallet_outlined,
                   color: const Color(0xFF414A51),
-                  width: (constraints.maxWidth - (colCount - 1) * 14) / colCount,
+                  width: cardWidth,
                 ),
                 _buildInfoKpiCard(
-                  title: 'Projected Margin',
-                  value: _currencyFormatter.format(margin),
-                  icon: Icons.trending_up_rounded,
-                  color: margin >= 0 ? const Color(0xFF9CC70A) : Colors.red,
-                  width: (constraints.maxWidth - (colCount - 1) * 14) / colCount,
+                  title: 'Approved Funds',
+                  value: _currencyFormatter.format(approvedFunds),
+                  icon: Icons.fact_check_outlined,
+                  color: const Color(0xFF0284C7),
+                  width: cardWidth,
+                ),
+                _buildInfoKpiCard(
+                  title: 'Actual Expenses',
+                  value: _currencyFormatter.format(actualExpenses),
+                  icon: Icons.receipt_long_rounded,
+                  color: const Color(0xFFEA580C),
+                  width: cardWidth,
+                ),
+                _buildInfoKpiCard(
+                  title: 'Remaining Budget',
+                  value: _currencyFormatter.format(remainingBudget),
+                  icon: Icons.savings_outlined,
+                  color: remainingBudget >= 0 ? const Color(0xFF9CC70A) : Colors.red,
+                  width: cardWidth,
                 ),
               ],
             );
@@ -1142,7 +1157,7 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
           icon: Icons.savings_outlined,
           headerTrailing: FilledButton.icon(
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF0D9488),
+              backgroundColor: const Color(0xFF414A51),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
@@ -1154,12 +1169,15 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
               }
             },
             icon: const Icon(Icons.open_in_new_rounded, size: 16),
-            label: const Text('Open Budget Editor', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+            label: const Text('Open Budget & Actuals', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
           ),
           children: [
             _buildDetailRow('Budget Status', budget != null ? budget.status.name.toUpperCase() : 'NOT CONFIGURED'),
             _buildDetailRow('Revision Number', budget != null ? 'Rev ${budget.revision}' : '—'),
-            _buildDetailRow('Total Cost Items', budget != null ? '${budget.items.length} items' : '0 items'),
+            _buildDetailRow('Budget Utilization', '${utilization.toStringAsFixed(1)} %'),
+            _buildDetailRow('Unspent Disbursed Funds', _currencyFormatter.format(unspentFunds)),
+            _buildDetailRow('Projected Gross Margin', '${_currencyFormatter.format(margin)} (${contractVal > 0 ? ((margin / contractVal) * 100).toStringAsFixed(1) : 0}%)'),
+            _buildDetailRow('Total Cost Heads', budget != null ? '${budget.items.length} items' : '0 items'),
             _buildDetailRow('Last Updated', budget != null && budget.updatedAt != null ? DateFormat('dd-MM-yyyy hh:mm a').format(budget.updatedAt!) : '—'),
           ],
         ),

@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../projects/domain/models/site_project.dart';
+import '../../projects/presentation/dialogs/project_picker_dialog.dart';
+import '../../projects/providers/project_providers.dart';
 import '../providers/expense_providers.dart';
 
 class ExpenseForm extends ConsumerStatefulWidget {
@@ -38,6 +41,7 @@ class _ExpenseFormState extends ConsumerState<ExpenseForm> {
   bool _saving = false;
   bool _savingAndNew = false;
   String? _receiptName;
+  SiteProject? _selectedProject;
 
   static const _accounts = [
     'Travel Expense',
@@ -392,6 +396,59 @@ class _ExpenseFormState extends ConsumerState<ExpenseForm> {
           secondSelected: _taxExclusive,
           onFirst: () => setState(() => _taxExclusive = false),
           onSecond: () => setState(() => _taxExclusive = true),
+        ),
+      ),
+      _row(
+        'Project',
+        Container(
+          height: 38,
+          decoration: _border(),
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: _pickProject,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Text(
+                      _selectedProject != null
+                          ? '${_selectedProject!.projectCode} (${_selectedProject!.clientName})'
+                          : 'Select Project (Optional)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _selectedProject != null
+                            ? const Color(0xFF414A51)
+                            : AppColors.textSecondary,
+                        fontWeight: _selectedProject != null
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ),
+              if (_selectedProject != null)
+                IconButton(
+                  tooltip: 'Clear Project',
+                  icon: const Icon(Icons.close_rounded, size: 16),
+                  onPressed: () => setState(() => _selectedProject = null),
+                ),
+              SizedBox(
+                height: 38,
+                width: 40,
+                child: FilledButton(
+                  onPressed: _pickProject,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.active,
+                    padding: EdgeInsets.zero,
+                    shape: const RoundedRectangleBorder(),
+                  ),
+                  child: const Icon(Icons.search, size: 17),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       _row(
@@ -777,6 +834,18 @@ class _ExpenseFormState extends ConsumerState<ExpenseForm> {
     );
   }
 
+  Future<void> _pickProject() async {
+    final projects = ref.read(projectsStreamProvider).valueOrNull ?? [];
+    final selected = await ProjectPickerDialog.show(
+      context,
+      projects: projects,
+      selectedProjectCode: _selectedProject?.projectCode,
+    );
+    if (selected != null && mounted) {
+      setState(() => _selectedProject = selected);
+    }
+  }
+
   Future<void> _save(bool keepOpen) async {
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) {
@@ -810,6 +879,8 @@ class _ExpenseFormState extends ConsumerState<ExpenseForm> {
             customer: '',
             status: 'NON-BILLABLE',
             amount: double.tryParse(_amount.text.trim()) ?? 0,
+            projectCode: _selectedProject?.projectCode,
+            projectId: _selectedProject?.id,
           );
       if (!mounted) return;
       ref.invalidate(expensesProvider);
@@ -824,6 +895,7 @@ class _ExpenseFormState extends ConsumerState<ExpenseForm> {
       _notes.clear();
       setState(() {
         _date = DateTime.now();
+        _selectedProject = null;
         _expenseAccount = null;
         _paidThrough = null;
         _vendor = null;
