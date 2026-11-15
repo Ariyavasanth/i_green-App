@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../projects/domain/models/site_project.dart';
+import '../../projects/providers/project_providers.dart';
 import '../domain/bill.dart';
 import '../providers/bill_providers.dart';
 
@@ -31,6 +33,38 @@ class _BillsPageState extends ConsumerState<BillsPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(billsProvider);
+    final selectedDivision = ref.watch(selectedDivisionFilterProvider);
+    final projectsAsync = ref.watch(projectsStreamProvider);
+
+    // Calculate project codes in the selected division to filter linked bills
+    final divisionProjects = projectsAsync.valueOrNull ?? const [];
+    final divisionProjectCodes =
+        (selectedDivision != null && selectedDivision != 'All')
+            ? divisionProjects
+                .where((p) => p.division == selectedDivision)
+                .map((p) => p.projectCode.trim().toLowerCase())
+                .where((code) => code.isNotEmpty)
+                .toSet()
+            : null;
+
+    bool matchesDivision(Bill b) {
+      if (divisionProjectCodes == null) return true;
+      final refLower = b.reference.trim().toLowerCase();
+      final numLower = b.number.trim().toLowerCase();
+      final divLower = selectedDivision!.toLowerCase();
+      if (refLower.contains(divLower) || numLower.contains(divLower)) {
+        return true;
+      }
+      if (divisionProjectCodes.any(
+          (code) => refLower.contains(code) || numLower.contains(code))) {
+        return true;
+      }
+      return false;
+    }
+
+    final allBills = state.valueOrNull ?? const <Bill>[];
+    final divisionFilteredBills = allBills.where(matchesDivision).toList();
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
@@ -52,12 +86,49 @@ class _BillsPageState extends ConsumerState<BillsPage> {
                       children: [
                         const Text('All Bills', style: AppTextStyles.pageTitle),
                         Text(
-                          '${state.valueOrNull?.length ?? 0} bills total',
+                          selectedDivision != null && selectedDivision != 'All'
+                              ? '${divisionFilteredBills.length} bills in $selectedDivision'
+                              : '${allBills.length} bills total',
                           style: AppTextStyles.caption,
                         ),
                       ],
                     ),
                   ),
+                  // Division Filter Dropdown
+                  Container(
+                    height: 38,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.divider),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedDivision ?? 'All',
+                        icon: const Icon(
+                          Icons.filter_list_rounded,
+                          size: 16,
+                          color: Color(0xFF414A51),
+                        ),
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF414A51),
+                        ),
+                        items: ['All', ...ProjectDivisions.values]
+                            .map((d) =>
+                                DropdownMenuItem(value: d, child: Text(d)))
+                            .toList(),
+                        onChanged: (val) {
+                          ref
+                              .read(selectedDivisionFilterProvider.notifier)
+                              .state = (val == null || val == 'All') ? null : val;
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   IconButton(
                     onPressed: () => ref.invalidate(billsProvider),
                     icon: const Icon(Icons.refresh),
@@ -91,7 +162,7 @@ class _BillsPageState extends ConsumerState<BillsPage> {
                 ),
               ),
               const SizedBox(height: 10),
-              _Summary(bills: state.valueOrNull ?? const []),
+              _Summary(bills: divisionFilteredBills),
               const SizedBox(height: 10),
               SizedBox(
                 height: 36,
@@ -128,9 +199,9 @@ class _BillsPageState extends ConsumerState<BillsPage> {
                       textAlign: TextAlign.center,
                     ),
                   ),
-                  data: (all) {
+                  data: (_) {
                     final now = DateTime.now();
-                    final rows = all
+                    final rows = divisionFilteredBills
                         .where(
                           (b) =>
                               '${b.number} ${b.vendorName} ${b.reference}'
@@ -143,7 +214,13 @@ class _BillsPageState extends ConsumerState<BillsPage> {
                         )
                         .toList();
                     if (rows.isEmpty) {
-                      return const Center(child: Text('No bills found'));
+                      return Center(
+                        child: Text(
+                          selectedDivision != null && selectedDivision != 'All'
+                              ? 'No bills found for division "$selectedDivision"'
+                              : 'No bills found',
+                        ),
+                      );
                     }
                     return RefreshIndicator(
                       onRefresh: () => ref.refresh(billsProvider.future),

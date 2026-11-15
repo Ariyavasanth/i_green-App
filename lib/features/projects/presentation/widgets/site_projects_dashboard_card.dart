@@ -59,7 +59,9 @@ class _SiteProjectsDashboardCardState
 
   @override
   Widget build(BuildContext context) {
-    final projectsAsync = ref.watch(projectsStreamProvider);
+    final projectsAsync = ref.watch(filteredProjectsWithKpiProvider);
+    final activeKpi = ref.watch(projectKpiFilterProvider);
+    final selectedDivision = ref.watch(selectedDivisionFilterProvider);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -178,8 +180,31 @@ class _SiteProjectsDashboardCardState
     );
   }
 
-  /// Search Bar without dropdown
+  /// Search Bar with Division dropdown & active KPI filter chip
   Widget _buildSearchFilterBar(bool isMobile) {
+    final activeKpi = ref.watch(projectKpiFilterProvider);
+    final selectedDiv = ref.watch(selectedDivisionFilterProvider) ?? 'All';
+
+    String? kpiLabel;
+    switch (activeKpi) {
+      case ProjectKpiFilter.live:
+        kpiLabel = 'Live Projects';
+        break;
+      case ProjectKpiFilter.pendingBills:
+        kpiLabel = 'Pending Bills';
+        break;
+      case ProjectKpiFilter.retentionDue:
+        kpiLabel = 'Retention Due';
+        break;
+      case ProjectKpiFilter.bgExpiring:
+        kpiLabel = 'SD / BG Expiring';
+        break;
+      case ProjectKpiFilter.all:
+      default:
+        kpiLabel = null;
+        break;
+    }
+
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: isMobile ? 12 : 20,
@@ -191,13 +216,118 @@ class _SiteProjectsDashboardCardState
           bottom: BorderSide(color: Color(0xFFE5E8E2), width: 1),
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: _buildSearchInput(isMobile),
+          Row(
+            children: [
+              Expanded(
+                child: _buildSearchInput(isMobile),
+              ),
+              const SizedBox(width: 10),
+              // Division Dropdown Filter
+              Container(
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFCBD2DA)),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: selectedDiv,
+                    icon: const Icon(
+                      Icons.filter_list_rounded,
+                      size: 18,
+                      color: Color(0xFF414A51),
+                    ),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF414A51),
+                    ),
+                    items: ['All', ...ProjectDivisions.values]
+                        .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                        .toList(),
+                    onChanged: (val) {
+                      ref.read(selectedDivisionFilterProvider.notifier).state =
+                          (val == null || val == 'All') ? null : val;
+                      setState(() => _currentPage = 0);
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              _buildSearchButton(),
+            ],
           ),
-          const SizedBox(width: 12),
-          _buildSearchButton(),
+          if (kpiLabel != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: const Color(0xFF9CC70A).withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.filter_alt_rounded,
+                        size: 14,
+                        color: Color(0xFF414A51),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Filtered by: $kpiLabel',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF414A51),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      InkWell(
+                        onTap: () {
+                          ref.read(projectKpiFilterProvider.notifier).state =
+                              ProjectKpiFilter.all;
+                          setState(() => _currentPage = 0);
+                        },
+                        child: const Icon(
+                          Icons.cancel_rounded,
+                          size: 16,
+                          color: Color(0xFF414A51),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () {
+                    ref.read(projectKpiFilterProvider.notifier).state =
+                        ProjectKpiFilter.all;
+                    setState(() => _currentPage = 0);
+                  },
+                  child: const Text(
+                    'Clear KPI Filter',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
