@@ -8,6 +8,8 @@ import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 
 import '../../domain/models/daily_progress_entry.dart';
+import '../../domain/models/deduction_entry.dart';
+import '../../domain/models/eot_letter.dart';
 import '../../domain/models/project_audit_log.dart';
 import '../../domain/models/project_breakdown_item.dart';
 import '../../domain/models/project_budget.dart';
@@ -913,6 +915,356 @@ class FirebaseProjectRepository implements ProjectRepository {
       await auditDoc.set(log.toJson());
     } catch (e, stack) {
       developer.log('Error recording project completion: $e',
+          name: 'FirebaseProjectRepository', error: e, stackTrace: stack);
+      rethrow;
+    }
+  }
+
+  // ── Extension of Time (EOT) Letters ──
+  @override
+  Stream<List<EotLetter>> watchEotLetters(String projectCode) {
+    return _projectsRef
+        .where('general_code', isEqualTo: projectCode)
+        .snapshots()
+        .map((snapshot) {
+      if (snapshot.docs.isEmpty) return <EotLetter>[];
+      final project = SiteProject.fromJson(
+        snapshot.docs.first.data(),
+        docId: snapshot.docs.first.id,
+      );
+      final letters = List<EotLetter>.from(project.eotLetters);
+      letters.sort((a, b) => b.letterDate.compareTo(a.letterDate));
+      return letters;
+    });
+  }
+
+  @override
+  Future<void> addEotLetter({
+    required String projectId,
+    required EotLetter letter,
+    required PlatformFile file,
+    String? auditEmployeeId,
+    String? auditEmployeeName,
+  }) async {
+    try {
+      final project = await getProjectById(projectId);
+      final safeFolder = (project?.projectCode.isNotEmpty == true
+              ? project!.projectCode
+              : projectId)
+          .replaceAll('/', '_');
+
+      // 1. Upload letter document
+      final uploadedDocs =
+          await _uploadFiles(safeFolder, 'eot_letters', [file]);
+      final attachedDoc =
+          uploadedDocs.isNotEmpty ? uploadedDocs.first : letter.document;
+
+      final newLetter = letter.copyWith(
+        document: attachedDoc,
+        createdAt: DateTime.now(),
+      );
+
+      // 2. Append to project.eotLetters
+      final updatedList = project != null
+          ? List<EotLetter>.from(project.eotLetters)
+          : <EotLetter>[];
+      updatedList.add(newLetter);
+
+      // 3. Find the latest extended completion date
+      DateTime? maxExtendedDate = newLetter.extendedCompletionDate;
+      for (final eot in updatedList) {
+        if (maxExtendedDate == null ||
+            eot.extendedCompletionDate.isAfter(maxExtendedDate)) {
+          maxExtendedDate = eot.extendedCompletionDate;
+        }
+      }
+
+      final now = DateTime.now();
+      final updateData = <String, dynamic>{
+        'eot_letters': updatedList.map((e) => e.toJson()).toList(),
+        'revised_completion_date': maxExtendedDate?.toIso8601String(),
+        'updated_at': now.toIso8601String(),
+      };
+      if (auditEmployeeId != null && auditEmployeeId.isNotEmpty) {
+        updateData['updated_by'] = auditEmployeeId;
+      }
+      if (auditEmployeeName != null && auditEmployeeName.isNotEmpty) {
+        updateData['updated_by_name'] = auditEmployeeName;
+      }
+
+      await _projectsRef.doc(projectId).update(updateData);
+
+      // 4. Record Audit Log
+      final auditDoc = _auditLogsRef(projectId).doc();
+      final log = ProjectAuditLog(
+        id: auditDoc.id,
+        projectId: projectId,
+        employeeId: auditEmployeeId ?? 'EMP-SYSTEM',
+        employeeName: auditEmployeeName ?? 'Project Team',
+        designation: 'Operations',
+        changeNote:
+            'Recorded EOT Approval Letter (Ref: ${newLetter.letterRefNo}). Extended Target Date: ${DateFormat('dd-MM-yyyy').format(newLetter.extendedCompletionDate)} (+${newLetter.extendedDays} days). Reason: ${newLetter.reason}',
+        timestamp: now,
+      );
+      await auditDoc.set(log.toJson());
+    } catch (e, stack) {
+      developer.log('Error adding EOT letter: $e',
+          name: 'FirebaseProjectRepository', error: e, stackTrace: stack);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> deleteEotLetter({
+    required String projectId,
+    required String letterId,
+  }) async {
+    try {
+      final project = await getProjectById(projectId);
+      if (project == null) return;
+      final updatedList =
+          project.eotLetters.where((e) => e.id != letterId).toList();
+      DateTime? maxExtendedDate;
+      for (final eot in updatedList) {
+        if (maxExtendedDate == null ||
+            eot.extendedCompletionDate.isAfter(maxExtendedDate)) {
+          maxExtendedDate = eot.extendedCompletionDate;
+        }
+      }
+      await _projectsRef.doc(projectId).update({
+        'eot_letters': updatedList.map((e) => e.toJson()).toList(),
+        'revised_completion_date': maxExtendedDate?.toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e, stack) {
+      developer.log('Error deleting EOT letter: $e',
+          name: 'FirebaseProjectRepository', error: e, stackTrace: stack);
+      rethrow;
+    }
+  }
+
+  // ── Payment Received & Completion Certificate Automation ──
+  @override
+  Future<void> recordPaymentReceived({
+    required String projectId,
+    required double amount,
+    DateTime? paymentDate,
+    String? remarks,
+    List<DeductionEntry>? deductions,
+    String? recordedBy,
+    String? recordedByName,
+  }) async {
+    try {
+      final project = await getProjectById(projectId);
+      if (project == null) throw Exception('Project not found');
+
+      final effectivePaymentDate = paymentDate ?? DateTime.now();
+      final deadline = effectivePaymentDate.add(const Duration(days: 30));
+      final taskId = 'TASK-CC-${DateTime.now().millisecondsSinceEpoch}';
+
+      // 1. Auto-create follow-up task in 'tasks' collection
+      try {
+        final assignedTo = project.assignedToEmployeeNames.isNotEmpty
+            ? project.assignedToEmployeeNames.first
+            : (project.employeeName.isNotEmpty ? project.employeeName : 'All');
+
+        await _firestore.collection('tasks').doc(taskId).set({
+          'id': taskId,
+          'title':
+              'Upload Completion Certificate - ${project.projectCode}',
+          'project_or_office_code': project.projectCode,
+          'assigned_by': recordedByName ?? 'Finance Team',
+          'assigned_to': assignedTo,
+          'created_at': DateTime.now().toIso8601String(),
+          'start_time': DateTime.now().toIso8601String(),
+          'status': 'TODO',
+          'priority': 'LOW', // Low (30 days SLA)
+          'sla_duration_hours': 720, // 30 days
+          'deadline': deadline.toIso8601String(),
+          'is_paused': false,
+          'accumulated_seconds': 0,
+          'completion_description':
+              'Follow-up Task: Payment received on ${DateFormat('dd-MM-yyyy').format(effectivePaymentDate)}. Upload project completion certificate to Company Document Vault within 30 days.',
+        });
+      } catch (taskErr) {
+        developer.log('Non-critical: Task creation failed: $taskErr',
+            name: 'FirebaseProjectRepository');
+      }
+
+      // 2. Notify project team in 'notifications' collection
+      try {
+        final notifDoc = _firestore.collection('notifications').doc();
+        await notifDoc.set({
+          'id': notifDoc.id,
+          'title': 'Action Required: Upload Completion Certificate',
+          'message':
+              'Payment of ₹${NumberFormat('#,##,###.##').format(amount)} received for ${project.projectCode} (${project.projectName}). Upload Completion Certificate within 30 days (Deadline: ${DateFormat('dd-MM-yyyy').format(deadline)}).',
+          'type': 'completion_certificate_reminder',
+          'required_permission': '',
+          'sender_id': recordedBy ?? 'SYSTEM',
+          'sender_name': recordedByName ?? 'Finance System',
+          'route': '/projects/manage/$projectId',
+          'created_at': DateTime.now().toIso8601String(),
+          'read_by_employee_ids': <String>[],
+          'metadata': {
+            'project_id': projectId,
+            'project_code': project.projectCode,
+            'task_id': taskId,
+            'deadline': deadline.toIso8601String(),
+          },
+        });
+      } catch (notifErr) {
+        developer.log('Non-critical: Notification failed: $notifErr',
+            name: 'FirebaseProjectRepository');
+      }
+
+      // 3. Update SiteProject in Firestore
+      final now = DateTime.now();
+      final updateData = <String, dynamic>{
+        'payment_amount': amount,
+        'payment_received_date': effectivePaymentDate.toIso8601String(),
+        'completion_certificate_deadline': deadline.toIso8601String(),
+        'completion_certificate_task_id': taskId,
+        'updated_at': now.toIso8601String(),
+      };
+      if (remarks != null && remarks.isNotEmpty) {
+        updateData['payment_received_remark'] = remarks;
+      }
+      if (deductions != null) {
+        updateData['deductions'] = deductions.map((d) => d.toJson()).toList();
+      }
+      if (recordedBy != null && recordedBy.isNotEmpty) {
+        updateData['updated_by'] = recordedBy;
+      }
+      if (recordedByName != null && recordedByName.isNotEmpty) {
+        updateData['updated_by_name'] = recordedByName;
+      }
+
+      await _projectsRef.doc(projectId).update(updateData);
+
+      // 4. Record Audit Log
+      final auditDoc = _auditLogsRef(projectId).doc();
+      final log = ProjectAuditLog(
+        id: auditDoc.id,
+        projectId: projectId,
+        employeeId: recordedBy ?? 'EMP-FINANCE',
+        employeeName: recordedByName ?? 'Finance Team',
+        designation: 'Accounts',
+        changeNote:
+            'Recorded Payment Received: ₹${NumberFormat('#,##,###.##').format(amount)}. Triggered 30-day Completion Certificate deadline (${DateFormat('dd-MM-yyyy').format(deadline)}) & follow-up task ($taskId).',
+        timestamp: now,
+      );
+      await auditDoc.set(log.toJson());
+    } catch (e, stack) {
+      developer.log('Error recording payment received: $e',
+          name: 'FirebaseProjectRepository', error: e, stackTrace: stack);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> uploadCompletionCertificate({
+    required String projectId,
+    required PlatformFile file,
+    required String title,
+    String? remarks,
+    String? uploadedBy,
+    String? uploadedByName,
+  }) async {
+    try {
+      final project = await getProjectById(projectId);
+      if (project == null) throw Exception('Project not found');
+
+      // 1. Upload to Storage & Save to Company Document Vault under Experience Certificates
+      final companyDocRef = _firestore.collection('company_documents').doc();
+      final safeName = file.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+      final storagePath =
+          'company_documents/EXP_CERT/${companyDocRef.id}_$safeName';
+
+      String downloadUrl = '';
+      try {
+        final ref = _storage.ref().child(storagePath);
+        final bytes = file.bytes ?? Uint8List(0);
+        final contentType = file.name.toLowerCase().endsWith('.pdf')
+            ? 'application/pdf'
+            : 'image/jpeg';
+        final uploadTask = await ref.putData(
+          bytes,
+          SettableMetadata(contentType: contentType),
+        );
+        downloadUrl = await uploadTask.ref.getDownloadURL();
+      } catch (storageErr) {
+        developer.log(
+          'Firebase Storage putData failed ($storageErr). Saving as data URI fallback.',
+          name: 'FirebaseProjectRepository',
+        );
+        final bytes = file.bytes ?? Uint8List(0);
+        final base64Str = base64Encode(bytes);
+        downloadUrl = 'data:application/pdf;base64,$base64Str';
+      }
+
+      final now = DateTime.now();
+      final projectDoc = ProjectDocument(
+        name: file.name,
+        size: file.size,
+        downloadUrl: downloadUrl,
+        storagePath: storagePath,
+        uploadedAt: now,
+      );
+
+      final vaultTitle = title.trim().isNotEmpty
+          ? title.trim()
+          : '${project.projectCode} Completion Certificate';
+
+      final vaultItemData = {
+        'id': companyDocRef.id,
+        'doc_type': 'EXP_CERT',
+        'title': vaultTitle,
+        'project_code': project.projectCode,
+        'document': projectDoc.toJson(),
+        'created_at': now.toIso8601String(),
+      };
+      await companyDocRef.set(vaultItemData);
+
+      // 2. Update Project status
+      await _projectsRef.doc(projectId).update({
+        'is_completion_certificate_uploaded': true,
+        'completion_certificate_uploaded_at': now.toIso8601String(),
+        'completion_certificate_doc_id': companyDocRef.id,
+        'updated_at': now.toIso8601String(),
+      });
+
+      // 3. Mark Follow-up Task as Completed (if any)
+      if (project.completionCertificateTaskId != null &&
+          project.completionCertificateTaskId!.isNotEmpty) {
+        try {
+          await _firestore
+              .collection('tasks')
+              .doc(project.completionCertificateTaskId)
+              .update({
+            'status': 'COMPLETED',
+            'end_time': now.toIso8601String(),
+            'completion_description':
+                'Completion Certificate uploaded to Company Document Vault under Experience Certificates by ${uploadedByName ?? "User"}.',
+          });
+        } catch (_) {}
+      }
+
+      // 4. Record Audit Log
+      final auditDoc = _auditLogsRef(projectId).doc();
+      final log = ProjectAuditLog(
+        id: auditDoc.id,
+        projectId: projectId,
+        employeeId: uploadedBy ?? 'EMP-SYSTEM',
+        employeeName: uploadedByName ?? 'Project Team',
+        designation: 'Operations',
+        changeNote:
+            'Uploaded Completion Certificate ($vaultTitle). Saved to Company Document Vault under Experience Certificates.',
+        timestamp: now,
+      );
+      await auditDoc.set(log.toJson());
+    } catch (e, stack) {
+      developer.log('Error uploading completion certificate: $e',
           name: 'FirebaseProjectRepository', error: e, stackTrace: stack);
       rethrow;
     }

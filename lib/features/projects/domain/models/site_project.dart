@@ -1,4 +1,5 @@
 import 'deduction_entry.dart';
+import 'eot_letter.dart';
 import 'project_breakdown_item.dart';
 import 'project_budget.dart';
 import 'project_document.dart';
@@ -90,6 +91,8 @@ class SiteProject {
     this.siteHandoverDate,
     this.workStartDate,
     this.targetCompletionDate,
+    this.eotLetters = const [],
+    this.revisedCompletionDate,
     // Section 12 – BOQ
     this.boqRemark = '',
     this.boqDocuments = const [],
@@ -127,6 +130,12 @@ class SiteProject {
     this.paymentReceivedRemark = '',
     this.paymentAmount = 0.0,
     this.deductions = const [],
+    this.paymentReceivedDate,
+    this.completionCertificateDeadline,
+    this.isCompletionCertificateUploaded = false,
+    this.completionCertificateUploadedAt,
+    this.completionCertificateDocId,
+    this.completionCertificateTaskId,
     // Section 24 – EMD Retention Receivable Date
     this.emdRetentionRemark = '',
     this.emdRetentionAmount = 0.0,
@@ -268,6 +277,8 @@ class SiteProject {
   final DateTime? siteHandoverDate;
   final DateTime? workStartDate;
   final DateTime? targetCompletionDate;
+  final List<EotLetter> eotLetters;
+  final DateTime? revisedCompletionDate;
 
   // Section 12 – BOQ
   final String boqRemark;
@@ -317,6 +328,12 @@ class SiteProject {
   final String paymentReceivedRemark;
   final double paymentAmount;
   final List<DeductionEntry> deductions;
+  final DateTime? paymentReceivedDate;
+  final DateTime? completionCertificateDeadline;
+  final bool isCompletionCertificateUploaded;
+  final DateTime? completionCertificateUploadedAt;
+  final String? completionCertificateDocId;
+  final String? completionCertificateTaskId;
 
   // Section 24 – EMD Retention Receivable Date
   final String emdRetentionRemark;
@@ -366,6 +383,24 @@ class SiteProject {
     final dates = [sdRetentionDate, emdRetentionDate, otherRetentionDate];
     return dates.any((d) => d != null && !d.isAfter(threshold));
   }
+
+  DateTime? get effectiveTargetCompletionDate =>
+      revisedCompletionDate ?? targetCompletionDate;
+
+  int get completionCertificateDaysRemaining {
+    if (completionCertificateDeadline == null) return 30;
+    return completionCertificateDeadline!.difference(DateTime.now()).inDays;
+  }
+
+  bool get isCompletionCertificateOverdue {
+    if (isCompletionCertificateUploaded) return false;
+    if (completionCertificateDeadline == null) return false;
+    return DateTime.now().isAfter(completionCertificateDeadline!);
+  }
+
+  String get projectName => generalDetails.isNotEmpty
+      ? generalDetails
+      : (projectCode.isNotEmpty ? projectCode : clientName);
 
   String get effectiveStatus =>
       shouldAutoReopenForRetention ? 'Active' : status;
@@ -453,6 +488,8 @@ class SiteProject {
         'site_handover_date': siteHandoverDate?.toIso8601String(),
         'work_start_date': workStartDate?.toIso8601String(),
         'target_completion_date': targetCompletionDate?.toIso8601String(),
+        'eot_letters': eotLetters.map((e) => e.toJson()).toList(),
+        'revised_completion_date': revisedCompletionDate?.toIso8601String(),
         // BOQ
         'boq_remark': boqRemark,
         'boq_documents': boqDocuments.map((d) => d.toJson()).toList(),
@@ -496,6 +533,14 @@ class SiteProject {
         'payment_received_remark': paymentReceivedRemark,
         'payment_amount': paymentAmount,
         'deductions': deductions.map((d) => d.toJson()).toList(),
+        'payment_received_date': paymentReceivedDate?.toIso8601String(),
+        'completion_certificate_deadline':
+            completionCertificateDeadline?.toIso8601String(),
+        'is_completion_certificate_uploaded': isCompletionCertificateUploaded,
+        'completion_certificate_uploaded_at':
+            completionCertificateUploadedAt?.toIso8601String(),
+        'completion_certificate_doc_id': completionCertificateDocId,
+        'completion_certificate_task_id': completionCertificateTaskId,
         // EMD Retention
         'emd_retention_remark': emdRetentionRemark,
         'emd_retention_amount': emdRetentionAmount,
@@ -536,6 +581,16 @@ class SiteProject {
         return raw
             .map((item) =>
                 ProjectDocument.fromJson(Map<String, dynamic>.from(item as Map)))
+            .toList();
+      }
+      return const [];
+    }
+
+    List<EotLetter> parseEotList(dynamic raw) {
+      if (raw is List) {
+        return raw
+            .map((item) =>
+                EotLetter.fromJson(Map<String, dynamic>.from(item as Map)))
             .toList();
       }
       return const [];
@@ -697,6 +752,10 @@ class SiteProject {
       targetCompletionDate: json['target_completion_date'] != null
           ? DateTime.tryParse(json['target_completion_date'].toString())
           : null,
+      eotLetters: parseEotList(json['eot_letters']),
+      revisedCompletionDate: json['revised_completion_date'] != null
+          ? DateTime.tryParse(json['revised_completion_date'].toString())
+          : null,
       // BOQ
       boqRemark: json['boq_remark'] as String? ?? '',
       boqDocuments: parseDocList(json['boq_documents']),
@@ -740,6 +799,19 @@ class SiteProject {
           json['payment_received_remark'] as String? ?? '',
       paymentAmount: (json['payment_amount'] as num?)?.toDouble() ?? 0.0,
       deductions: parseDeductions(json['deductions']),
+      paymentReceivedDate: json['payment_received_date'] != null
+          ? DateTime.tryParse(json['payment_received_date'].toString())
+          : null,
+      completionCertificateDeadline: json['completion_certificate_deadline'] != null
+          ? DateTime.tryParse(json['completion_certificate_deadline'].toString())
+          : null,
+      isCompletionCertificateUploaded:
+          json['is_completion_certificate_uploaded'] as bool? ?? false,
+      completionCertificateUploadedAt: json['completion_certificate_uploaded_at'] != null
+          ? DateTime.tryParse(json['completion_certificate_uploaded_at'].toString())
+          : null,
+      completionCertificateDocId: json['completion_certificate_doc_id'] as String?,
+      completionCertificateTaskId: json['completion_certificate_task_id'] as String?,
       // EMD Retention
       emdRetentionRemark: json['emd_retention_remark'] as String? ?? '',
       emdRetentionAmount:
@@ -866,6 +938,8 @@ class SiteProject {
     DateTime? siteHandoverDate,
     DateTime? workStartDate,
     DateTime? targetCompletionDate,
+    List<EotLetter>? eotLetters,
+    DateTime? revisedCompletionDate,
     // BOQ
     String? boqRemark,
     List<ProjectDocument>? boqDocuments,
@@ -903,6 +977,12 @@ class SiteProject {
     String? paymentReceivedRemark,
     double? paymentAmount,
     List<DeductionEntry>? deductions,
+    DateTime? paymentReceivedDate,
+    DateTime? completionCertificateDeadline,
+    bool? isCompletionCertificateUploaded,
+    DateTime? completionCertificateUploadedAt,
+    String? completionCertificateDocId,
+    String? completionCertificateTaskId,
     // EMD Retention
     String? emdRetentionRemark,
     double? emdRetentionAmount,
@@ -1000,6 +1080,8 @@ class SiteProject {
       siteHandoverDate: siteHandoverDate ?? this.siteHandoverDate,
       workStartDate: workStartDate ?? this.workStartDate,
       targetCompletionDate: targetCompletionDate ?? this.targetCompletionDate,
+      eotLetters: eotLetters ?? this.eotLetters,
+      revisedCompletionDate: revisedCompletionDate ?? this.revisedCompletionDate,
       boqRemark: boqRemark ?? this.boqRemark,
       boqDocuments: boqDocuments ?? this.boqDocuments,
       projectDetailsRemark: projectDetailsRemark ?? this.projectDetailsRemark,
@@ -1031,6 +1113,17 @@ class SiteProject {
           paymentReceivedRemark ?? this.paymentReceivedRemark,
       paymentAmount: paymentAmount ?? this.paymentAmount,
       deductions: deductions ?? this.deductions,
+      paymentReceivedDate: paymentReceivedDate ?? this.paymentReceivedDate,
+      completionCertificateDeadline:
+          completionCertificateDeadline ?? this.completionCertificateDeadline,
+      isCompletionCertificateUploaded:
+          isCompletionCertificateUploaded ?? this.isCompletionCertificateUploaded,
+      completionCertificateUploadedAt:
+          completionCertificateUploadedAt ?? this.completionCertificateUploadedAt,
+      completionCertificateDocId:
+          completionCertificateDocId ?? this.completionCertificateDocId,
+      completionCertificateTaskId:
+          completionCertificateTaskId ?? this.completionCertificateTaskId,
       emdRetentionRemark: emdRetentionRemark ?? this.emdRetentionRemark,
       emdRetentionAmount: emdRetentionAmount ?? this.emdRetentionAmount,
       emdRetentionDate: emdRetentionDate ?? this.emdRetentionDate,

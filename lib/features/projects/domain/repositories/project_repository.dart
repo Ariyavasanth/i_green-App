@@ -1,6 +1,8 @@
 import 'package:file_picker/file_picker.dart';
 
 import '../models/daily_progress_entry.dart';
+import '../models/deduction_entry.dart';
+import '../models/eot_letter.dart';
 import '../models/project_audit_log.dart';
 import '../models/project_breakdown_item.dart';
 import '../models/project_budget.dart';
@@ -104,5 +106,45 @@ abstract class ProjectRepository {
     required List<PlatformFile> mBookPhotos,
     String? recordedBy,
     String? remarks,
+  });
+
+  // ── Extension of Time (EOT) Letters ──
+  Stream<List<EotLetter>> watchEotLetters(String projectCode);
+
+  Future<void> addEotLetter({
+    required String projectId,
+    required EotLetter letter,
+    required PlatformFile file,
+    String? auditEmployeeId,
+    String? auditEmployeeName,
+  });
+
+  Future<void> deleteEotLetter({
+    required String projectId,
+    required String letterId,
+  });
+
+  // ── Payment Received & Completion Certificate Automation ──
+  /// Records payment received, calculates 30-day completion certificate deadline,
+  /// creates a follow-up task, and notifies the project team.
+  Future<void> recordPaymentReceived({
+    required String projectId,
+    required double amount,
+    DateTime? paymentDate,
+    String? remarks,
+    List<DeductionEntry>? deductions,
+    String? recordedBy,
+    String? recordedByName,
+  });
+
+  /// Uploads completion certificate, stores in Company Document Vault under Experience Certificates,
+  /// updates project record, and marks the follow-up task as completed.
+  Future<void> uploadCompletionCertificate({
+    required String projectId,
+    required PlatformFile file,
+    required String title,
+    String? remarks,
+    String? uploadedBy,
+    String? uploadedByName,
   });
 }

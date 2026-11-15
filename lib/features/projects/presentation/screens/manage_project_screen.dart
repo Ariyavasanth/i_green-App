@@ -18,6 +18,8 @@ import '../../../tenders/domain/models/tender.dart';
 import '../../../tenders/providers/company_document_providers.dart';
 import '../../../tenders/providers/tender_providers.dart';
 import '../../domain/models/daily_progress_entry.dart';
+import '../../domain/models/deduction_entry.dart';
+import '../../domain/models/eot_letter.dart';
 import '../../domain/models/project_compliance_record.dart';
 import '../../domain/models/project_document.dart';
 import '../../domain/models/project_inventory_item.dart';
@@ -65,6 +67,7 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
     (number: 12, title: 'Project Expenses', icon: Icons.receipt_outlined),
     (number: 13, title: 'Project Profit / Loss', icon: Icons.assessment_outlined),
     (number: 14, title: 'Project Completion & M-Book', icon: Icons.assignment_turned_in_outlined),
+    (number: 15, title: 'Project Documents', icon: Icons.folder_open_outlined),
   ];
 
   @override
@@ -605,6 +608,8 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
         return _buildSection10ProfitLoss(project, isMobile);
       case 13:
         return _buildSection14ProjectCompletion(project, isMobile);
+      case 14:
+        return _buildSection15ProjectDocuments(project, isMobile);
       default:
         return _buildSection1Overview(project, isMobile);
     }
@@ -1232,8 +1237,26 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
         _buildContentCard(
           title: 'Payment Received & Deductions',
           icon: Icons.payments_outlined,
+          headerTrailing: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF9CC70A),
+              foregroundColor: const Color(0xFF414A51),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => _showRecordPaymentReceivedDialog(project),
+            icon: const Icon(Icons.add_card_rounded, size: 16),
+            label: const Text('Record / Update Payment'),
+          ),
           children: [
-            _buildDetailRow('Total Payment Received', _currencyFormatter.format(project.paymentAmount)),
+            _buildDetailRow(
+              'Total Payment Received',
+              _currencyFormatter.format(project.paymentAmount),
+            ),
+            if (project.paymentReceivedDate != null)
+              _buildDetailRow(
+                'Payment Received Date',
+                DateFormat('dd-MM-yyyy').format(project.paymentReceivedDate!),
+              ),
             if (project.paymentReceivedRemark.isNotEmpty)
               _buildDetailRow('Payment Remarks', project.paymentReceivedRemark),
             const SizedBox(height: 10),
@@ -1263,8 +1286,17 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(d.deductionType, style: const TextStyle(fontSize: 13, color: Color(0xFF414A51))),
-                        Text(_currencyFormatter.format(d.deductionAmount), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF22282D))),
+                        Text(d.deductionType,
+                            style: const TextStyle(
+                                fontSize: 13, color: Color(0xFF414A51))),
+                        Text(
+                          _currencyFormatter.format(d.deductionAmount),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF22282D),
+                          ),
+                        ),
                       ],
                     ),
                   );
@@ -1272,6 +1304,8 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
               ),
           ],
         ),
+        const SizedBox(height: 18),
+        _buildCompletionCertificateComplianceCard(project),
       ],
     );
   }
@@ -1648,6 +1682,537 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
               ),
           ],
         ),
+      ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION 15 — PROJECT DOCUMENTS & EOT LETTERS
+  // ═══════════════════════════════════════════════════════════════════════════
+  Widget _buildSection15ProjectDocuments(SiteProject project, bool isMobile) {
+    final eotList = project.eotLetters;
+    final origTargetDate = project.targetCompletionDate != null
+        ? DateFormat('dd-MM-yyyy').format(project.targetCompletionDate!)
+        : 'Not set';
+    final revisedDate = project.effectiveTargetCompletionDate != null
+        ? DateFormat('dd-MM-yyyy').format(project.effectiveTargetCompletionDate!)
+        : 'Not set';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 1. Extension of Time (EOT) Letters Card
+        _buildContentCard(
+          title: 'Extension of Time (EOT) Approval Letters',
+          icon: Icons.more_time_rounded,
+          headerTrailing: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF9CC70A),
+              foregroundColor: const Color(0xFF414A51),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => _showAddEotLetterDialog(project),
+            icon: const Icon(Icons.add_rounded, size: 16),
+            label: const Text('Add EOT Letter'),
+          ),
+          children: [
+            // Timeline Banner
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAF8),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE5E8E2)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Original Target Date',
+                            style: TextStyle(
+                                fontSize: 11, color: AppColors.textSecondary)),
+                        const SizedBox(height: 2),
+                        Text(origTargetDate,
+                            style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF414A51))),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_rounded,
+                      size: 16, color: Color(0xFF9CC70A)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Current Approved Completion Date',
+                            style: TextStyle(
+                                fontSize: 11, color: AppColors.textSecondary)),
+                        const SizedBox(height: 2),
+                        Text(
+                          revisedDate,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: project.revisedCompletionDate != null
+                                ? const Color(0xFF15803D)
+                                : const Color(0xFF414A51),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (eotList.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9CC70A).withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${eotList.length} EOT Letter(s)',
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF414A51),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (eotList.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAF8),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE5E8E2)),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.description_outlined,
+                        size: 36, color: Colors.grey.shade400),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'No EOT (Extension of Time) letters uploaded yet.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF414A51),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'If the client approves additional time to complete the project, click "Add EOT Letter" to store the approval letter and update the deadline.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Column(
+                children: eotList.map((eot) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE5E8E2)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF9CC70A)
+                                    .withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'Ref: ${eot.letterRefNo}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF414A51),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Letter Date: ${DateFormat('dd-MM-yyyy').format(eot.letterDate)}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const Spacer(),
+                            if (eot.extendedDays > 0)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF0FDF4),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border:
+                                      Border.all(color: const Color(0xFFBBF7D0)),
+                                ),
+                                child: Text(
+                                  '+${eot.extendedDays} Days Extended',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF166534),
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(width: 6),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline,
+                                  size: 18, color: Colors.red),
+                              tooltip: 'Delete EOT Letter',
+                              onPressed: () =>
+                                  _confirmDeleteEotLetter(project, eot),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Text(
+                              'New Completion Date: ',
+                              style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF414A51)),
+                            ),
+                            Text(
+                              DateFormat('dd-MM-yyyy')
+                                  .format(eot.extendedCompletionDate),
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF15803D),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (eot.reason.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Reason: ${eot.reason}',
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.textSecondary),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        if (eot.document.downloadUrl.isNotEmpty ||
+                            eot.document.name.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF4F6F3),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFE5E8E2)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.picture_as_pdf_outlined,
+                                    size: 16, color: Color(0xFF414A51)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    eot.document.name.isNotEmpty
+                                        ? eot.document.name
+                                        : 'EOT Approval Letter',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF414A51),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (eot.document.downloadUrl.isNotEmpty)
+                                  IconButton(
+                                    icon: const Icon(Icons.visibility_outlined,
+                                        size: 16),
+                                    tooltip: 'View Document',
+                                    onPressed: () => _launchDocumentUrl(
+                                        eot.document.downloadUrl),
+                                  ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+          ],
+        ),
+        const SizedBox(height: 18),
+
+        // 2. Completion Certificate & Vault Compliance Card
+        _buildCompletionCertificateComplianceCard(project),
+        const SizedBox(height: 18),
+
+        // 3. Work Order & LOA Documents Card
+        _buildContentCard(
+          title: 'Work Order & LOA Contract Documents',
+          icon: Icons.assignment_outlined,
+          children: [
+            if (project.workOrderRemark.isNotEmpty)
+              _buildDetailRow('Work Order Remarks', project.workOrderRemark),
+            const SizedBox(height: 6),
+            if (project.workOrderDocuments.isEmpty &&
+                project.wrpoDocuments.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'No work order or contract documents uploaded yet.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              )
+            else ...[
+              if (project.workOrderDocuments.isNotEmpty)
+                _buildDocumentsList(
+                    'Work Order / LOA Documents', project.workOrderDocuments),
+              if (project.wrpoDocuments.isNotEmpty)
+                _buildDocumentsList('WRPO Documents', project.wrpoDocuments),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompletionCertificateComplianceCard(SiteProject project) {
+    final hasPayment =
+        project.paymentAmount > 0 || project.paymentReceivedDate != null;
+    final isUploaded = project.isCompletionCertificateUploaded;
+    final isOverdue = project.isCompletionCertificateOverdue;
+    final daysRemaining = project.completionCertificateDaysRemaining;
+    final deadlineText = project.completionCertificateDeadline != null
+        ? DateFormat('dd-MM-yyyy').format(project.completionCertificateDeadline!)
+        : 'Within 30 days of payment';
+
+    return _buildContentCard(
+      title: 'Completion Certificate Compliance (30-Day Rule)',
+      icon: Icons.verified_user_outlined,
+      children: [
+        if (isUploaded)
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFBBF7D0)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.verified_rounded,
+                    color: Color(0xFF16A34A), size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Completion Certificate Uploaded & Saved to Company Vault',
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF166534),
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        project.completionCertificateUploadedAt != null
+                            ? 'Uploaded on ${DateFormat('dd-MM-yyyy').format(project.completionCertificateUploadedAt!)}. Stored in Company Vault under Experience Certificates for future tender BQR participation.'
+                            : 'Stored in Company Vault under Experience Certificates for future tender BQR participation.',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF15803D),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                FilledButton.tonalIcon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFDCFCE7),
+                    foregroundColor: const Color(0xFF166534),
+                  ),
+                  onPressed: () =>
+                      _showUploadCompletionCertificateDialog(project),
+                  icon: const Icon(Icons.upload_file_rounded, size: 15),
+                  label: const Text('Update / Re-upload'),
+                ),
+              ],
+            ),
+          )
+        else if (hasPayment)
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isOverdue
+                  ? const Color(0xFFFEF2F2)
+                  : const Color(0xFFFFFBEB),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isOverdue
+                    ? const Color(0xFFFECACA)
+                    : const Color(0xFFFDE68A),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      isOverdue
+                          ? Icons.warning_amber_rounded
+                          : Icons.hourglass_top_rounded,
+                      color: isOverdue
+                          ? const Color(0xFFDC2626)
+                          : const Color(0xFFD97706),
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isOverdue
+                                ? 'CRITICAL: 30-Day Completion Certificate Deadline OVERDUE'
+                                : '30-Day Deadline Active: $daysRemaining Day(s) Remaining',
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                              color: isOverdue
+                                  ? const Color(0xFF991B1B)
+                                  : const Color(0xFF92400E),
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'After receiving payment, the company must upload the Completion Certificate within 30 days. Deadline: $deadlineText.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isOverdue
+                                  ? const Color(0xFFB91C1C)
+                                  : const Color(0xFFB45309),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isOverdue
+                                    ? const Color(0xFFFCA5A5)
+                                    : const Color(0xFFFCD34D),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.task_alt_rounded,
+                                  size: 13,
+                                  color: isOverdue
+                                      ? const Color(0xFFDC2626)
+                                      : const Color(0xFFD97706),
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  'Auto Follow-up Task: Assigned to Project Team',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: isOverdue
+                                        ? const Color(0xFF991B1B)
+                                        : const Color(0xFF92400E),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF9CC70A),
+                        foregroundColor: const Color(0xFF414A51),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () =>
+                          _showUploadCompletionCertificateDialog(project),
+                      icon: const Icon(Icons.upload_file_rounded, size: 16),
+                      label: const Text('Upload Certificate'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9FAF8),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE5E8E2)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline_rounded,
+                    size: 18, color: Color(0xFF414A51)),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Once client payment is received, the 30-day compliance timer will start, a follow-up task will be created for the project team, and uploaded certificates are automatically archived in the Company Vault under Experience Certificates.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -4668,7 +5233,7 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Text(
-                  'Once uploaded, this certificate will be automatically saved into the Company Document Vault as an Experience Certificate for future tenders.',
+                  'Once uploaded, this certificate will be automatically saved into the Company Document Vault under Experience Certificates for future tender BQR participation, the project compliance status will be updated, and the follow-up task marked completed.',
                   style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                 ),
                 const SizedBox(height: 14),
@@ -4689,7 +5254,7 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                   },
                   icon: const Icon(Icons.attach_file),
                   label: Text(pickedFile == null
-                      ? 'Attach Certificate File *'
+                      ? 'Attach Certificate File (PDF / Image) *'
                       : pickedFile!.name),
                 ),
               ],
@@ -4709,15 +5274,24 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                 if (pickedFile == null) return;
                 Navigator.of(ctx).pop();
                 try {
-                  await ref.read(companyDocumentRepositoryProvider).addDocument(
-                        docType: CompanyDocType.experienceCertificate,
+                  final employee = ref.read(currentEmployeeProvider);
+                  await ref
+                      .read(projectRepositoryProvider)
+                      .uploadCompletionCertificate(
+                        projectId: project.id,
+                        file: pickedFile!,
                         title: titleCtrl.text.trim().isEmpty
                             ? '${project.projectCode} Completion Certificate'
                             : titleCtrl.text.trim(),
-                        file: pickedFile!,
-                        projectCode: project.projectCode,
+                        uploadedBy: employee?.employeeId.isNotEmpty == true
+                            ? employee!.employeeId
+                            : employee?.id.toString(),
+                        uploadedByName:
+                            employee?.fullName ?? employee?.name ?? 'User',
                       );
+                  await _fetchProjectIfMissing();
                   if (mounted) {
+                    setState(() {});
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
@@ -4739,6 +5313,434 @@ class _ManageProjectScreenState extends ConsumerState<ManageProjectScreen> {
                 }
               },
               child: const Text('Save to Vault'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showAddEotLetterDialog(SiteProject project) async {
+    final refNoCtrl = TextEditingController();
+    final reasonCtrl = TextEditingController();
+    DateTime letterDate = DateTime.now();
+    DateTime extendedDate = project.effectiveTargetCompletionDate
+            ?.add(const Duration(days: 30)) ??
+        DateTime.now().add(const Duration(days: 30));
+    PlatformFile? pickedFile;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final baseDate = project.targetCompletionDate ?? letterDate;
+          final diffDays = extendedDate.difference(baseDate).inDays;
+
+          return AlertDialog(
+            title: const Text('Add Extension of Time (EOT) Letter'),
+            content: SizedBox(
+              width: 480,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Store the client\'s extension approval letter to officially extend the target completion date and track timeline revisions.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: refNoCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Letter Reference No. *',
+                        hintText: 'e.g. EOT/2026/042 or LTR-EXT-01',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              final d = await showDatePicker(
+                                context: ctx,
+                                initialDate: letterDate,
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime(2035),
+                              );
+                              if (d != null) {
+                                setDialogState(() => letterDate = d);
+                              }
+                            },
+                            child: InputDecorator(
+                              decoration: const InputDecoration(
+                                labelText: 'Letter Date *',
+                                border: OutlineInputBorder(),
+                                suffixIcon: Icon(
+                                    Icons.calendar_today_rounded,
+                                    size: 18),
+                              ),
+                              child: Text(
+                                  DateFormat('dd-MM-yyyy').format(letterDate)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              final d = await showDatePicker(
+                                context: ctx,
+                                initialDate: extendedDate,
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime(2035),
+                              );
+                              if (d != null) {
+                                setDialogState(() => extendedDate = d);
+                              }
+                            },
+                            child: InputDecorator(
+                              decoration: const InputDecoration(
+                                labelText: 'New Extended Date *',
+                                border: OutlineInputBorder(),
+                                suffixIcon: Icon(
+                                    Icons.event_available_rounded,
+                                    size: 18),
+                              ),
+                              child: Text(DateFormat('dd-MM-yyyy')
+                                  .format(extendedDate)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAF8),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFE5E8E2)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.timer_outlined,
+                              size: 16, color: Color(0xFF414A51)),
+                          const SizedBox(width: 8),
+                          Text(
+                            diffDays > 0
+                                ? 'Additional Days Granted: +$diffDays days'
+                                : 'Same as original target date',
+                            style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF414A51)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: reasonCtrl,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'Reason for Extension *',
+                        hintText:
+                            'e.g. Delay in site handover by client / Unseasonal heavy rainfall',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final res = await FilePicker.pickFiles(withData: true);
+                        if (res != null && res.files.isNotEmpty) {
+                          setDialogState(() => pickedFile = res.files.first);
+                        }
+                      },
+                      icon: const Icon(Icons.attach_file),
+                      label: Text(pickedFile == null
+                          ? 'Attach Approval Letter (PDF / Image) *'
+                          : pickedFile!.name),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF9CC70A),
+                  foregroundColor: const Color(0xFF414A51),
+                ),
+                onPressed: () async {
+                  if (refNoCtrl.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content:
+                              Text('Please enter Letter Reference Number')),
+                    );
+                    return;
+                  }
+                  if (pickedFile == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content:
+                              Text('Please attach the approval letter file')),
+                    );
+                    return;
+                  }
+                  Navigator.of(ctx).pop();
+                  try {
+                    final employee = ref.read(currentEmployeeProvider);
+                    final letter = EotLetter(
+                      id: 'EOT-${DateTime.now().millisecondsSinceEpoch}',
+                      projectCode: project.projectCode,
+                      letterRefNo: refNoCtrl.text.trim(),
+                      letterDate: letterDate,
+                      extendedCompletionDate: extendedDate,
+                      extendedDays: diffDays > 0 ? diffDays : 0,
+                      reason: reasonCtrl.text.trim(),
+                      document: ProjectDocument(
+                        name: pickedFile!.name,
+                        size: pickedFile!.size,
+                        downloadUrl: '',
+                        storagePath: '',
+                        uploadedAt: DateTime.now(),
+                      ),
+                      uploadedBy: employee?.employeeId.isNotEmpty == true
+                          ? employee!.employeeId
+                          : (employee?.id.toString() ?? 'EMP-USER'),
+                      uploadedByName: employee?.fullName ??
+                          employee?.name ??
+                          'Operations',
+                      createdAt: DateTime.now(),
+                    );
+                    await ref.read(projectRepositoryProvider).addEotLetter(
+                          projectId: project.id,
+                          letter: letter,
+                          file: pickedFile!,
+                          auditEmployeeId:
+                              employee?.employeeId.isNotEmpty == true
+                                  ? employee!.employeeId
+                                  : employee?.id.toString(),
+                          auditEmployeeName:
+                              employee?.fullName ?? employee?.name,
+                        );
+                    await _fetchProjectIfMissing();
+                    if (mounted) {
+                      setState(() {});
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              'EOT Approval Letter saved and target date revised.'),
+                          backgroundColor: Color(0xFF2E7D32),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to save EOT letter: $e'),
+                          backgroundColor: Colors.red.shade700,
+                        ),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Save EOT Letter'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteEotLetter(
+      SiteProject project, EotLetter letter) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete EOT Letter'),
+        content: Text(
+            'Are you sure you want to delete EOT letter ${letter.letterRefNo}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ref.read(projectRepositoryProvider).deleteEotLetter(
+              projectId: project.id,
+              letterId: letter.id,
+            );
+        await _fetchProjectIfMissing();
+        if (mounted) {
+          setState(() {});
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('EOT letter deleted successfully.')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('Failed to delete EOT letter: $e'),
+                backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _showRecordPaymentReceivedDialog(SiteProject project) async {
+    final amountCtrl = TextEditingController(
+      text: project.paymentAmount > 0 ? project.paymentAmount.toString() : '',
+    );
+    DateTime paymentDate = project.paymentReceivedDate ?? DateTime.now();
+    final remarksCtrl =
+        TextEditingController(text: project.paymentReceivedRemark);
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Record Payment Received'),
+          content: SizedBox(
+            width: 440,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Recording payment automatically activates the 30-day Completion Certificate deadline, creates a follow-up task, and notifies the project team.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: amountCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Total Payment Amount (₹) *',
+                    prefixText: '₹ ',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final d = await showDatePicker(
+                      context: ctx,
+                      initialDate: paymentDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2035),
+                    );
+                    if (d != null) {
+                      setDialogState(() => paymentDate = d);
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Payment Received Date *',
+                      border: OutlineInputBorder(),
+                      suffixIcon:
+                          Icon(Icons.calendar_today_rounded, size: 18),
+                    ),
+                    child: Text(DateFormat('dd-MM-yyyy').format(paymentDate)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: remarksCtrl,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Payment Remarks (Optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF9CC70A),
+                foregroundColor: const Color(0xFF414A51),
+              ),
+              onPressed: () async {
+                final amt = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
+                if (amt <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Please enter a valid payment amount')),
+                  );
+                  return;
+                }
+                Navigator.of(ctx).pop();
+                try {
+                  final employee = ref.read(currentEmployeeProvider);
+                  await ref
+                      .read(projectRepositoryProvider)
+                      .recordPaymentReceived(
+                        projectId: project.id,
+                        amount: amt,
+                        paymentDate: paymentDate,
+                        remarks: remarksCtrl.text.trim(),
+                        deductions: project.deductions,
+                        recordedBy: employee?.employeeId.isNotEmpty == true
+                            ? employee!.employeeId
+                            : employee?.id.toString(),
+                        recordedByName:
+                            employee?.fullName ?? employee?.name ?? 'Finance',
+                      );
+                  await _fetchProjectIfMissing();
+                  if (mounted) {
+                    setState(() {});
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Payment recorded. 30-day Completion Certificate deadline and follow-up task triggered.',
+                        ),
+                        backgroundColor: Color(0xFF2E7D32),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                          content: Text('Failed to record payment: $e'),
+                          backgroundColor: Colors.red),
+                    );
+                  }
+                }
+              },
+              child: const Text('Save Payment'),
             ),
           ],
         ),
