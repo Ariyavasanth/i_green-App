@@ -13,9 +13,23 @@ abstract class CompanyDocumentRepository {
     String? financialYear,
     String? monthYear,
     String? projectCode,
+    DateTime? startDate,
     DateTime? expiryDate,
+    int alertBeforeDays = 30,
+  });
+
+  Future<CompanyDocumentItem> updateDocument({
+    required CompanyDocumentItem existing,
+    required CompanyDocType docType,
+    required String title,
+    PlatformFile? newFile,
+    String? financialYear,
+    String? monthYear,
+    String? projectCode,
+    DateTime? startDate,
+    DateTime? expiryDate,
+    int alertBeforeDays = 30,
   });
 
   Future<void> deleteDocument(String id);
 }
-

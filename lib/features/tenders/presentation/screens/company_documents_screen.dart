@@ -21,15 +21,25 @@ class _CompanyDocumentsScreenState
   CompanyDocType? _filterType;
   bool _isUploading = false;
 
-  Future<void> _showAddDocumentDialog() async {
-    CompanyDocType selectedType = CompanyDocType.itr;
-    final titleCtrl = TextEditingController();
-    final fyCtrl = TextEditingController(text: '${DateTime.now().year - 1}-${DateTime.now().year}');
-    final monthCtrl = TextEditingController(
-      text: '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}',
+  Future<void> _showDocumentDialog({CompanyDocumentItem? existing}) async {
+    final isEdit = existing != null;
+    CompanyDocType selectedType = existing?.docType ?? CompanyDocType.itr;
+    final titleCtrl = TextEditingController(text: existing?.title ?? '');
+    final fyCtrl = TextEditingController(
+      text: existing?.financialYear ??
+          '${DateTime.now().year - 1}-${DateTime.now().year}',
     );
-    final projectCodeCtrl = TextEditingController();
-    DateTime? expiryDate;
+    final monthCtrl = TextEditingController(
+      text: existing?.monthYear ??
+          '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}',
+    );
+    final projectCodeCtrl =
+        TextEditingController(text: existing?.projectCode ?? '');
+    final alertDaysCtrl = TextEditingController(
+      text: (existing?.alertBeforeDays ?? 30).toString(),
+    );
+    DateTime? startDate = existing?.startDate;
+    DateTime? expiryDate = existing?.expiryDate;
     PlatformFile? pickedFile;
 
     await showDialog(
@@ -40,15 +50,28 @@ class _CompanyDocumentsScreenState
           final needsMonth = selectedType == CompanyDocType.pfChallan ||
               selectedType == CompanyDocType.esiChallan ||
               selectedType == CompanyDocType.gstChallan;
-          final needsProject = selectedType == CompanyDocType.experienceCertificate;
-          final needsExpiry = selectedType == CompanyDocType.license ||
+          final needsProject =
+              selectedType == CompanyDocType.experienceCertificate;
+          final isExpiryPrimary = selectedType == CompanyDocType.license ||
               selectedType == CompanyDocType.vendorAuth ||
               selectedType == CompanyDocType.registration;
+          final supportsValidityDates = isExpiryPrimary ||
+              selectedType == CompanyDocType.pfCertificate ||
+              selectedType == CompanyDocType.esiCertificate ||
+              selectedType == CompanyDocType.gstCertificate ||
+              selectedType == CompanyDocType.experienceCertificate;
 
           return AlertDialog(
-            title: const Text('Add Company Document'),
+            title: Text(
+              isEdit ? 'Edit / Renew Document' : 'Add Company Document',
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                color: Color(0xFF414A51),
+              ),
+            ),
             content: SizedBox(
-              width: 440,
+              width: 460,
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -92,12 +115,38 @@ class _CompanyDocumentsScreenState
                     ],
                     if (needsMonth) ...[
                       const SizedBox(height: 12),
-                      TextField(
-                        controller: monthCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Month-Year (YYYY-MM)',
-                          border: OutlineInputBorder(),
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: monthCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Month-Year (YYYY-MM)',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton.outlined(
+                            tooltip: 'Pick Month from Calendar',
+                            icon: const Icon(Icons.calendar_month_rounded),
+                            onPressed: () async {
+                              final picked = await showDatePicker(
+                                context: ctx,
+                                initialDate: DateTime.now(),
+                                firstDate: DateTime(2015),
+                                lastDate: DateTime(2040),
+                                helpText: 'Select Challan Month',
+                              );
+                              if (picked != null) {
+                                setDialogState(() {
+                                  monthCtrl.text =
+                                      '${picked.year}-${picked.month.toString().padLeft(2, '0')}';
+                                });
+                              }
+                            },
+                          ),
+                        ],
                       ),
                     ],
                     if (needsProject) ...[
@@ -110,27 +159,88 @@ class _CompanyDocumentsScreenState
                         ),
                       ),
                     ],
-                    if (needsExpiry) ...[
+                    if (supportsValidityDates) ...[
                       const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: () async {
-                          final picked = await showDatePicker(
-                            context: ctx,
-                            initialDate: DateTime.now().add(const Duration(days: 90)),
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime(2040),
-                          );
-                          if (picked != null) {
-                            setDialogState(() => expiryDate = picked);
-                          }
-                        },
-                        icon: const Icon(Icons.event_rounded),
-                        label: Text(
-                          expiryDate == null
-                              ? 'Select Expiry Date'
-                              : 'Expires: ${DateFormat('dd-MM-yyyy').format(expiryDate!)}',
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                final picked = await showDatePicker(
+                                  context: ctx,
+                                  initialDate: startDate ?? DateTime.now(),
+                                  firstDate: DateTime(2000),
+                                  lastDate: DateTime(2045),
+                                  helpText: 'Select Start / Issue Date',
+                                );
+                                if (picked != null) {
+                                  setDialogState(() {
+                                    startDate = picked;
+                                    if (expiryDate != null &&
+                                        expiryDate!.isBefore(picked)) {
+                                      expiryDate = null;
+                                    }
+                                  });
+                                }
+                              },
+                              icon: const Icon(Icons.event_available_rounded,
+                                  size: 16),
+                              label: Text(
+                                startDate == null
+                                    ? 'Start Date'
+                                    : 'Start: ${DateFormat('dd-MM-yyyy').format(startDate!)}',
+                                style: const TextStyle(fontSize: 12),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                final picked = await showDatePicker(
+                                  context: ctx,
+                                  initialDate: expiryDate ??
+                                      (startDate ?? DateTime.now())
+                                          .add(const Duration(days: 365)),
+                                  firstDate: startDate ?? DateTime(2000),
+                                  lastDate: DateTime(2050),
+                                  helpText: 'Select Expiry Date',
+                                );
+                                if (picked != null) {
+                                  setDialogState(() => expiryDate = picked);
+                                }
+                              },
+                              icon: const Icon(Icons.event_busy_rounded,
+                                  size: 16),
+                              label: Text(
+                                expiryDate == null
+                                    ? (isExpiryPrimary
+                                        ? 'Expiry Date *'
+                                        : 'Expiry (Optional)')
+                                    : 'Exp: ${DateFormat('dd-MM-yyyy').format(expiryDate!)}',
+                                style: const TextStyle(fontSize: 12),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
+                      if (expiryDate != null || isExpiryPrimary) ...[
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: alertDaysCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Alert Before Expiry (Days)',
+                            helperText:
+                                'Notification alert triggers this many days before expiry',
+                            border: OutlineInputBorder(),
+                            prefixIcon:
+                                Icon(Icons.notifications_active_outlined),
+                          ),
+                        ),
+                      ],
                     ],
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
@@ -144,9 +254,11 @@ class _CompanyDocumentsScreenState
                       },
                       icon: const Icon(Icons.attach_file_rounded),
                       label: Text(
-                        pickedFile == null
-                            ? 'Choose File'
-                            : pickedFile!.name,
+                        pickedFile != null
+                            ? pickedFile!.name
+                            : (isEdit
+                                ? 'Replace File (Current: ${existing.document.name})'
+                                : 'Choose File'),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -165,26 +277,52 @@ class _CompanyDocumentsScreenState
                   foregroundColor: const Color(0xFF414A51),
                 ),
                 onPressed: () async {
-                  if (pickedFile == null) return;
+                  if (!isEdit && pickedFile == null) return;
+                  final parsedAlertDays =
+                      int.tryParse(alertDaysCtrl.text.trim()) ?? 30;
+                  final safeAlertDays =
+                      parsedAlertDays < 1 ? 1 : parsedAlertDays;
+                  final finalTitle = titleCtrl.text.trim().isEmpty
+                      ? selectedType.label
+                      : titleCtrl.text.trim();
+
                   Navigator.of(ctx).pop();
                   setState(() => _isUploading = true);
                   try {
-                    await ref.read(companyDocumentRepositoryProvider).addDocument(
-                          docType: selectedType,
-                          title: titleCtrl.text.trim().isEmpty
-                              ? selectedType.label
-                              : titleCtrl.text.trim(),
-                          file: pickedFile!,
-                          financialYear: needsFy ? fyCtrl.text.trim() : null,
-                          monthYear: needsMonth ? monthCtrl.text.trim() : null,
-                          projectCode: needsProject ? projectCodeCtrl.text.trim() : null,
-                          expiryDate: needsExpiry ? expiryDate : null,
-                        );
+                    final repo = ref.read(companyDocumentRepositoryProvider);
+                    if (isEdit) {
+                      await repo.updateDocument(
+                        existing: existing,
+                        docType: selectedType,
+                        title: finalTitle,
+                        newFile: pickedFile,
+                        financialYear: needsFy ? fyCtrl.text.trim() : null,
+                        monthYear: needsMonth ? monthCtrl.text.trim() : null,
+                        projectCode:
+                            needsProject ? projectCodeCtrl.text.trim() : null,
+                        startDate: supportsValidityDates ? startDate : null,
+                        expiryDate: supportsValidityDates ? expiryDate : null,
+                        alertBeforeDays: safeAlertDays,
+                      );
+                    } else {
+                      await repo.addDocument(
+                        docType: selectedType,
+                        title: finalTitle,
+                        file: pickedFile!,
+                        financialYear: needsFy ? fyCtrl.text.trim() : null,
+                        monthYear: needsMonth ? monthCtrl.text.trim() : null,
+                        projectCode:
+                            needsProject ? projectCodeCtrl.text.trim() : null,
+                        startDate: supportsValidityDates ? startDate : null,
+                        expiryDate: supportsValidityDates ? expiryDate : null,
+                        alertBeforeDays: safeAlertDays,
+                      );
+                    }
                   } finally {
                     if (mounted) setState(() => _isUploading = false);
                   }
                 },
-                child: const Text('Upload'),
+                child: Text(isEdit ? 'Save Changes' : 'Upload'),
               ),
             ],
           );
@@ -235,7 +373,7 @@ class _CompanyDocumentsScreenState
                   backgroundColor: const Color(0xFF9CC70A),
                   foregroundColor: const Color(0xFF414A51),
                 ),
-                onPressed: _showAddDocumentDialog,
+                onPressed: () => _showDocumentDialog(),
                 icon: const Icon(Icons.upload_file_rounded, size: 18),
                 label: const Text('Upload Document'),
               ),
@@ -246,10 +384,14 @@ class _CompanyDocumentsScreenState
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('Error: $err')),
         data: (docs) {
-          final missingPf = findMissingChallanMonths(docs, CompanyDocType.pfChallan);
-          final missingEsi = findMissingChallanMonths(docs, CompanyDocType.esiChallan);
-          final missingGst = findMissingChallanMonths(docs, CompanyDocType.gstChallan);
-          final expiring = docs.where((d) => d.isExpiringSoon || d.isExpired).toList();
+          final missingPf =
+              findMissingChallanMonths(docs, CompanyDocType.pfChallan);
+          final missingEsi =
+              findMissingChallanMonths(docs, CompanyDocType.esiChallan);
+          final missingGst =
+              findMissingChallanMonths(docs, CompanyDocType.gstChallan);
+          final expiring =
+              docs.where((d) => d.isExpiringSoon || d.isExpired).toList();
 
           final filtered = _filterType == null
               ? docs
@@ -282,15 +424,25 @@ class _CompanyDocumentsScreenState
                         ),
                         const SizedBox(height: 6),
                         if (missingPf.isNotEmpty)
-                          Text('• Missing PF Challans: ${missingPf.join(", ")}'),
+                          Text(
+                              '• Missing PF Challans: ${missingPf.join(", ")}'),
                         if (missingEsi.isNotEmpty)
-                          Text('• Missing ESI Challans: ${missingEsi.join(", ")}'),
+                          Text(
+                              '• Missing ESI Challans: ${missingEsi.join(", ")}'),
                         if (missingGst.isNotEmpty)
-                          Text('• Missing GST Challans: ${missingGst.join(", ")}'),
+                          Text(
+                              '• Missing GST Challans: ${missingGst.join(", ")}'),
                         for (final exp in expiring)
                           Text(
-                            '• ${exp.title} (${exp.isExpired ? "EXPIRED" : "Expiring Soon"}: ${DateFormat("dd-MM-yyyy").format(exp.expiryDate!)})',
-                            style: const TextStyle(color: Colors.red),
+                            exp.isExpired
+                                ? '• ${exp.title} (EXPIRED on ${DateFormat("dd-MM-yyyy").format(exp.expiryDate!)})'
+                                : '• ${exp.title} (Expires in ${exp.daysUntilExpiry} day(s) on ${DateFormat("dd-MM-yyyy").format(exp.expiryDate!)})',
+                            style: TextStyle(
+                              color: exp.isExpired
+                                  ? Colors.red.shade700
+                                  : const Color(0xFFB45309),
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                       ],
                     ),
@@ -327,24 +479,91 @@ class _CompanyDocumentsScreenState
                 ...filtered.map(
                   (doc) => Card(
                     margin: const EdgeInsets.only(bottom: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: BorderSide(
+                        color: doc.isExpired
+                            ? Colors.red.shade300
+                            : doc.isExpiringSoon
+                                ? Colors.amber.shade400
+                                : Colors.transparent,
+                      ),
+                    ),
                     child: ListTile(
                       onTap: () => TenderDocumentActions.viewDocument(
                         context,
                         doc.document,
                       ),
-                      leading: const Icon(Icons.description_outlined,
-                          color: Color(0xFF414A51)),
-                      title: Text(
-                        doc.title,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      leading: Icon(
+                        doc.isExpired
+                            ? Icons.warning_amber_rounded
+                            : Icons.description_outlined,
+                        color: doc.isExpired
+                            ? Colors.red
+                            : doc.isExpiringSoon
+                                ? const Color(0xFFD97706)
+                                : const Color(0xFF414A51),
+                      ),
+                      title: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              doc.title,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (doc.isExpired) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'EXPIRED',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.red.shade700,
+                                ),
+                              ),
+                            ),
+                          ] else if (doc.isExpiringSoon) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.shade50,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'EXPIRES IN ${doc.daysUntilExpiry}D',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFFB45309),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       subtitle: Text([
                         doc.docType.label,
-                        if (doc.financialYear != null) 'FY: ${doc.financialYear}',
+                        if (doc.financialYear != null)
+                          'FY: ${doc.financialYear}',
                         if (doc.monthYear != null) 'Month: ${doc.monthYear}',
-                        if (doc.projectCode != null) 'Project: ${doc.projectCode}',
+                        if (doc.projectCode != null)
+                          'Project: ${doc.projectCode}',
+                        if (doc.startDate != null)
+                          'Start: ${DateFormat("dd-MM-yyyy").format(doc.startDate!)}',
                         if (doc.expiryDate != null)
-                          'Expiry: ${DateFormat("dd-MM-yyyy").format(doc.expiryDate!)}',
+                          'Expiry: ${DateFormat("dd-MM-yyyy").format(doc.expiryDate!)} (Alert ${doc.alertBeforeDays}d prior)',
                       ].join(' • ')),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -357,6 +576,13 @@ class _CompanyDocumentsScreenState
                               context,
                               doc.document,
                             ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined,
+                                color: Color(0xFF414A51)),
+                            tooltip: 'Edit / Renew Document',
+                            onPressed: () =>
+                                _showDocumentDialog(existing: doc),
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete_outline,
@@ -407,4 +633,3 @@ class _CompanyDocumentsScreenState
     );
   }
 }
-

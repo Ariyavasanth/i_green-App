@@ -44,10 +44,21 @@ class FirebaseTenderRepository implements TenderRepository {
     try {
       final now = DateTime.now();
       final year = now.year.toString();
+      final prefix = 'TE-$year-';
       final snap = await _tendersRef.get();
-      final count = snap.docs.length + 1;
-      final seq = count.toString().padLeft(4, '0');
-      return 'TE-$year-$seq';
+      int maxSeq = 0;
+      for (final doc in snap.docs) {
+        final rawId = (doc.data()['tender_id'] ?? '').toString().trim();
+        if (rawId.startsWith(prefix)) {
+          final numPart = int.tryParse(rawId.substring(prefix.length));
+          if (numPart != null && numPart > maxSeq) {
+            maxSeq = numPart;
+          }
+        }
+      }
+      final nextSeq = maxSeq > 0 ? maxSeq + 1 : snap.docs.length + 1;
+      final seq = nextSeq.toString().padLeft(4, '0');
+      return '$prefix$seq';
     } catch (_) {
       final now = DateTime.now();
       return 'TE-${now.year}-${(now.millisecondsSinceEpoch % 10000).toString().padLeft(4, '0')}';

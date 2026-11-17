@@ -73,6 +73,10 @@ class NotificationsPopover extends ConsumerWidget {
 
   IconData _getIconForType(String type) {
     switch (type) {
+      case 'vault_expired':
+        return Icons.error_outline_rounded;
+      case 'vault_expiring':
+        return Icons.warning_amber_rounded;
       case 'od_request':
         return Icons.commute_rounded;
       case 'leave_request':
@@ -86,6 +90,10 @@ class NotificationsPopover extends ConsumerWidget {
 
   Color _getColorForType(String type) {
     switch (type) {
+      case 'vault_expired':
+        return const Color(0xFFDC2626);
+      case 'vault_expiring':
+        return const Color(0xFFD97706);
       case 'od_request':
         return const Color(0xFF9CC70A);
       case 'leave_request':
@@ -99,6 +107,10 @@ class NotificationsPopover extends ConsumerWidget {
 
   String _getModuleBadge(String type) {
     switch (type) {
+      case 'vault_expired':
+        return 'Vault Expired';
+      case 'vault_expiring':
+        return 'Vault Alert';
       case 'od_request':
         return 'On-Duty';
       case 'leave_request':
@@ -114,7 +126,7 @@ class NotificationsPopover extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentEmp = ref.watch(currentEmployeeProvider);
     final empIdStr = currentEmp?.id.toString() ?? '';
-    final notificationsAsync = ref.watch(userNotificationsStreamProvider);
+    final notificationsAsync = ref.watch(combinedNotificationsProvider);
 
     return Container(
       height: isMobile ? MediaQuery.of(context).size.height * 0.75 : null,
@@ -164,7 +176,9 @@ class NotificationsPopover extends ConsumerWidget {
                 notificationsAsync.maybeWhen(
                   data: (notifications) {
                     final unread = notifications
-                        .where((n) => !n.isReadBy(empIdStr))
+                        .where((n) =>
+                            !n.id.startsWith(kVaultAlertPrefix) &&
+                            !n.isReadBy(empIdStr))
                         .toList();
                     if (unread.isEmpty) return const SizedBox.shrink();
 
@@ -276,15 +290,16 @@ class NotificationsPopover extends ConsumerWidget {
                   ),
                   itemBuilder: (context, index) {
                     final item = notifications[index];
-                    final isRead = item.isReadBy(empIdStr);
+                    final isVaultAlert = item.id.startsWith(kVaultAlertPrefix);
+                    final isRead = !isVaultAlert && item.isReadBy(empIdStr);
                     final typeColor = _getColorForType(item.type);
                     final icon = _getIconForType(item.type);
                     final badgeLabel = _getModuleBadge(item.type);
 
                     return InkWell(
                       onTap: () {
-                        // Mark as read
-                        if (!isRead && empIdStr.isNotEmpty) {
+                        // Mark as read (only for persisted Firestore notifications)
+                        if (!isVaultAlert && !isRead && empIdStr.isNotEmpty) {
                           ref
                               .read(notificationRepositoryProvider)
                               .markAsRead(
@@ -303,7 +318,13 @@ class NotificationsPopover extends ConsumerWidget {
                       },
                       hoverColor: const Color(0xFFF8FAFC),
                       child: Container(
-                        color: isRead ? Colors.transparent : const Color(0xFFF0FDF4),
+                        color: item.type == 'vault_expired'
+                            ? const Color(0xFFFEF2F2)
+                            : item.type == 'vault_expiring'
+                                ? const Color(0xFFFFFBEB)
+                                : (isRead
+                                    ? Colors.transparent
+                                    : const Color(0xFFF0FDF4)),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 12,

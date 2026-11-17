@@ -33,6 +33,7 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isSaving = false;
   bool _isAiAutoFilling = false;
+  bool _isGeneratingTenderId = false;
 
   // Section 1: Tender Identification
   final _tenderIdController = TextEditingController();
@@ -74,6 +75,7 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
   final List<PlatformFile> _bqrFiles = [];
   List<ProjectDocument> _existingBqrDocs = [];
   List<BqrRequirementItem> _bqrRequirements = [];
+  final Set<String> _uploadingBqrItemIds = {};
 
   // Section 8: EMD / EMD Exemption
   String _isEmdExempted = 'No';
@@ -148,13 +150,32 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
     }
   }
 
-  Future<void> _generateTenderId() async {
-    final nextId =
-        await ref.read(tenderRepositoryProvider).generateNextTenderId();
-    if (mounted) {
+  Future<void> _generateTenderId({bool showFeedback = false}) async {
+    if (_isGeneratingTenderId) return;
+    setState(() => _isGeneratingTenderId = true);
+    try {
+      final previousId = _tenderIdController.text.trim();
+      final nextId =
+          await ref.read(tenderRepositoryProvider).generateNextTenderId();
+      if (!mounted) return;
       setState(() {
         _tenderIdController.text = nextId;
       });
+      if (showFeedback) {
+        _showToast(
+          previousId == nextId
+              ? 'Tender ID is already set to the next available ID ($nextId)'
+              : 'Generated Tender ID: $nextId',
+        );
+      }
+    } catch (e) {
+      if (mounted && showFeedback) {
+        _showToast('Failed to generate Tender ID: $e', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isGeneratingTenderId = false);
+      }
     }
   }
 
@@ -244,6 +265,12 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
         // Section 7: BQR
         if (data.bqrRemark.isNotEmpty) {
           _bqrRemarkController.text = data.bqrRemark;
+        }
+        final extractedBqrItems = data.bqrRequirements.isNotEmpty
+            ? data.bqrRequirements
+            : _parseBqrRequirementsFromText(data.bqrRemark);
+        if (extractedBqrItems.isNotEmpty) {
+          _bqrRequirements = _mergeExtractedBqrRequirements(extractedBqrItems);
         }
 
         // Section 8: EMD / EMD Exemption
@@ -802,9 +829,21 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                   ),
-                                  onPressed: _generateTenderId,
-                                  child: const Icon(Icons.auto_awesome,
-                                      size: 16, color: Color(0xFF9CC70A)),
+                                  onPressed: _isGeneratingTenderId
+                                      ? null
+                                      : () =>
+                                          _generateTenderId(showFeedback: true),
+                                  child: _isGeneratingTenderId
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Color(0xFF9CC70A),
+                                          ),
+                                        )
+                                      : const Icon(Icons.auto_awesome,
+                                          size: 16, color: Color(0xFF9CC70A)),
                                 ),
                               ),
                             ],
@@ -847,13 +886,28 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
                                                 BorderRadius.circular(10),
                                           ),
                                         ),
-                                        onPressed: _generateTenderId,
-                                        icon: const Icon(Icons.auto_awesome,
-                                            size: 16,
-                                            color: Color(0xFF9CC70A)),
-                                        label: const Text(
-                                          'GENERATE',
-                                          style: TextStyle(
+                                        onPressed: _isGeneratingTenderId
+                                            ? null
+                                            : () => _generateTenderId(
+                                                showFeedback: true),
+                                        icon: _isGeneratingTenderId
+                                            ? const SizedBox(
+                                                width: 14,
+                                                height: 14,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: Color(0xFF9CC70A),
+                                                ),
+                                              )
+                                            : const Icon(Icons.auto_awesome,
+                                                size: 16,
+                                                color: Color(0xFF9CC70A)),
+                                        label: Text(
+                                          _isGeneratingTenderId
+                                              ? 'GENERATING...'
+                                              : 'GENERATE',
+                                          style: const TextStyle(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w700),
                                         ),
@@ -2233,6 +2287,164 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
     );
   }
 
+  List<BqrRequirementItem> _parseBqrRequirementsFromText(String rawText) {
+    final trimmed = rawText.trim();
+    if (trimmed.isEmpty) return const [];
+
+    List<String> parts = trimmed
+        .split(RegExp(r'[\r\n]+'))
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+
+    if (parts.length <= 1 && trimmed.contains(';')) {
+      parts = trimmed
+          .split(';')
+          .map((part) => part.trim())
+          .where((part) => part.isNotEmpty)
+          .toList();
+    }
+
+    final baseTs = DateTime.now().millisecondsSinceEpoch;
+    final seen = <String>{};
+    final items = <BqrRequirementItem>[];
+
+    for (var i = 0; i < parts.length; i++) {
+      final cleaned = parts[i]
+          .replaceFirst(RegExp(r'^([•\-\*\u2022]+|\d+[\.\)]\s*|\([a-zA-Z0-9]+\)\s*|[a-zA-Z][\.\)]\s*)'), '')
+          .trim();
+      if (cleaned.isEmpty) continue;
+      if (!seen.add(cleaned.toLowerCase())) continue;
+
+      items.add(
+        BqrRequirementItem(
+          id: 'bqr_${baseTs}_$i',
+          title: cleaned,
+          status: 'pending',
+        ),
+      );
+    }
+
+    return items;
+  }
+
+  List<BqrRequirementItem> _mergeExtractedBqrRequirements(
+    List<BqrRequirementItem> extracted,
+  ) {
+    final merged = List<BqrRequirementItem>.from(_bqrRequirements);
+    final existingByTitle = <String, int>{
+      for (var i = 0; i < merged.length; i++)
+        merged[i].title.trim().toLowerCase(): i,
+    };
+
+    for (final item in extracted) {
+      final key = item.title.trim().toLowerCase();
+      if (key.isEmpty) continue;
+      final existingIdx = existingByTitle[key];
+      if (existingIdx != null) {
+        final existing = merged[existingIdx];
+        if (existing.description.isEmpty && item.description.isNotEmpty) {
+          merged[existingIdx] = existing.copyWith(description: item.description);
+        }
+      } else {
+        existingByTitle[key] = merged.length;
+        merged.add(item);
+      }
+    }
+
+    return merged;
+  }
+
+  Future<void> _uploadFilesForBqrItem(
+    int index, {
+    bool replaceAll = false,
+    int? replaceDocIndex,
+  }) async {
+    if (index < 0 || index >= _bqrRequirements.length) return;
+    final targetItem = _bqrRequirements[index];
+    if (_uploadingBqrItemIds.contains(targetItem.id)) return;
+
+    final res = await FilePicker.pickFiles(
+      allowMultiple: replaceDocIndex == null,
+      withData: true,
+    );
+    if (res == null || res.files.isEmpty) return;
+
+    setState(() => _uploadingBqrItemIds.add(targetItem.id));
+
+    try {
+      final repo = ref.read(tenderRepositoryProvider);
+      final tenderId = _tenderIdController.text.trim();
+      final category = 'bqr_${targetItem.id}';
+      final uploadedDocs = <ProjectDocument>[];
+
+      for (final file in res.files) {
+        final doc = await repo.uploadTenderAttachment(
+          tenderId,
+          category,
+          file,
+        );
+        uploadedDocs.add(doc);
+      }
+
+      if (!mounted) return;
+      final currentIdx =
+          _bqrRequirements.indexWhere((r) => r.id == targetItem.id);
+      if (currentIdx == -1) return;
+
+      final currentItem = _bqrRequirements[currentIdx];
+      late final List<ProjectDocument> updatedDocs;
+
+      if (replaceDocIndex != null &&
+          replaceDocIndex >= 0 &&
+          replaceDocIndex < currentItem.documents.length) {
+        updatedDocs = List<ProjectDocument>.from(currentItem.documents);
+        updatedDocs[replaceDocIndex] = uploadedDocs.first;
+      } else if (replaceAll) {
+        updatedDocs = uploadedDocs;
+      } else {
+        updatedDocs = [...currentItem.documents, ...uploadedDocs];
+      }
+
+      setState(() {
+        _bqrRequirements[currentIdx] = currentItem.copyWith(
+          documents: updatedDocs,
+          status: updatedDocs.isNotEmpty ? 'uploaded' : 'pending',
+        );
+      });
+
+      final isReplace = replaceAll || replaceDocIndex != null;
+      _showToast(
+        isReplace
+            ? 'Updated document for "${currentItem.title}".'
+            : 'Uploaded ${uploadedDocs.length} document(s) for "${currentItem.title}".',
+      );
+    } catch (e) {
+      if (mounted) {
+        _showToast('Failed to upload BQR document: $e', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _uploadingBqrItemIds.remove(targetItem.id));
+      }
+    }
+  }
+
+  void _removeBqrItemDocument(int itemIndex, int docIndex) {
+    if (itemIndex < 0 || itemIndex >= _bqrRequirements.length) return;
+    final item = _bqrRequirements[itemIndex];
+    if (docIndex < 0 || docIndex >= item.documents.length) return;
+
+    final updatedDocs = List<ProjectDocument>.from(item.documents)
+      ..removeAt(docIndex);
+    setState(() {
+      _bqrRequirements[itemIndex] = item.copyWith(
+        documents: updatedDocs,
+        status: updatedDocs.isNotEmpty ? 'uploaded' : 'pending',
+      );
+    });
+  }
+
   Widget _buildBqrLineItemsSection() {
     final pendingCount = _bqrRequirements.where((r) => !r.isUploaded).length;
     final daysUntilClose = _closingDate?.difference(DateTime.now()).inDays;
@@ -2297,6 +2509,22 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
             const SizedBox(width: 8),
             OutlinedButton.icon(
               onPressed: () async {
+                if (_bqrRequirements.isEmpty &&
+                    _bqrRemarkController.text.trim().isNotEmpty) {
+                  final parsed =
+                      _parseBqrRequirementsFromText(_bqrRemarkController.text);
+                  if (parsed.isNotEmpty) {
+                    setState(() {
+                      _bqrRequirements = parsed;
+                    });
+                  }
+                }
+                if (_bqrRequirements.isEmpty) {
+                  _showToast(
+                    'Add BQR items or run AI Auto-Fill first to fetch matching Vault documents.',
+                  );
+                  return;
+                }
                 final companyDocs =
                     ref.read(companyDocumentsStreamProvider).valueOrNull ??
                         await ref
@@ -2345,6 +2573,8 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
           ...List.generate(_bqrRequirements.length, (index) {
             final item = _bqrRequirements[index];
             final isDone = item.isUploaded;
+            final isUploading = _uploadingBqrItemIds.contains(item.id);
+
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(10),
@@ -2353,78 +2583,222 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: const Color(0xFFE5E8E2)),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.title,
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF414A51),
-                          ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.title,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF414A51),
+                              ),
+                            ),
+                            if (item.description.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                item.description,
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 2),
+                            Text(
+                              item.documents.isEmpty
+                                  ? 'No file uploaded'
+                                  : '${item.documents.length} file(s) attached',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF718096),
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          '${item.documents.length} file(s) attached',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF718096),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: (isDone
-                              ? const Color(0xFF16A34A)
-                              : const Color(0xFFD97706))
-                          .withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      isDone ? 'Uploaded' : 'Pending',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: isDone
-                            ? const Color(0xFF16A34A)
-                            : const Color(0xFFD97706),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: (isDone
+                                      ? const Color(0xFF16A34A)
+                                      : const Color(0xFFD97706))
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              isDone ? 'Uploaded' : 'Pending',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: isDone
+                                    ? const Color(0xFF16A34A)
+                                    : const Color(0xFFD97706),
+                              ),
+                            ),
+                          ),
+                          if (isUploading)
+                            const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFF9CC70A),
+                              ),
+                            )
+                          else ...[
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF414A51),
+                                side: const BorderSide(
+                                    color: Color(0xFFCBD5E1)),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
+                                minimumSize: Size.zero,
+                                tapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                              ),
+                              onPressed: () => _uploadFilesForBqrItem(index),
+                              icon: const Icon(Icons.upload_file_rounded,
+                                  size: 15),
+                              label: const Text(
+                                'Upload Document',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                            if (item.documents.isNotEmpty)
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF414A51),
+                                  side: const BorderSide(
+                                      color: Color(0xFF9CC70A)),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 6),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                ),
+                                onPressed: () => _uploadFilesForBqrItem(
+                                  index,
+                                  replaceAll: true,
+                                ),
+                                icon: const Icon(Icons.sync_rounded,
+                                    size: 15, color: Color(0xFF9CC70A)),
+                                label: const Text(
+                                  'Replace Document',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                          ],
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    tooltip: 'Upload BQR Item File',
-                    icon: const Icon(Icons.upload_file_rounded,
-                        size: 18, color: Color(0xFF414A51)),
-                    onPressed: () async {
-                      final res = await FilePicker.pickFiles(
-                        withData: true,
+                  if (item.documents.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    ...List.generate(item.documents.length, (docIdx) {
+                      final doc = item.documents[docIdx];
+                      return Container(
+                        margin: const EdgeInsets.only(top: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.attach_file,
+                                size: 15, color: Color(0xFF9CC70A)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                doc.name,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF2D3748),
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'View Document',
+                              icon: const Icon(Icons.visibility_outlined,
+                                  size: 16, color: Color(0xFF414A51)),
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
+                              onPressed: () =>
+                                  TenderDocumentActions.viewDocument(
+                                      context, doc),
+                            ),
+                            const SizedBox(width: 4),
+                            IconButton(
+                              tooltip: 'Download Document',
+                              icon: const Icon(Icons.download_rounded,
+                                  size: 16, color: Color(0xFF9CC70A)),
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
+                              onPressed: () =>
+                                  TenderDocumentActions.downloadDocument(
+                                      context, doc),
+                            ),
+                            const SizedBox(width: 4),
+                            IconButton(
+                              tooltip: 'Replace Document',
+                              icon: const Icon(Icons.sync_rounded,
+                                  size: 16, color: Color(0xFF414A51)),
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
+                              onPressed: isUploading
+                                  ? null
+                                  : () => _uploadFilesForBqrItem(
+                                        index,
+                                        replaceDocIndex: docIdx,
+                                      ),
+                            ),
+                            const SizedBox(width: 4),
+                            IconButton(
+                              tooltip: 'Remove Document',
+                              icon: const Icon(Icons.close,
+                                  size: 16, color: Colors.red),
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
+                              onPressed: isUploading
+                                  ? null
+                                  : () =>
+                                      _removeBqrItemDocument(index, docIdx),
+                            ),
+                          ],
+                        ),
                       );
-                      if (res == null || res.files.isEmpty) return;
-                      final doc = await ref
-                          .read(tenderRepositoryProvider)
-                          .uploadTenderAttachment(
-                            _tenderIdController.text.trim(),
-                            'bqr_${item.id}',
-                            res.files.first,
-                          );
-                      if (!mounted) return;
-                      setState(() {
-                        final updatedDocs = [...item.documents, doc];
-                        _bqrRequirements[index] = item.copyWith(
-                          documents: updatedDocs,
-                          status: 'uploaded',
-                        );
-                      });
-                    },
-                  ),
+                    }),
+                  ],
                 ],
               ),
             );

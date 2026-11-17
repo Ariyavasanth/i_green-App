@@ -40,19 +40,13 @@ class FirebaseCompanyDocumentRepository implements CompanyDocumentRepository {
         .toList();
   }
 
-  @override
-  Future<CompanyDocumentItem> addDocument({
+  Future<ProjectDocument> _uploadToBucket({
+    required String docId,
     required CompanyDocType docType,
-    required String title,
     required PlatformFile file,
-    String? financialYear,
-    String? monthYear,
-    String? projectCode,
-    DateTime? expiryDate,
   }) async {
-    final docRef = _collection.doc();
     final safeName = file.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-    final storagePath = 'company_documents/${docType.code}/${docRef.id}_$safeName';
+    final storagePath = 'company_documents/${docType.code}/${docId}_$safeName';
     final ref = _storage.ref().child(storagePath);
 
     final bytes = file.bytes ?? Uint8List(0);
@@ -74,13 +68,33 @@ class FirebaseCompanyDocumentRepository implements CompanyDocumentRepository {
     );
     final url = await ref.getDownloadURL();
 
-    final projectDoc = ProjectDocument(
+    return ProjectDocument(
       name: file.name,
       storagePath: storagePath,
       downloadUrl: url,
       category: docType.code,
       size: file.size,
       uploadedAt: DateTime.now(),
+    );
+  }
+
+  @override
+  Future<CompanyDocumentItem> addDocument({
+    required CompanyDocType docType,
+    required String title,
+    required PlatformFile file,
+    String? financialYear,
+    String? monthYear,
+    String? projectCode,
+    DateTime? startDate,
+    DateTime? expiryDate,
+    int alertBeforeDays = 30,
+  }) async {
+    final docRef = _collection.doc();
+    final projectDoc = await _uploadToBucket(
+      docId: docRef.id,
+      docType: docType,
+      file: file,
     );
 
     final item = CompanyDocumentItem(
@@ -90,13 +104,64 @@ class FirebaseCompanyDocumentRepository implements CompanyDocumentRepository {
       financialYear: financialYear,
       monthYear: monthYear,
       projectCode: projectCode,
+      startDate: startDate,
       expiryDate: expiryDate,
+      alertBeforeDays: alertBeforeDays,
       document: projectDoc,
       createdAt: DateTime.now(),
     );
 
     await docRef.set(item.toJson());
     return item;
+  }
+
+  @override
+  Future<CompanyDocumentItem> updateDocument({
+    required CompanyDocumentItem existing,
+    required CompanyDocType docType,
+    required String title,
+    PlatformFile? newFile,
+    String? financialYear,
+    String? monthYear,
+    String? projectCode,
+    DateTime? startDate,
+    DateTime? expiryDate,
+    int alertBeforeDays = 30,
+  }) async {
+    ProjectDocument finalDoc = existing.document;
+
+    if (newFile != null) {
+      finalDoc = await _uploadToBucket(
+        docId: existing.id,
+        docType: docType,
+        file: newFile,
+      );
+      if (existing.document.storagePath.isNotEmpty &&
+          existing.document.storagePath != finalDoc.storagePath) {
+        try {
+          await _storage.ref().child(existing.document.storagePath).delete();
+        } catch (_) {
+          // Ignore missing old storage object
+        }
+      }
+    }
+
+    final updated = CompanyDocumentItem(
+      id: existing.id,
+      docType: docType,
+      title: title,
+      financialYear: financialYear,
+      monthYear: monthYear,
+      projectCode: projectCode,
+      startDate: startDate,
+      expiryDate: expiryDate,
+      alertBeforeDays: alertBeforeDays,
+      document: finalDoc,
+      createdAt: existing.createdAt,
+    );
+
+    await _collection.doc(existing.id).set(updated.toJson());
+    return updated;
   }
 
   @override
@@ -115,4 +180,3 @@ class FirebaseCompanyDocumentRepository implements CompanyDocumentRepository {
     }
   }
 }
-

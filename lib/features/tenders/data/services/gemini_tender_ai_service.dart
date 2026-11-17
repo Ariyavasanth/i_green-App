@@ -122,6 +122,12 @@ You MUST extract and return a valid JSON object matching the following structure
   "closing_date": "ISO-8601 formatted submission deadline date and time, e.g. 2026-05-15T15:00:00. If time is unknown, use T15:00:00. If date is not found, return null",
   "closing_date_remark": "Remarks on bid submission deadline, online portal link, or hardcopy submission instructions",
   "bqr_remark": "Bidder Qualification Requirements (BQR) / Eligibility Criteria: annual turnover required, prior work experience required, licenses (Class-1 contractor, GST, electrical contractor license), similar completed projects",
+  "bqr_requirements": [
+    {
+      "title": "Short individual BQR document/requirement name (e.g. ITR for Last 3 Financial Years, GST Registration Certificate, PF & ESI Registration, Experience Certificate, Class-1 Contractor License, Annual Turnover Certificate)",
+      "description": "Brief eligibility criteria or threshold for this requirement if specified in the tender"
+    }
+  ],
   "is_emd_exempted": "Yes" ONLY if the tender notice explicitly states NIL EMD or Zero EMD for all bidders. Default to "No". Even if MSME/NSIC exemption is allowed, keep this as "No" because EMD is normally required unless the tender itself specifies zero EMD,
   "emd_amount": 0.0 (MANDATORY: Extract the exact official EMD / Earnest Money Deposit amount in INR as a clean numeric value, e.g. 50000. Look for "EMD", "Earnest Money", "Bid Security", "Demand Draft", or percentage calculations. If stated in Lakhs like "1.5 Lakhs", calculate the number 150000. Do NOT return 0.0 if an EMD amount is specified!),
   "emd_remark": "Notes on EMD payment mode (DD, BG, online payment), exemption eligibility criteria (MSME/Udyam/NSIC), or validity duration",
