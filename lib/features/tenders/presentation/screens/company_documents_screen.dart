@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../projects/providers/project_providers.dart';
 import '../../domain/models/company_document_item.dart';
 import '../../providers/company_document_providers.dart';
 import '../widgets/tender_document_actions.dart';
@@ -33,8 +34,10 @@ class _CompanyDocumentsScreenState
       text: existing?.monthYear ??
           '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}',
     );
-    final projectCodeCtrl =
-        TextEditingController(text: existing?.projectCode ?? '');
+    String? selectedProjectCode =
+        (existing?.projectCode ?? '').trim().isNotEmpty
+            ? existing!.projectCode!.trim()
+            : null;
     final alertDaysCtrl = TextEditingController(
       text: (existing?.alertBeforeDays ?? 30).toString(),
     );
@@ -151,12 +154,62 @@ class _CompanyDocumentsScreenState
                     ],
                     if (needsProject) ...[
                       const SizedBox(height: 12),
-                      TextField(
-                        controller: projectCodeCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Project Code',
-                          border: OutlineInputBorder(),
-                        ),
+                      Consumer(
+                        builder: (context, ref, _) {
+                          final projectsAsync =
+                              ref.watch(projectsStreamProvider);
+                          final projectCodes = <String>[
+                            ...(projectsAsync.valueOrNull ?? const [])
+                                .map((p) => p.projectCode.trim())
+                                .where((code) => code.isNotEmpty),
+                          ].toSet().toList();
+                          if (selectedProjectCode != null &&
+                              selectedProjectCode!.isNotEmpty &&
+                              !projectCodes.contains(selectedProjectCode)) {
+                            projectCodes.insert(0, selectedProjectCode!);
+                          }
+                          final dropdownValue = selectedProjectCode != null &&
+                                  projectCodes.contains(selectedProjectCode)
+                              ? selectedProjectCode
+                              : null;
+
+                          return DropdownButtonFormField<String>(
+                            key: ValueKey(dropdownValue),
+                            initialValue: dropdownValue,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: 'Project Code',
+                              hintText: projectsAsync.isLoading &&
+                                      projectCodes.isEmpty
+                                  ? 'Loading project codes...'
+                                  : projectsAsync.hasError &&
+                                          projectCodes.isEmpty
+                                      ? 'Error loading project codes'
+                                      : projectCodes.isEmpty
+                                          ? 'No project codes found'
+                                          : 'Select Project Code',
+                              border: const OutlineInputBorder(),
+                            ),
+                            items: projectCodes
+                                .map(
+                                  (code) => DropdownMenuItem<String>(
+                                    value: code,
+                                    child: Text(
+                                      code,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: projectCodes.isEmpty
+                                ? null
+                                : (val) {
+                                    setDialogState(
+                                      () => selectedProjectCode = val,
+                                    );
+                                  },
+                          );
+                        },
                       ),
                     ],
                     if (supportsValidityDates) ...[
@@ -298,8 +351,7 @@ class _CompanyDocumentsScreenState
                         newFile: pickedFile,
                         financialYear: needsFy ? fyCtrl.text.trim() : null,
                         monthYear: needsMonth ? monthCtrl.text.trim() : null,
-                        projectCode:
-                            needsProject ? projectCodeCtrl.text.trim() : null,
+                        projectCode: needsProject ? selectedProjectCode : null,
                         startDate: supportsValidityDates ? startDate : null,
                         expiryDate: supportsValidityDates ? expiryDate : null,
                         alertBeforeDays: safeAlertDays,
@@ -311,8 +363,7 @@ class _CompanyDocumentsScreenState
                         file: pickedFile!,
                         financialYear: needsFy ? fyCtrl.text.trim() : null,
                         monthYear: needsMonth ? monthCtrl.text.trim() : null,
-                        projectCode:
-                            needsProject ? projectCodeCtrl.text.trim() : null,
+                        projectCode: needsProject ? selectedProjectCode : null,
                         startDate: supportsValidityDates ? startDate : null,
                         expiryDate: supportsValidityDates ? expiryDate : null,
                         alertBeforeDays: safeAlertDays,
@@ -334,6 +385,7 @@ class _CompanyDocumentsScreenState
   @override
   Widget build(BuildContext context) {
     final docsAsync = ref.watch(companyDocumentsStreamProvider);
+    ref.watch(projectsStreamProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F3),

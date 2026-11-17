@@ -345,5 +345,15 @@ service cloud.firestore {
       );
       allow delete: if isSuperAdmin() || hasPermission('Responses') || hasPermission('Employee Management');
     }
+
+    // ── In-App Notifications & FCM Device Tokens ─────────────────────────────
+    match /notifications/{notificationId} {
+      allow read, write: if true;
+    }
+
+    match /fcm_tokens/{tokenId} {
+      allow read: if false;
+      allow create, update, delete: if true;
+    }
   }
 }

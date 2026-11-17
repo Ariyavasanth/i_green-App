@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 
 import '../../employee/domain/employee.dart';
 import '../domain/app_notification.dart';
@@ -12,6 +15,12 @@ class FirebaseNotificationRepository implements NotificationRepository {
 
   CollectionReference<Map<String, dynamic>> get _notificationsRef =>
       _firestore.collection('notifications');
+
+  CollectionReference<Map<String, dynamic>> get _fcmTokensRef =>
+      _firestore.collection('fcm_tokens');
+
+  String _tokenDocId(String token) =>
+      sha256.convert(utf8.encode(token.trim())).toString();
 
   @override
   Future<void> sendNotification(AppNotification notification) async {
@@ -90,6 +99,43 @@ class FirebaseNotificationRepository implements NotificationRepository {
   Future<void> deleteNotification(String notificationId) async {
     try {
       await _notificationsRef.doc(notificationId).delete();
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> saveFcmToken({
+    required Employee employee,
+    required String token,
+    required String platform,
+  }) async {
+    final cleanToken = token.trim();
+    if (cleanToken.isEmpty) return;
+
+    try {
+      final docId = _tokenDocId(cleanToken);
+      await _fcmTokensRef.doc(docId).set({
+        'token': cleanToken,
+        'employee_id': employee.id,
+        'employee_code': employee.employeeId,
+        'email': employee.emailAddress.trim().toLowerCase(),
+        'employee_name': employee.fullName,
+        'user_type': employee.userType,
+        'is_super_admin': employee.isSuperAdmin,
+        'access_permissions': employee.accessPermissions,
+        'platform': platform,
+        'updated_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> removeFcmToken({required String token}) async {
+    final cleanToken = token.trim();
+    if (cleanToken.isEmpty) return;
+
+    try {
+      final docId = _tokenDocId(cleanToken);
+      await _fcmTokensRef.doc(docId).delete();
     } catch (_) {}
   }
 }

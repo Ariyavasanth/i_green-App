@@ -6,8 +6,10 @@ import 'app.dart';
 import 'core/storage/auth_session_storage_factory.dart';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'features/notifications/services/fcm_push_service.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
@@ -24,6 +26,12 @@ Future<void> main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.macOS)) {
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    }
     // Enable offline persistence so Firestore serves data from local cache
     // immediately on subsequent loads — dramatically reduces perceived load time.
     try {

@@ -19,5 +19,13 @@ abstract class NotificationRepository {
   });
 
   Future<void> deleteNotification(String notificationId);
+
+  Future<void> saveFcmToken({
+    required Employee employee,
+    required String token,
+    required String platform,
+  });
+
+  Future<void> removeFcmToken({required String token});
 }
 

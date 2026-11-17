@@ -73,6 +73,8 @@ class NotificationsPopover extends ConsumerWidget {
 
   IconData _getIconForType(String type) {
     switch (type) {
+      case 'tender_closing_reminder':
+        return Icons.event_available_rounded;
       case 'vault_expired':
         return Icons.error_outline_rounded;
       case 'vault_expiring':
@@ -88,8 +90,11 @@ class NotificationsPopover extends ConsumerWidget {
     }
   }
 
-  Color _getColorForType(String type) {
+  Color _getColorForType(String type, {Map<String, dynamic> metadata = const {}}) {
     switch (type) {
+      case 'tender_closing_reminder':
+        final days = (metadata['days_until_closing'] as num?)?.toInt() ?? 5;
+        return days <= 1 ? const Color(0xFFDC2626) : const Color(0xFFD97706);
       case 'vault_expired':
         return const Color(0xFFDC2626);
       case 'vault_expiring':
@@ -107,6 +112,8 @@ class NotificationsPopover extends ConsumerWidget {
 
   String _getModuleBadge(String type) {
     switch (type) {
+      case 'tender_closing_reminder':
+        return 'Tender Closing';
       case 'vault_expired':
         return 'Vault Expired';
       case 'vault_expiring':
@@ -121,6 +128,10 @@ class NotificationsPopover extends ConsumerWidget {
         return 'Request';
     }
   }
+
+  bool _isLiveAlert(AppNotification item) =>
+      item.id.startsWith(kVaultAlertPrefix) ||
+      item.id.startsWith(kTenderClosingAlertPrefix);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -176,9 +187,7 @@ class NotificationsPopover extends ConsumerWidget {
                 notificationsAsync.maybeWhen(
                   data: (notifications) {
                     final unread = notifications
-                        .where((n) =>
-                            !n.id.startsWith(kVaultAlertPrefix) &&
-                            !n.isReadBy(empIdStr))
+                        .where((n) => !_isLiveAlert(n) && !n.isReadBy(empIdStr))
                         .toList();
                     if (unread.isEmpty) return const SizedBox.shrink();
 
@@ -290,16 +299,17 @@ class NotificationsPopover extends ConsumerWidget {
                   ),
                   itemBuilder: (context, index) {
                     final item = notifications[index];
-                    final isVaultAlert = item.id.startsWith(kVaultAlertPrefix);
-                    final isRead = !isVaultAlert && item.isReadBy(empIdStr);
-                    final typeColor = _getColorForType(item.type);
+                    final isLiveAlert = _isLiveAlert(item);
+                    final isRead = !isLiveAlert && item.isReadBy(empIdStr);
+                    final typeColor =
+                        _getColorForType(item.type, metadata: item.metadata);
                     final icon = _getIconForType(item.type);
                     final badgeLabel = _getModuleBadge(item.type);
 
                     return InkWell(
                       onTap: () {
                         // Mark as read (only for persisted Firestore notifications)
-                        if (!isVaultAlert && !isRead && empIdStr.isNotEmpty) {
+                        if (!isLiveAlert && !isRead && empIdStr.isNotEmpty) {
                           ref
                               .read(notificationRepositoryProvider)
                               .markAsRead(
@@ -318,9 +328,16 @@ class NotificationsPopover extends ConsumerWidget {
                       },
                       hoverColor: const Color(0xFFF8FAFC),
                       child: Container(
-                        color: item.type == 'vault_expired'
+                        color: item.type == 'vault_expired' ||
+                                (item.type == 'tender_closing_reminder' &&
+                                    ((item.metadata['days_until_closing']
+                                                as num?)
+                                            ?.toInt() ??
+                                        5) <=
+                                        1)
                             ? const Color(0xFFFEF2F2)
-                            : item.type == 'vault_expiring'
+                            : item.type == 'vault_expiring' ||
+                                    item.type == 'tender_closing_reminder'
                                 ? const Color(0xFFFFFBEB)
                                 : (isRead
                                     ? Colors.transparent

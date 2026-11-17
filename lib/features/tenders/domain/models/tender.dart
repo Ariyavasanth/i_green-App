@@ -99,10 +99,53 @@ class Tender {
   bool get hasFinancialBid => financialBidDocuments.isNotEmpty;
   int get pendingBqrCount =>
       bqrRequirements.where((r) => !r.isUploaded).length;
+
+  bool get isFinalizedStatus {
+    final s = status.trim().toLowerCase();
+    return s == 'won' || s == 'rejected' || s == 'lost';
+  }
+
+  /// Missing key submission documents outside the BQR checklist.
+  List<String> get missingCoreDocumentLabels {
+    final missing = <String>[];
+    if (financialBidDocuments.isEmpty) {
+      missing.add('Financial Bid');
+    }
+    if (isEmdExempted == 'Yes') {
+      if (emdExemptionDocuments.isEmpty) {
+        missing.add('EMD Exemption');
+      }
+    } else if (emdAmount > 0 && emdDocuments.isEmpty) {
+      missing.add('EMD');
+    }
+    return missing;
+  }
+
+  /// Total count of pending documents (pending BQR items + missing core submission docs).
+  int get pendingDocumentCount =>
+      pendingBqrCount + missingCoreDocumentLabels.length;
+
+  /// Calendar days left until [closingDate] (0 = closes today, negative = closed).
+  int? get daysUntilClosing {
+    if (closingDate == null) return null;
+    final now = DateTime.now();
+    if (closingDate!.isBefore(now)) {
+      final today = DateTime(now.year, now.month, now.day);
+      final closeDay =
+          DateTime(closingDate!.year, closingDate!.month, closingDate!.day);
+      final dayDiff = closeDay.difference(today).inDays;
+      return dayDiff < 0 ? dayDiff : -1;
+    }
+    final today = DateTime(now.year, now.month, now.day);
+    final closeDay =
+        DateTime(closingDate!.year, closingDate!.month, closingDate!.day);
+    return closeDay.difference(today).inDays;
+  }
+
   bool get isClosingSoon {
-    if (closingDate == null) return false;
-    final diff = closingDate!.difference(DateTime.now()).inDays;
-    return diff >= 0 && diff <= 5;
+    if (isFinalizedStatus) return false;
+    final days = daysUntilClosing;
+    return days != null && days >= 0 && days <= 5;
   }
 
   Map<String, dynamic> toJson() => {

@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'features/employee/domain/employee.dart';
+import 'features/employee/providers/employee_providers.dart';
+import 'features/notifications/providers/notification_providers.dart';
 import 'screens/splash_screen.dart';
 
 class BooksApp extends ConsumerStatefulWidget {
@@ -34,10 +37,26 @@ class _BooksAppState extends ConsumerState<BooksApp> {
         _splashCompleted = true;
       }
     } catch (_) {}
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final fcmService = ref.read(fcmPushServiceProvider);
+      fcmService.setNavigationHandler((route) {
+        if (!mounted) return;
+        try {
+          ref.read(appRouterProvider).push(route);
+        } catch (_) {}
+      });
+      fcmService.syncForEmployee(ref.read(currentEmployeeProvider));
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<Employee?>(currentEmployeeProvider, (previous, next) {
+      ref.read(fcmPushServiceProvider).syncForEmployee(next);
+    });
+
     if (!_splashCompleted) {
       return MaterialApp(
         title: 'Igreen',
