@@ -152,7 +152,11 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
 
   Future<void> _generateTenderId({bool showFeedback = false}) async {
     if (_isGeneratingTenderId) return;
-    setState(() => _isGeneratingTenderId = true);
+    if (showFeedback) {
+      setState(() => _isGeneratingTenderId = true);
+    } else {
+      _isGeneratingTenderId = true;
+    }
     try {
       final previousId = _tenderIdController.text.trim();
       final nextId =
