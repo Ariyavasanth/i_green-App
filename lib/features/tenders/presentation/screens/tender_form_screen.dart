@@ -17,6 +17,7 @@ import '../../domain/models/site_visit_record.dart';
 import '../../domain/models/tender.dart';
 import '../../providers/company_document_providers.dart';
 import '../../providers/tender_providers.dart';
+import '../dialogs/company_document_picker_dialog.dart';
 import '../widgets/tender_document_actions.dart';
 
 class TenderFormScreen extends ConsumerStatefulWidget {
@@ -2272,7 +2273,24 @@ class _TenderFormScreenState extends ConsumerState<TenderFormScreen> {
               ),
             ),
             OutlinedButton.icon(
-              onPressed: () => context.push('/projects/company-documents'),
+              onPressed: () async {
+                final picked =
+                    await CompanyDocumentPickerDialog.show(context);
+                if (picked == null || picked.isEmpty || !mounted) return;
+                setState(() {
+                  for (final item in picked) {
+                    final alreadyAdded = _existingBqrDocs.any(
+                      (d) => d.storagePath == item.document.storagePath,
+                    );
+                    if (!alreadyAdded) {
+                      _existingBqrDocs.add(item.document);
+                    }
+                  }
+                });
+                _showToast(
+                  'Attached ${picked.length} document(s) from Company Vault.',
+                );
+              },
               icon: const Icon(Icons.folder_shared_outlined, size: 16),
               label: const Text('Vault'),
             ),
