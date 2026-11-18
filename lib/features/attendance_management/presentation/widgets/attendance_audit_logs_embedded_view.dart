@@ -25,7 +25,8 @@ class _AttendanceAuditLogsEmbeddedViewState extends ConsumerState<AttendanceAudi
   @override
   Widget build(BuildContext context) {
     final auditLogsAsync = ref.watch(attendanceManagementAuditProvider(_selectedEmployeeId));
-    final employeesAsync = ref.watch(employeesProvider);
+    final employeesAsync = ref.watch(activeEmployeesProvider);
+    final activeEmployees = employeesAsync.valueOrNull;
     final isMobile = MediaQuery.of(context).size.width < 650;
 
     return Column(
@@ -51,8 +52,13 @@ class _AttendanceAuditLogsEmbeddedViewState extends ConsumerState<AttendanceAudi
                       child: employeesAsync.when(
                         loading: () => const LinearProgressIndicator(),
                         error: (e, _) => Text('Error loading employees: $e'),
-                        data: (employees) => DropdownButtonFormField<int?>(
-                          initialValue: _selectedEmployeeId,
+                        data: (employees) {
+                          final validSelectedId = _selectedEmployeeId != null &&
+                                  employees.any((e) => e.id == _selectedEmployeeId)
+                              ? _selectedEmployeeId
+                              : null;
+                          return DropdownButtonFormField<int?>(
+                          initialValue: validSelectedId,
                           isExpanded: true,
                           decoration: InputDecoration(
                             labelText: 'Filter by Employee',
@@ -74,7 +80,8 @@ class _AttendanceAuditLogsEmbeddedViewState extends ConsumerState<AttendanceAudi
                                 )),
                           ],
                           onChanged: (val) => setState(() => _selectedEmployeeId = val),
-                        ),
+                        );
+                        },
                       ),
                     ),
 
@@ -130,7 +137,20 @@ class _AttendanceAuditLogsEmbeddedViewState extends ConsumerState<AttendanceAudi
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Text('Error loading audit logs: $e', style: const TextStyle(color: Colors.red)),
             data: (logs) {
+              final activeIds = activeEmployees?.map((e) => e.id).toSet();
+              final activeCodes = activeEmployees
+                  ?.map((e) => e.employeeId.trim().toUpperCase())
+                  .where((c) => c.isNotEmpty)
+                  .toSet();
               final filtered = logs.where((log) {
+                if (activeEmployees != null) {
+                  final rawId = log['employee_id'];
+                  final empIdNum = rawId is int ? rawId : (int.tryParse(rawId?.toString() ?? '') ?? 0);
+                  final empCode = (log['employee_code'] ?? '').toString().trim().toUpperCase();
+                  final matchesCode = empCode.isNotEmpty && (activeCodes?.contains(empCode) ?? false);
+                  final matchesId = empIdNum > 0 && (activeIds?.contains(empIdNum) ?? false);
+                  if (!matchesCode && !matchesId) return false;
+                }
                 if (_searchQuery.isEmpty) return true;
                 final empName = (log['employee_name'] ?? '').toString().toLowerCase();
                 final dateStr = (log['date'] ?? '').toString().toLowerCase();

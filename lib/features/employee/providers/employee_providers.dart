@@ -148,6 +148,13 @@ final employeesProvider = FutureProvider<List<Employee>>((ref) async {
   return uniqueEmployees;
 });
 
+/// Employees that are active for Attendance Management (excludes Inactive,
+/// Suspended, Archived, and Deleted employees).
+final activeEmployeesProvider = FutureProvider<List<Employee>>((ref) async {
+  final employees = await ref.watch(employeesProvider.future);
+  return employees.where((e) => e.isActiveForAttendance).toList();
+});
+
 final allEmployeesProvider = FutureProvider<List<Employee>>((ref) async {
   final employees = await ref
       .watch(employeeRepositoryProvider)

@@ -141,7 +141,7 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
 
   @override
   Widget build(BuildContext context) {
-    final employeesAsync = ref.watch(employeesProvider);
+    final employeesAsync = ref.watch(activeEmployeesProvider);
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobileModal = screenWidth < 500;
 
@@ -242,8 +242,10 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
                         _selectedEmployeeCode = match.first.employeeId;
                       }
                     }
+                    final validSelectedId =
+                        employees.any((e) => e.id == _selectedEmployeeId) ? _selectedEmployeeId : null;
                     return DropdownButtonFormField<int>(
-                      initialValue: _selectedEmployeeId,
+                      initialValue: validSelectedId,
                       isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Select Employee *',

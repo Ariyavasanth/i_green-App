@@ -311,7 +311,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     final monthYearStr = DateFormat('MM-yyyy').format(_focusedMonth);
     final todayStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
 
-    final employeesAsync = ref.watch(employeesProvider);
+    final employeesAsync = ref.watch(activeEmployeesProvider);
     final staticStatsAsync = (_activeTab == AttendanceCategoryTab.staticAttendance ||
             _activeTab == AttendanceCategoryTab.allEmployees)
         ? ref.watch(attendanceManagementStatsProvider(todayStr))
@@ -330,12 +330,22 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           )))
         : const AsyncValue<List<AttendanceRecord>>.data([]);
 
-    final siteVisitsAsync = (_activeTab == AttendanceCategoryTab.siteVisitAttendance ||
+    final rawSiteVisitsAsync = (_activeTab == AttendanceCategoryTab.siteVisitAttendance ||
             _activeTab == AttendanceCategoryTab.allEmployees)
         ? ref.watch(allSiteVisitsProvider((visitDate: null, employeeId: null, siteName: null)))
         : const AsyncValue<List<SiteVisitRecord>>.data([]);
 
     final allEmployeesList = employeesAsync.valueOrNull ?? [];
+    final siteVisitsAsync = employeesAsync.hasValue
+        ? rawSiteVisitsAsync.whenData(
+            (visits) => _filterSiteVisitsByActiveEmployees(visits, allEmployeesList),
+          )
+        : rawSiteVisitsAsync;
+    final activeStaticRecordsAsync = employeesAsync.hasValue
+        ? staticRecordsAsync.whenData(
+            (records) => _filterRecordsByActiveEmployees(records, allEmployeesList),
+          )
+        : staticRecordsAsync;
 
     return Container(
       color: const Color(0xFFF8FAFC),
@@ -347,6 +357,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
               onRefresh: () async {
                 ref.invalidate(allAttendanceRecordsProvider);
                 ref.invalidate(employeesProvider);
+                ref.invalidate(activeEmployeesProvider);
                 ref.invalidate(allEmployeesProvider);
                 ref.invalidate(attendanceManagementStatsProvider);
                 ref.invalidate(attendanceManagementRecordsProvider);
@@ -381,8 +392,9 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                     _buildActiveTabContent(
                       isMobile: isMobile,
                       allEmployees: allEmployeesList,
+                      employeesLoaded: employeesAsync.hasValue,
                       staticStatsAsync: staticStatsAsync,
-                      staticRecordsAsync: staticRecordsAsync,
+                      staticRecordsAsync: activeStaticRecordsAsync,
                       siteVisitsAsync: siteVisitsAsync,
                     ),
                   ],
@@ -414,7 +426,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           else if (_activeTab == AttendanceCategoryTab.allEmployees)
             _buildAllEmployeesBottomSummaryBar(
               allEmployeesList,
-              staticRecordsAsync.valueOrNull ?? [],
+              activeStaticRecordsAsync.valueOrNull ?? [],
               siteVisitsAsync.valueOrNull ?? [],
             )
           else
@@ -485,6 +497,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                   ref.invalidate(allLeaveRequestsProvider);
                   ref.invalidate(allOnDutyAssignmentsProvider);
                   ref.invalidate(employeesProvider);
+                  ref.invalidate(activeEmployeesProvider);
                   ref.invalidate(payrollRecordsForMonthProvider);
                   ref.invalidate(allPayrollRecordsProvider);
                   if (mounted) {
@@ -704,8 +717,14 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
 
   Widget _buildCategoryTabBar() {
+    final employeesAsync = ref.watch(activeEmployeesProvider);
+    final activeEmployees = employeesAsync.valueOrNull ?? const <Employee>[];
     final pendingRequestsAsync = ref.watch(pendingCorrectionRequestsProvider);
-    final pendingCount = pendingRequestsAsync.valueOrNull?.length ?? 0;
+    final rawRequests = pendingRequestsAsync.valueOrNull ?? const <AttendanceCorrectionRequest>[];
+    final activeRequests = employeesAsync.hasValue
+        ? _filterCorrectionRequestsByActiveEmployees(rawRequests, activeEmployees)
+        : rawRequests;
+    final pendingCount = activeRequests.length;
 
     return Container(
       width: double.infinity,
@@ -893,6 +912,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
   Widget _buildActiveTabContent({
     required bool isMobile,
     required List<Employee> allEmployees,
+    required bool employeesLoaded,
     required AsyncValue<AttendanceManagementStats> staticStatsAsync,
     required AsyncValue<List<AttendanceRecord>> staticRecordsAsync,
     required AsyncValue<List<SiteVisitRecord>> siteVisitsAsync,
@@ -922,11 +942,15 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
         return const AttendanceAuditLogsEmbeddedView();
 
       case AttendanceCategoryTab.correctionRequests:
-        return _buildCorrectionRequestsView(isMobile);
+        return _buildCorrectionRequestsView(isMobile, allEmployees, employeesLoaded: employeesLoaded);
     }
   }
 
-  Widget _buildCorrectionRequestsView(bool isMobile) {
+  Widget _buildCorrectionRequestsView(
+    bool isMobile,
+    List<Employee> activeEmployees, {
+    bool employeesLoaded = false,
+  }) {
     final pendingRequestsAsync = ref.watch(pendingCorrectionRequestsProvider);
 
     return pendingRequestsAsync.when(
@@ -942,7 +966,10 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           child: Text('Error loading requests: $e', style: const TextStyle(color: Color(0xFFE53935))),
         ),
       ),
-      data: (requests) {
+      data: (rawRequests) {
+        final requests = employeesLoaded
+            ? _filterCorrectionRequestsByActiveEmployees(rawRequests, activeEmployees)
+            : rawRequests;
         if (requests.isEmpty) {
           return Center(
             child: Container(
@@ -1375,7 +1402,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     AsyncValue<AttendanceManagementStats> statsAsync,
     AsyncValue<List<AttendanceRecord>> recordsAsync,
   ) {
-    final employeesAsync = ref.watch(employeesProvider);
+    final employeesAsync = ref.watch(activeEmployeesProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2885,8 +2912,118 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
   // --- Filtering Helpers ---
 
-  List<AttendanceRecord> _filterStaticRecords(List<AttendanceRecord> records, List<Employee> employees) {
+  bool _matchesAnyActiveEmployee({
+    required int employeeId,
+    String employeeCode = '',
+    String employeeName = '',
+    required Set<int> activeIds,
+    required Set<String> activeCodes,
+    required Set<String> activeNames,
+  }) {
+    final normCode = employeeCode.trim().toUpperCase();
+    if (normCode.isNotEmpty && activeCodes.contains(normCode)) {
+      return true;
+    }
+    if ((normCode.isEmpty || normCode.startsWith('EMP-')) &&
+        employeeId > 0 &&
+        activeIds.contains(employeeId)) {
+      return true;
+    }
+    final normName = employeeName.trim().toLowerCase();
+    if (normName.isNotEmpty && activeNames.contains(normName)) {
+      return true;
+    }
+    return false;
+  }
+
+  ({Set<int> ids, Set<String> codes, Set<String> names}) _buildActiveEmployeeLookup(
+    List<Employee> activeEmployees,
+  ) {
+    final ids = <int>{};
+    final codes = <String>{};
+    final names = <String>{};
+    for (final e in activeEmployees) {
+      if (e.id > 0) ids.add(e.id);
+      if (e.employeeId.trim().isNotEmpty) {
+        codes.add(e.employeeId.trim().toUpperCase());
+      }
+      if (e.fullName.trim().isNotEmpty) {
+        names.add(e.fullName.trim().toLowerCase());
+      }
+      if (e.name.trim().isNotEmpty) {
+        names.add(e.name.trim().toLowerCase());
+      }
+      final combinedName = '${e.firstName} ${e.lastName}'.trim().toLowerCase();
+      if (combinedName.isNotEmpty) {
+        names.add(combinedName);
+      }
+    }
+    return (ids: ids, codes: codes, names: names);
+  }
+
+  List<AttendanceRecord> _filterRecordsByActiveEmployees(
+    List<AttendanceRecord> records,
+    List<Employee> activeEmployees,
+  ) {
+    final lookup = _buildActiveEmployeeLookup(activeEmployees);
     return records.where((r) {
+      return _matchesAnyActiveEmployee(
+        employeeId: r.employeeId,
+        employeeCode: r.employeeCode,
+        employeeName: r.employeeName,
+        activeIds: lookup.ids,
+        activeCodes: lookup.codes,
+        activeNames: lookup.names,
+      );
+    }).toList();
+  }
+
+  List<SiteVisitRecord> _filterSiteVisitsByActiveEmployees(
+    List<SiteVisitRecord> visits,
+    List<Employee> activeEmployees,
+  ) {
+    final lookup = _buildActiveEmployeeLookup(activeEmployees);
+    return visits.where((v) {
+      return _matchesAnyActiveEmployee(
+        employeeId: v.employeeId,
+        employeeName: v.employeeName,
+        activeIds: lookup.ids,
+        activeCodes: lookup.codes,
+        activeNames: lookup.names,
+      );
+    }).toList();
+  }
+
+  List<AttendanceCorrectionRequest> _filterCorrectionRequestsByActiveEmployees(
+    List<AttendanceCorrectionRequest> requests,
+    List<Employee> activeEmployees,
+  ) {
+    final lookup = _buildActiveEmployeeLookup(activeEmployees);
+    return requests.where((req) {
+      return _matchesAnyActiveEmployee(
+        employeeId: req.employeeId,
+        employeeCode: req.employeeCode,
+        employeeName: req.employeeName,
+        activeIds: lookup.ids,
+        activeCodes: lookup.codes,
+        activeNames: lookup.names,
+      );
+    }).toList();
+  }
+
+  List<AttendanceRecord> _filterStaticRecords(List<AttendanceRecord> records, List<Employee> employees) {
+    final lookup = _buildActiveEmployeeLookup(employees);
+    return records.where((r) {
+      if (!_matchesAnyActiveEmployee(
+        employeeId: r.employeeId,
+        employeeCode: r.employeeCode,
+        employeeName: r.employeeName,
+        activeIds: lookup.ids,
+        activeCodes: lookup.codes,
+        activeNames: lookup.names,
+      )) {
+        return false;
+      }
       if (_selectedEmployeeId != null && r.employeeId != _selectedEmployeeId) return false;
       if (_selectedStatus != 'All') {
         final selLower = _selectedStatus.toLowerCase();
@@ -2972,6 +3109,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
     return visits.where((v) {
       final emp = empMapById[v.employeeId] ?? empMapByName[v.employeeName.trim().toLowerCase()];
+      if (emp == null) return false;
 
       if (_selectedEmployeeId != null && v.employeeId != _selectedEmployeeId && (emp == null || emp.id != _selectedEmployeeId)) {
         return false;

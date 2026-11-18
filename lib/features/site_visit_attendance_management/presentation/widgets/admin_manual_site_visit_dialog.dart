@@ -123,7 +123,7 @@ class _AdminManualSiteVisitDialogState extends ConsumerState<AdminManualSiteVisi
 
   @override
   Widget build(BuildContext context) {
-    final employeesAsync = ref.watch(employeesProvider);
+    final employeesAsync = ref.watch(activeEmployeesProvider);
     final isMobile = MediaQuery.of(context).size.width < 500;
 
     return Dialog(
@@ -179,8 +179,10 @@ class _AdminManualSiteVisitDialogState extends ConsumerState<AdminManualSiteVisi
                       final match = employees.where((e) => e.id == _selectedEmployeeId).firstOrNull;
                       if (match != null) _selectedEmployeeName = match.name;
                     }
+                    final validSelectedId =
+                        employees.any((e) => e.id == _selectedEmployeeId) ? _selectedEmployeeId : null;
                     return DropdownButtonFormField<int>(
-                      value: _selectedEmployeeId,
+                      value: validSelectedId,
                       style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A), fontWeight: FontWeight.w600),
                       decoration: InputDecoration(
                         labelText: 'Select Employee *',

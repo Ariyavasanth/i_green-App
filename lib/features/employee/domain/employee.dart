@@ -498,6 +498,20 @@ class Employee {
     return permissions.any(hasPermission);
   }
 
+  /// Returns true when an employee status represents a non-active state
+  /// (Inactive, Suspended, Archived, or Deleted) that should be excluded from
+  /// Attendance Management views and stats.
+  static bool isStatusInactive(String? rawStatus) {
+    final normalized = (rawStatus ?? '').trim().toLowerCase();
+    return normalized == 'inactive' ||
+        normalized == 'suspended' ||
+        normalized == 'archived' ||
+        normalized == 'deleted';
+  }
+
+  /// Whether this employee should be shown and counted in Attendance Management.
+  bool get isActiveForAttendance => !isStatusInactive(status);
+
   static const List<String> allSidebarPermissions = [
     'Home',
     'Organization Management',

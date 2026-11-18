@@ -1,8 +1,42 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../attendance/domain/attendance_record.dart';
 import '../../attendance/domain/attendance_session.dart';
+import '../../employee/domain/employee.dart';
 import '../domain/attendance_management_repository.dart';
 import '../domain/attendance_management_stats.dart';
+
+class _EmployeeStatusSnapshot {
+  const _EmployeeStatusSnapshot({
+    required this.activeCount,
+    required this.activeIds,
+    required this.activeCodes,
+    required this.inactiveIds,
+    required this.inactiveCodes,
+  });
+
+  final int activeCount;
+  final Set<int> activeIds;
+  final Set<String> activeCodes;
+  final Set<int> inactiveIds;
+  final Set<String> inactiveCodes;
+
+  bool isExcluded({required int employeeId, required String employeeCode}) {
+    final code = employeeCode.trim().toUpperCase();
+    if (code.isNotEmpty) {
+      if (inactiveCodes.contains(code)) return true;
+      if (activeCodes.contains(code)) return false;
+    }
+    if (employeeId > 0) {
+      if (inactiveIds.contains(employeeId) && !activeIds.contains(employeeId)) {
+        return true;
+      }
+      if (inactiveIds.contains(employeeId) && code.isEmpty) {
+        return true;
+      }
+    }
+    return false;
+  }
+}
 
 class FirebaseAttendanceManagementRepository implements AttendanceManagementRepository {
   final FirebaseFirestore? _customFirestore;
@@ -22,8 +56,93 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
 
   static final Map<int, String> _empCodeCache = {};
   static DateTime? _empCodeCacheTime;
-  static int? _cachedTotalEmployees;
-  static DateTime? _cachedTotalEmployeesTime;
+
+  Future<_EmployeeStatusSnapshot> _loadEmployeeStatusSnapshot() async {
+    final activeIds = <int>{};
+    final activeCodes = <String>{};
+    final inactiveIds = <int>{};
+    final inactiveCodes = <String>{};
+    final seenActiveKeys = <String>{};
+
+    try {
+      final snap = await _employeesRef.get();
+
+      // First pass: detect dynamic-prefix employee docs so stale legacy EMP- docs
+      // do not override an employee's current status or inflate active counts.
+      final hasDynamicPrefix = <String>{};
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final storedCode = (data['employee_id'] ?? doc.id).toString().trim().toUpperCase();
+        if (!storedCode.startsWith('EMP-') && !storedCode.startsWith('CAN-')) {
+          final email = (data['email_address'] ?? data['email'] ?? '').toString().trim().toLowerCase();
+          final dataId = data['id'] is int
+              ? data['id'] as int
+              : (int.tryParse(data['id']?.toString() ?? '') ?? 0);
+          if (email.isNotEmpty) hasDynamicPrefix.add(email);
+          if (dataId > 0) hasDynamicPrefix.add('id_$dataId');
+        }
+      }
+
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final email = (data['email_address'] ?? data['email'] ?? '').toString().trim().toLowerCase();
+        final storedCode = (data['employee_id'] ?? '').toString().trim().toUpperCase();
+        final docId = doc.id.trim().toUpperCase();
+        if (email == 'rahul.sharma@igreen.com' || storedCode == 'EMP-1001' || docId == 'EMP-1001') {
+          continue;
+        }
+        if (storedCode.startsWith('CAN-') || docId.startsWith('CAN-')) {
+          continue;
+        }
+
+        final statusStr = (data['status'] ?? 'Active').toString().trim();
+        if (statusStr.toLowerCase() == 'draft') continue;
+
+        final dataId = data['id'] is int
+            ? data['id'] as int
+            : (int.tryParse(data['id']?.toString() ?? '') ?? 0);
+
+        final effectiveCode = storedCode.isNotEmpty ? storedCode : docId;
+        final isDuplicateEmpDoc = effectiveCode.startsWith('EMP-') &&
+            ((email.isNotEmpty && hasDynamicPrefix.contains(email)) ||
+                (dataId > 0 && hasDynamicPrefix.contains('id_$dataId')));
+        if (isDuplicateEmpDoc) continue;
+
+        String primaryCode = '';
+        if (docId.contains('-') && !docId.startsWith('EMP-') && !docId.startsWith('TEMP')) {
+          primaryCode = docId;
+        } else if (storedCode.isNotEmpty && !storedCode.startsWith('EMP-')) {
+          primaryCode = storedCode;
+        } else {
+          primaryCode = storedCode.isNotEmpty ? storedCode : docId;
+        }
+
+        final isInactive = Employee.isStatusInactive(statusStr);
+        if (isInactive) {
+          if (dataId > 0) inactiveIds.add(dataId);
+          if (primaryCode.isNotEmpty) inactiveCodes.add(primaryCode);
+          if (storedCode.isNotEmpty) inactiveCodes.add(storedCode);
+          if (docId.isNotEmpty) inactiveCodes.add(docId);
+        } else {
+          if (dataId > 0) activeIds.add(dataId);
+          if (primaryCode.isNotEmpty) activeCodes.add(primaryCode);
+          if (storedCode.isNotEmpty) activeCodes.add(storedCode);
+          if (docId.isNotEmpty) activeCodes.add(docId);
+
+          final uniqueKey = primaryCode.isNotEmpty ? primaryCode : '${dataId}_$email';
+          seenActiveKeys.add(uniqueKey);
+        }
+      }
+    } catch (_) {}
+
+    return _EmployeeStatusSnapshot(
+      activeCount: seenActiveKeys.length,
+      activeIds: activeIds,
+      activeCodes: activeCodes,
+      inactiveIds: inactiveIds,
+      inactiveCodes: inactiveCodes,
+    );
+  }
 
   /// Looks up the employee's string code (e.g. 'EMP-002') from Firestore by integer ID.
   /// No employee-specific codes or offsets are hardcoded — always reads from the database.
@@ -139,6 +258,12 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
   }) async {
     // Resolve the target employee code so we can strictly isolate records
     final String targetEmpCode = employeeId != null ? await _resolveEmpCode(employeeId) : '';
+    final empStatus = await _loadEmployeeStatusSnapshot();
+
+    if (employeeId != null &&
+        empStatus.isExcluded(employeeId: employeeId, employeeCode: targetEmpCode)) {
+      return [];
+    }
 
     List<AttendanceRecord> firestoreRecords = [];
     try {
@@ -195,7 +320,9 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
       combinedMap[key] = r;
     }
 
-    var list = combinedMap.values.toList();
+    var list = combinedMap.values
+        .where((r) => !empStatus.isExcluded(employeeId: r.employeeId, employeeCode: r.employeeCode))
+        .toList();
 
     if (monthYear != null && monthYear.isNotEmpty) {
       list = list.where((r) => _matchesMonthYear(r.date, monthYear)).toList();
@@ -217,6 +344,13 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
   }) async* {
     // Resolve the employee code once before streaming so we never hardcode IDs
     final String targetEmpCode = employeeId != null ? await _resolveEmpCode(employeeId) : '';
+    final empStatus = await _loadEmployeeStatusSnapshot();
+
+    if (employeeId != null &&
+        empStatus.isExcluded(employeeId: employeeId, employeeCode: targetEmpCode)) {
+      yield [];
+      return;
+    }
 
     final query = employeeId != null
         ? _recordsRef.where('employee_id', isEqualTo: employeeId)
@@ -257,7 +391,9 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
         combinedMap[key] = r;
       }
 
-      var list = combinedMap.values.toList();
+      var list = combinedMap.values
+          .where((r) => !empStatus.isExcluded(employeeId: r.employeeId, employeeCode: r.employeeCode))
+          .toList();
 
       if (monthYear != null && monthYear.isNotEmpty) {
         list = list.where((r) => _matchesMonthYear(r.date, monthYear)).toList();
@@ -279,17 +415,8 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
       final defaultDate = '${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year}';
       final targetDate = _normalizeDateKey(date ?? defaultDate);
 
-      int totalEmployees = _cachedTotalEmployees ?? 0;
-      if (totalEmployees == 0 ||
-          _cachedTotalEmployeesTime == null ||
-          now.difference(_cachedTotalEmployeesTime!).inMinutes >= 5) {
-        try {
-          final empSnap = await _employeesRef.get();
-          totalEmployees = empSnap.docs.length;
-          _cachedTotalEmployees = totalEmployees;
-          _cachedTotalEmployeesTime = now;
-        } catch (_) {}
-      }
+      final empStatus = await _loadEmployeeStatusSnapshot();
+      final int totalEmployees = empStatus.activeCount;
 
       List<AttendanceRecord> firestoreRecords = [];
       try {
@@ -299,6 +426,7 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
 
       final combinedMap = <String, AttendanceRecord>{};
       for (final r in _localMemoryCache.values) {
+        if (empStatus.isExcluded(employeeId: r.employeeId, employeeCode: r.employeeCode)) continue;
         final norm = _normalizeDateKey(r.date);
         if (norm == targetDate) {
           final key = r.employeeCode.isNotEmpty ? '${r.employeeCode}_$norm' : '${r.employeeId}_$norm';
@@ -306,6 +434,7 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
         }
       }
       for (final r in firestoreRecords) {
+        if (empStatus.isExcluded(employeeId: r.employeeId, employeeCode: r.employeeCode)) continue;
         final norm = _normalizeDateKey(r.date);
         if (norm == targetDate) {
           final key = r.employeeCode.isNotEmpty ? '${r.employeeCode}_$norm' : '${r.employeeId}_$norm';
@@ -357,23 +486,14 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
     final targetDate = _normalizeDateKey(date ?? defaultDate);
 
     return _recordsRef.snapshots().asyncMap((snap) async {
-      int totalEmployees = _cachedTotalEmployees ?? 0;
-      final currentTime = DateTime.now();
-      if (totalEmployees == 0 ||
-          _cachedTotalEmployeesTime == null ||
-          currentTime.difference(_cachedTotalEmployeesTime!).inMinutes >= 5) {
-        try {
-          final empSnap = await _employeesRef.get();
-          totalEmployees = empSnap.docs.length;
-          _cachedTotalEmployees = totalEmployees;
-          _cachedTotalEmployeesTime = currentTime;
-        } catch (_) {}
-      }
+      final empStatus = await _loadEmployeeStatusSnapshot();
+      final int totalEmployees = empStatus.activeCount;
 
       final firestoreRecords = snap.docs.map((d) => AttendanceRecord.fromMap(d.data())).toList();
 
       final combinedMap = <String, AttendanceRecord>{};
       for (final r in _localMemoryCache.values) {
+        if (empStatus.isExcluded(employeeId: r.employeeId, employeeCode: r.employeeCode)) continue;
         final norm = _normalizeDateKey(r.date);
         if (norm == targetDate) {
           final key = r.employeeCode.isNotEmpty ? '${r.employeeCode}_$norm' : '${r.employeeId}_$norm';
@@ -381,6 +501,7 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
         }
       }
       for (final r in firestoreRecords) {
+        if (empStatus.isExcluded(employeeId: r.employeeId, employeeCode: r.employeeCode)) continue;
         final norm = _normalizeDateKey(r.date);
         if (norm == targetDate) {
           final key = r.employeeCode.isNotEmpty ? '${r.employeeCode}_$norm' : '${r.employeeId}_$norm';
@@ -526,12 +647,23 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
   @override
   Future<List<Map<String, dynamic>>> getAuditAttempts({int? employeeId, int limit = 100}) async {
     try {
+      final empStatus = await _loadEmployeeStatusSnapshot();
+      if (employeeId != null) {
+        final code = await _resolveEmpCode(employeeId);
+        if (empStatus.isExcluded(employeeId: employeeId, employeeCode: code)) {
+          return [];
+        }
+      }
       Query<Map<String, dynamic>> query = _attemptsRef.orderBy('created_at', descending: true).limit(limit);
       if (employeeId != null) {
         query = _attemptsRef.where('employee_id', isEqualTo: employeeId).limit(limit);
       }
       final snap = await query.get();
-      return snap.docs.map((d) => d.data()).toList();
+      return snap.docs.map((d) => d.data()).where((data) {
+        final empIdNum = _extractDocEmpId(data);
+        final empCode = _extractDocEmpCode(data);
+        return !empStatus.isExcluded(employeeId: empIdNum, employeeCode: empCode);
+      }).toList();
     } catch (_) {
       return [];
     }
