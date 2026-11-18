@@ -149,6 +149,11 @@ class AttendanceRecord {
         if (adjustedEnd < startSec) {
           adjustedEnd += 86400; // Overnight wrap-around
         }
+        final rawElapsed = adjustedEnd - startSec;
+        if (s.durationMinutes > 0 && (rawElapsed - s.durationMinutes * 60).abs() >= 60) {
+          // Preserve explicit stored durationMinutes when timestamps have legacy AM/PM discrepancy
+          adjustedEnd = startSec + (s.durationMinutes * 60);
+        }
         if (adjustedEnd > startSec) {
           intervals.add((start: startSec, end: adjustedEnd));
         }

@@ -28,6 +28,7 @@ class _FakeFirestore implements FirebaseFirestore {
 class _FakeCollectionRef implements CollectionReference<Map<String, dynamic>> {
   _FakeCollectionRef(this.fs, this.path);
   final _FakeFirestore fs;
+  @override
   final String path;
   int _autoIdCounter = 0;
 
@@ -689,7 +690,10 @@ void main() {
         travelStartTime: '',
         sites: const [
           OnDutySite(
+            siteId: 'site_1',
             siteName: 'Site X',
+            destination: 'Site X',
+            purpose: 'Install',
             travelStartTime: '11:05:00 AM',
           ),
         ],

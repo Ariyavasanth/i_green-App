@@ -5296,6 +5296,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
   String? _locationMessage;
   LocationAccessStatus _locationAccessStatus = LocationAccessStatus.granted;
   static const double _maxAllowedGpsAccuracyMeters = 200;
+  StreamSubscription<Position>? _webPositionSub;
 
   String _formatKey(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -5309,8 +5310,127 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
 
   @override
   void dispose() {
+    _webPositionSub?.cancel();
+    _webPositionSub = null;
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  /// Acquires the most accurate GPS fix available.
+  /// On Web (Chrome), skips coarse one-shot fixes by briefly listening to
+  /// watchPosition with WebSettings(accuracy: best, maximumAge: 0) so the
+  /// browser GPS hardware has time to lock on satellites instead of returning
+  /// the first coarse network/cell-tower reading.
+  Future<Position> _acquireBestPosition({
+    double targetLat = 0,
+    double targetLng = 0,
+    int targetRadius = 0,
+  }) async {
+    if (!kIsWeb) {
+      return Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+    }
+
+    await _webPositionSub?.cancel();
+    _webPositionSub = null;
+
+    final webSettings = WebSettings(
+      accuracy: LocationAccuracy.best,
+      maximumAge: Duration.zero,
+    );
+
+    final completer = Completer<Position>();
+    Position? bestPos;
+    Timer? settleTimer;
+
+    void finish() {
+      settleTimer?.cancel();
+      settleTimer = null;
+      _webPositionSub?.cancel();
+      _webPositionSub = null;
+      if (!completer.isCompleted && bestPos != null) {
+        completer.complete(bestPos!);
+      }
+    }
+
+    try {
+      settleTimer = Timer(const Duration(seconds: 7), () {
+        if (!completer.isCompleted) {
+          if (bestPos != null) {
+            finish();
+          } else {
+            _webPositionSub?.cancel();
+            _webPositionSub = null;
+            Geolocator.getCurrentPosition(locationSettings: webSettings).then(
+              (pos) {
+                if (!completer.isCompleted) completer.complete(pos);
+              },
+              onError: (Object err, StackTrace st) {
+                if (!completer.isCompleted) completer.completeError(err, st);
+              },
+            );
+          }
+        }
+      });
+
+      _webPositionSub = Geolocator.getPositionStream(
+        locationSettings: webSettings,
+      ).listen(
+        (pos) {
+          final isBetter = bestPos == null ||
+              (pos.accuracy > 0 &&
+                  (bestPos!.accuracy <= 0 || pos.accuracy < bestPos!.accuracy));
+          if (isBetter) {
+            bestPos = pos;
+          }
+
+          final hasTarget = targetLat != 0 || targetLng != 0;
+          final dist = hasTarget
+              ? Geolocator.distanceBetween(
+                  targetLat,
+                  targetLng,
+                  pos.latitude,
+                  pos.longitude,
+                )
+              : 0.0;
+          final accurateEnough = pos.accuracy > 0 &&
+              pos.accuracy <= _maxAllowedGpsAccuracyMeters;
+          final insideNow = !hasTarget || (targetRadius > 0 && dist <= targetRadius);
+
+          // Stop early as soon as we have a true satellite lock (<= 30m) or
+          // an accurate reading already inside the geofence.
+          if ((accurateEnough && insideNow) ||
+              (pos.accuracy > 0 && pos.accuracy <= 30)) {
+            bestPos = pos;
+            finish();
+          }
+        },
+        onError: (Object err, StackTrace st) {
+          settleTimer?.cancel();
+          settleTimer = null;
+          _webPositionSub?.cancel();
+          _webPositionSub = null;
+          if (!completer.isCompleted) {
+            if (bestPos != null) {
+              completer.complete(bestPos!);
+            } else {
+              completer.completeError(err, st);
+            }
+          }
+        },
+        cancelOnError: true,
+      );
+
+      return await completer.future;
+    } catch (_) {
+      settleTimer?.cancel();
+      await _webPositionSub?.cancel();
+      _webPositionSub = null;
+      rethrow;
+    }
   }
 
   @override
@@ -5388,30 +5508,32 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
         return;
       }
 
-      if (accessStatus == LocationAccessStatus.denied) {
-        accessStatus = await LocationPermissionHelper.requestLocationPermission();
-      }
+      if (!kIsWeb) {
+        if (accessStatus == LocationAccessStatus.denied) {
+          accessStatus = await LocationPermissionHelper.requestLocationPermission();
+        }
 
-      if (accessStatus == LocationAccessStatus.serviceDisabled) {
-        if (!mounted) return;
-        setState(() {
-          _isFetchingLocation = false;
-          _withinAllowedRadius = false;
-          _locationAccessStatus = LocationAccessStatus.serviceDisabled;
-          _locationMessage = 'Location services (GPS) are turned off on this device. Please turn on GPS to verify your attendance.';
-        });
-        return;
-      }
+        if (accessStatus == LocationAccessStatus.serviceDisabled) {
+          if (!mounted) return;
+          setState(() {
+            _isFetchingLocation = false;
+            _withinAllowedRadius = false;
+            _locationAccessStatus = LocationAccessStatus.serviceDisabled;
+            _locationMessage = 'Location services (GPS) are turned off on this device. Please turn on GPS to verify your attendance.';
+          });
+          return;
+        }
 
-      if (accessStatus == LocationAccessStatus.denied) {
-        if (!mounted) return;
-        setState(() {
-          _isFetchingLocation = false;
-          _withinAllowedRadius = false;
-          _locationAccessStatus = LocationAccessStatus.denied;
-          _locationMessage = 'Location access is required to confirm you are within the workplace premises.';
-        });
-        return;
+        if (accessStatus == LocationAccessStatus.denied) {
+          if (!mounted) return;
+          setState(() {
+            _isFetchingLocation = false;
+            _withinAllowedRadius = false;
+            _locationAccessStatus = LocationAccessStatus.denied;
+            _locationMessage = 'Location access is required to confirm you are within the workplace premises.';
+          });
+          return;
+        }
       }
 
       if (accessStatus == LocationAccessStatus.deniedForever) {
@@ -5426,15 +5548,20 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
       }
 
       _locationAccessStatus = LocationAccessStatus.granted;
-      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      final position = await _acquireBestPosition(
+        targetLat: targetLat,
+        targetLng: targetLng,
+        targetRadius: targetRadius,
+      );
       final distance = Geolocator.distanceBetween(
         targetLat,
         targetLng,
         position.latitude,
         position.longitude,
       );
-      final withinRadius = (targetLat == 0 && targetLng == 0) ||
-          distance <= targetRadius;
+      final bool isAccuracyTooLow = position.accuracy > _maxAllowedGpsAccuracyMeters;
+      final withinRadius = !isAccuracyTooLow &&
+          ((targetLat == 0 && targetLng == 0) || distance <= targetRadius);
       if (!mounted) return;
       setState(() {
         _isFetchingLocation = false;
@@ -5448,10 +5575,24 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
           final accuracyStr = position.accuracy > 0
               ? ' • Accuracy: ±${position.accuracy.round()}m'
               : '';
-          _locationMessage = isSite
-              ? 'You are not at your site location ($distanceStr away, allowed: ${targetRadius}m$accuracyStr). Please go to your site location.'
-              : 'You are not at $locationDisplayName ($distanceStr away, allowed: ${targetRadius}m$accuracyStr). Please go to the assigned workplace location.';
+          if (kIsWeb && isAccuracyTooLow) {
+            _locationMessage =
+                'Browser is returning Approximate Location ($distanceStr away$accuracyStr) instead of Precise GPS. Enable "Use precise location" in Settings → Apps → Chrome → Permissions → Location (and reset site permission if needed), then tap refresh.';
+          } else {
+            _locationMessage = isSite
+                ? 'You are not at your site location ($distanceStr away, allowed: ${targetRadius}m$accuracyStr). Please go to your site location.'
+                : 'You are not at $locationDisplayName ($distanceStr away, allowed: ${targetRadius}m$accuracyStr). Please go to the assigned workplace location.';
+          }
         }
+      });
+    } on PermissionDeniedException {
+      if (!mounted) return;
+      setState(() {
+        _isFetchingLocation = false;
+        _withinAllowedRadius = false;
+        _locationAccessStatus = LocationAccessStatus.deniedForever;
+        _locationMessage =
+            'Location permission was denied in the browser. Allow Precise Location for this site in Chrome settings and tap refresh.';
       });
     } catch (e) {
       if (!mounted) return;
@@ -5566,15 +5707,43 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
 
       final settings = await widget.attendanceRepository.getAttendanceSettings();
       final bool isSite = emp.isDynamicEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0);
-      final bool requireGps = isSite ? emp.siteRequireGpsVerification : settings.requireGpsVerification;
+      final AttendanceLocationItem? matchedLoc = !isSite && emp.workLocation.trim().isNotEmpty
+          ? settings.findMatchingLocation(emp.workLocation)
+          : null;
+      final double targetLat = isSite
+          ? emp.siteLatitude
+          : (matchedLoc != null && (matchedLoc.latitude != 0 || matchedLoc.longitude != 0))
+              ? matchedLoc.latitude
+              : settings.officeLatitude;
+      final double targetLng = isSite
+          ? emp.siteLongitude
+          : (matchedLoc != null && (matchedLoc.latitude != 0 || matchedLoc.longitude != 0))
+              ? matchedLoc.longitude
+              : settings.officeLongitude;
+      final int targetRadius = isSite
+          ? emp.siteAllowedRadiusMeters
+          : (matchedLoc != null)
+              ? matchedLoc.radiusMeters
+              : settings.allowedAttendanceRadiusMeters;
+      final bool requireGps = isSite
+          ? emp.siteRequireGpsVerification
+          : (matchedLoc != null)
+              ? matchedLoc.requireGpsVerification
+              : settings.requireGpsVerification;
       double currentLat = 0.0;
       double currentLng = 0.0;
 
       if (requireGps) {
-        final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+        final position = await _acquireBestPosition(
+          targetLat: targetLat,
+          targetLng: targetLng,
+          targetRadius: targetRadius,
+        );
         if (position.accuracy > _maxAllowedGpsAccuracyMeters) {
           throw Exception(
-            'GPS accuracy is too low (${position.accuracy.toStringAsFixed(1)}m). Move to an open area and try again.',
+            kIsWeb
+                ? 'Browser GPS accuracy is too low (±${position.accuracy.round()}m). Enable "Use precise location" in Settings → Apps → Chrome → Permissions → Location and try again.'
+                : 'GPS accuracy is too low (${position.accuracy.toStringAsFixed(1)}m). Move to an open area and try again.',
           );
         }
         if (!kIsWeb && position.isMocked) {
