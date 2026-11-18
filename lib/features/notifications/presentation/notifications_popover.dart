@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,7 +8,7 @@ import '../../employee/providers/employee_providers.dart';
 import '../domain/app_notification.dart';
 import '../providers/notification_providers.dart';
 
-class NotificationsPopover extends ConsumerWidget {
+class NotificationsPopover extends ConsumerStatefulWidget {
   const NotificationsPopover({super.key, this.isMobile = false});
 
   final bool isMobile;
@@ -21,11 +22,17 @@ class NotificationsPopover extends ConsumerWidget {
     );
   }
 
-  static Future<void> showAsDesktopDialog(BuildContext context, {Offset? anchorPosition}) {
-    return showDialog<void>(
+  static Future<void> showAsDesktopDialog(
+    BuildContext context, {
+    Offset? anchorPosition,
+  }) {
+    return showGeneralDialog<void>(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.12),
-      builder: (ctx) {
+      barrierDismissible: true,
+      barrierLabel: 'Notifications',
+      barrierColor: Colors.black.withValues(alpha: 0.14),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (ctx, animation, secondaryAnimation) {
         return Stack(
           children: [
             Positioned(
@@ -41,9 +48,9 @@ class NotificationsPopover extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.12),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
+                        color: Colors.black.withValues(alpha: 0.14),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
                       ),
                     ],
                     border: Border.all(color: const Color(0xFFE2E8F0)),
@@ -56,8 +63,35 @@ class NotificationsPopover extends ConsumerWidget {
           ],
         );
       },
+      transitionBuilder: (ctx, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, -0.04),
+              end: Offset.zero,
+            ).animate(curved),
+            child: child,
+          ),
+        );
+      },
     );
   }
+
+  @override
+  ConsumerState<NotificationsPopover> createState() =>
+      _NotificationsPopoverState();
+}
+
+class _NotificationsPopoverState extends ConsumerState<NotificationsPopover> {
+  /// Optimistically hidden IDs so swiped/tapped notifications disappear immediately
+  /// without waiting for Firestore roundtrip latency.
+  final Set<String> _locallyDismissedIds = {};
 
   String _formatTimeAgo(DateTime dt) {
     final now = DateTime.now();
@@ -90,7 +124,10 @@ class NotificationsPopover extends ConsumerWidget {
     }
   }
 
-  Color _getColorForType(String type, {Map<String, dynamic> metadata = const {}}) {
+  Color _getColorForType(
+    String type, {
+    Map<String, dynamic> metadata = const {},
+  }) {
     switch (type) {
       case 'tender_closing_reminder':
         final days = (metadata['days_until_closing'] as num?)?.toInt() ?? 5;
@@ -133,24 +170,99 @@ class NotificationsPopover extends ConsumerWidget {
       item.id.startsWith(kVaultAlertPrefix) ||
       item.id.startsWith(kTenderClosingAlertPrefix);
 
+  String _sectionLabelFor(AppNotification item) {
+    if (_isLiveAlert(item)) return 'ACTION REQUIRED';
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final itemDay = DateTime(
+      item.createdAt.year,
+      item.createdAt.month,
+      item.createdAt.day,
+    );
+    final dayDiff = todayStart.difference(itemDay).inDays;
+    if (dayDiff <= 0) return 'TODAY';
+    if (dayDiff < 7) return 'THIS WEEK';
+    return 'EARLIER';
+  }
+
+  List<_PopoverListEntry> _buildGroupedEntries(List<AppNotification> items) {
+    final entries = <_PopoverListEntry>[];
+    String? lastSection;
+    for (final item in items) {
+      final section = _sectionLabelFor(item);
+      if (section != lastSection) {
+        entries.add(_PopoverListEntry.header(section));
+        lastSection = section;
+      }
+      entries.add(_PopoverListEntry.item(item));
+    }
+    return entries;
+  }
+
+  void _dismissItem(AppNotification item, String empIdStr) {
+    setState(() {
+      _locallyDismissedIds.add(item.id);
+    });
+
+    if (_isLiveAlert(item)) {
+      ref.read(dismissedLiveAlertIdsProvider.notifier).dismissForToday(item.id);
+    } else if (empIdStr.isNotEmpty) {
+      ref.read(notificationRepositoryProvider).dismissNotification(
+            notificationId: item.id,
+            employeeId: empIdStr,
+          );
+    }
+  }
+
+  void _clearAll(List<AppNotification> visibleItems, String empIdStr) {
+    if (visibleItems.isEmpty) return;
+
+    setState(() {
+      for (final item in visibleItems) {
+        _locallyDismissedIds.add(item.id);
+      }
+    });
+
+    final liveIds = visibleItems
+        .where(_isLiveAlert)
+        .map((n) => n.id)
+        .toList();
+    final persistedIds = visibleItems
+        .where((n) => !_isLiveAlert(n))
+        .map((n) => n.id)
+        .toList();
+
+    if (liveIds.isNotEmpty) {
+      ref
+          .read(dismissedLiveAlertIdsProvider.notifier)
+          .dismissAllForToday(liveIds);
+    }
+    if (persistedIds.isNotEmpty && empIdStr.isNotEmpty) {
+      ref.read(notificationRepositoryProvider).clearNotifications(
+            employeeId: empIdStr,
+            notificationIds: persistedIds,
+          );
+    }
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final currentEmp = ref.watch(currentEmployeeProvider);
     final empIdStr = currentEmp?.id.toString() ?? '';
     final notificationsAsync = ref.watch(combinedNotificationsProvider);
 
     return Container(
-      height: isMobile ? MediaQuery.of(context).size.height * 0.75 : null,
+      height: widget.isMobile ? MediaQuery.of(context).size.height * 0.75 : null,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: isMobile
+        borderRadius: widget.isMobile
             ? const BorderRadius.vertical(top: Radius.circular(20))
             : BorderRadius.circular(16),
       ),
       child: Column(
         children: [
           // Drag handle for mobile
-          if (isMobile) ...[
+          if (widget.isMobile) ...[
             const SizedBox(height: 10),
             Center(
               child: Container(
@@ -166,7 +278,7 @@ class NotificationsPopover extends ConsumerWidget {
 
           // Header
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 12, 12),
+            padding: const EdgeInsets.fromLTRB(18, 14, 12, 12),
             child: Row(
               children: [
                 const Icon(
@@ -183,13 +295,41 @@ class NotificationsPopover extends ConsumerWidget {
                     color: Color(0xFF1E293B),
                   ),
                 ),
+                notificationsAsync.maybeWhen(
+                  data: (notifications) {
+                    final visibleCount = notifications
+                        .where((n) => !_locallyDismissedIds.contains(n.id))
+                        .length;
+                    if (visibleCount == 0) return const SizedBox.shrink();
+                    return Container(
+                      margin: const EdgeInsets.only(left: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9CC70A),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        visibleCount > 99 ? '99+' : '$visibleCount',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    );
+                  },
+                  orElse: () => const SizedBox.shrink(),
+                ),
                 const Spacer(),
                 notificationsAsync.maybeWhen(
                   data: (notifications) {
-                    final unread = notifications
-                        .where((n) => !_isLiveAlert(n) && !n.isReadBy(empIdStr))
+                    final visible = notifications
+                        .where((n) => !_locallyDismissedIds.contains(n.id))
                         .toList();
-                    if (unread.isEmpty) return const SizedBox.shrink();
+                    if (visible.isEmpty) return const SizedBox.shrink();
 
                     return TextButton.icon(
                       style: TextButton.styleFrom(
@@ -197,30 +337,26 @@ class NotificationsPopover extends ConsumerWidget {
                         foregroundColor: const Color(0xFF9CC70A),
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                       ),
-                      icon: const Icon(Icons.done_all, size: 16),
+                      icon: const Icon(Icons.done_all_rounded, size: 16),
                       label: const Text(
-                        'Mark all as read',
+                        'Clear all',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      onPressed: () {
-                        final unreadIds = unread.map((n) => n.id).toList();
-                        ref
-                            .read(notificationRepositoryProvider)
-                            .markAllAsRead(
-                              employeeId: empIdStr,
-                              notificationIds: unreadIds,
-                            );
-                      },
+                      onPressed: () => _clearAll(visible, empIdStr),
                     );
                   },
                   orElse: () => const SizedBox.shrink(),
                 ),
-                if (!isMobile)
+                if (!widget.isMobile)
                   IconButton(
-                    icon: const Icon(Icons.close, size: 18, color: Color(0xFF94A3B8)),
+                    icon: const Icon(
+                      Icons.close,
+                      size: 18,
+                      color: Color(0xFF94A3B8),
+                    ),
                     tooltip: 'Close',
                     onPressed: () => Navigator.of(context).pop(),
                   ),
@@ -249,196 +385,302 @@ class NotificationsPopover extends ConsumerWidget {
                 ),
               ),
               data: (notifications) {
-                if (notifications.isEmpty) {
+                final visible = notifications
+                    .where((n) => !_locallyDismissedIds.contains(n.id))
+                    .toList();
+
+                if (visible.isEmpty) {
                   return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 56,
-                          height: 56,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFF1F5F9),
-                            shape: BoxShape.circle,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFF1F5F9),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.notifications_none_rounded,
+                              size: 28,
+                              color: Color(0xFF94A3B8),
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.notifications_none_rounded,
-                            size: 28,
-                            color: Color(0xFF94A3B8),
+                          const SizedBox(height: 12),
+                          const Text(
+                            "You're all caught up!",
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF475569),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'No new notifications',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF475569),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'No new notifications right now.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF94A3B8),
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          "You're all caught up!",
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF94A3B8),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   );
                 }
 
-                return ListView.separated(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  itemCount: notifications.length,
-                  separatorBuilder: (context, index) => const Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: Color(0xFFF1F5F9),
-                  ),
-                  itemBuilder: (context, index) {
-                    final item = notifications[index];
-                    final isLiveAlert = _isLiveAlert(item);
-                    final isRead = !isLiveAlert && item.isReadBy(empIdStr);
-                    final typeColor =
-                        _getColorForType(item.type, metadata: item.metadata);
-                    final icon = _getIconForType(item.type);
-                    final badgeLabel = _getModuleBadge(item.type);
+                final entries = _buildGroupedEntries(visible);
 
-                    return InkWell(
-                      onTap: () {
-                        // Mark as read (only for persisted Firestore notifications)
-                        if (!isLiveAlert && !isRead && empIdStr.isNotEmpty) {
-                          ref
-                              .read(notificationRepositoryProvider)
-                              .markAsRead(
-                                notificationId: item.id,
-                                employeeId: empIdStr,
-                              );
-                        }
-
-                        // Close popover / bottomsheet
-                        Navigator.of(context).pop();
-
-                        // Route navigation
-                        if (item.route.isNotEmpty) {
-                          context.push(item.route);
-                        }
-                      },
-                      hoverColor: const Color(0xFFF8FAFC),
-                      child: Container(
-                        color: item.type == 'vault_expired' ||
-                                (item.type == 'tender_closing_reminder' &&
-                                    ((item.metadata['days_until_closing']
-                                                as num?)
-                                            ?.toInt() ??
-                                        5) <=
-                                        1)
-                            ? const Color(0xFFFEF2F2)
-                            : item.type == 'vault_expiring' ||
-                                    item.type == 'tender_closing_reminder'
-                                ? const Color(0xFFFFFBEB)
-                                : (isRead
-                                    ? Colors.transparent
-                                    : const Color(0xFFF0FDF4)),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
+                return Column(
+                  children: [
+                    Expanded(
+                      child: ScrollConfiguration(
+                        behavior: ScrollConfiguration.of(context).copyWith(
+                          dragDevices: {
+                            PointerDeviceKind.touch,
+                            PointerDeviceKind.mouse,
+                            PointerDeviceKind.trackpad,
+                          },
                         ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Icon Box
-                            Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                color: typeColor.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Icon(icon, color: typeColor, size: 20),
-                            ),
-                            const SizedBox(width: 12),
+                        child: ListView.separated(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          itemCount: entries.length,
+                          separatorBuilder: (context, index) {
+                            if (entries[index].isHeader) {
+                              return const SizedBox.shrink();
+                            }
+                            return const Divider(
+                              height: 1,
+                              thickness: 1,
+                              color: Color(0xFFF1F5F9),
+                            );
+                          },
+                          itemBuilder: (context, index) {
+                            final entry = entries[index];
+                            if (entry.isHeader) {
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                                child: Text(
+                                  entry.headerTitle!,
+                                  style: const TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.6,
+                                    color: Color(0xFF94A3B8),
+                                  ),
+                                ),
+                              );
+                            }
 
-                            // Content
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
+                            final item = entry.notification!;
+                            final typeColor = _getColorForType(
+                              item.type,
+                              metadata: item.metadata,
+                            );
+                            final icon = _getIconForType(item.type);
+                            final badgeLabel = _getModuleBadge(item.type);
+
+                            return Dismissible(
+                              key: ValueKey('notif_${item.id}'),
+                              direction: DismissDirection.horizontal,
+                              movementDuration:
+                                  const Duration(milliseconds: 240),
+                              resizeDuration:
+                                  const Duration(milliseconds: 200),
+                              dismissThresholds: const {
+                                DismissDirection.startToEnd: 0.25,
+                                DismissDirection.endToStart: 0.25,
+                              },
+                              background: _buildSlideDismissBackground(
+                                alignment: Alignment.centerLeft,
+                              ),
+                              secondaryBackground:
+                                  _buildSlideDismissBackground(
+                                alignment: Alignment.centerRight,
+                              ),
+                              onDismissed: (_) => _dismissItem(item, empIdStr),
+                              child: InkWell(
+                                onTap: () {
+                                  // Dismiss immediately on tap so once viewed, it's gone
+                                  _dismissItem(item, empIdStr);
+
+                                  // Close popover / bottomsheet
+                                  Navigator.of(context).pop();
+
+                                  // Navigate to target page
+                                  if (item.route.isNotEmpty) {
+                                    context.push(item.route);
+                                  }
+                                },
+                                hoverColor: const Color(0xFFF8FAFC),
+                                child: Container(
+                                  color: item.type == 'vault_expired' ||
+                                          (item.type ==
+                                                  'tender_closing_reminder' &&
+                                              ((item.metadata[
+                                                          'days_until_closing']
+                                                      as num?)
+                                                  ?.toInt() ??
+                                                  5) <=
+                                                  1)
+                                      ? const Color(0xFFFEF2F2)
+                                      : item.type == 'vault_expiring' ||
+                                              item.type ==
+                                                  'tender_closing_reminder'
+                                          ? const Color(0xFFFFFBEB)
+                                          : const Color(0xFFF0FDF4),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      // Module Badge
+                                      // Icon Box
                                       Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 2,
-                                        ),
+                                        width: 38,
+                                        height: 38,
                                         decoration: BoxDecoration(
-                                          color: typeColor.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          badgeLabel,
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w700,
-                                            color: typeColor,
+                                          color: typeColor.withValues(
+                                            alpha: 0.14,
                                           ),
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
+                                        child: Icon(
+                                          icon,
+                                          color: typeColor,
+                                          size: 20,
                                         ),
                                       ),
-                                      const Spacer(),
-                                      // Time
-                                      Text(
-                                        _formatTimeAgo(item.createdAt),
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: Color(0xFF94A3B8),
+                                      const SizedBox(width: 12),
+
+                                      // Content
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                // Module Badge
+                                                Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 2,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: typeColor.withValues(
+                                                      alpha: 0.12,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                      4,
+                                                    ),
+                                                  ),
+                                                  child: Text(
+                                                    badgeLabel,
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: typeColor,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const Spacer(),
+                                                // Time
+                                                Text(
+                                                  _formatTimeAgo(
+                                                    item.createdAt,
+                                                  ),
+                                                  style: const TextStyle(
+                                                    fontSize: 11,
+                                                    color: Color(0xFF94A3B8),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Container(
+                                                  width: 7,
+                                                  height: 7,
+                                                  decoration:
+                                                      const BoxDecoration(
+                                                    color: Color(0xFF9CC70A),
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              item.title,
+                                              style: const TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFF0F172A),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              item.message,
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                color: Color(0xFF64748B),
+                                                height: 1.3,
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                      if (!isRead) ...[
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          width: 7,
-                                          height: 7,
-                                          decoration: const BoxDecoration(
-                                            color: Color(0xFF9CC70A),
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                      ],
                                     ],
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    item.title,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: isRead
-                                          ? FontWeight.w600
-                                          : FontWeight.bold,
-                                      color: const Color(0xFF1E293B),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    item.message,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Color(0xFF64748B),
-                                      height: 1.3,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
+                                ),
                               ),
-                            ),
-                          ],
+                            );
+                          },
                         ),
                       ),
-                    );
-                  },
+                    ),
+                    // Subtle gesture hint footer
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF8FAFC),
+                        border: Border(
+                          top: BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.swipe_rounded,
+                            size: 13,
+                            color: Color(0xFF94A3B8),
+                          ),
+                          SizedBox(width: 5),
+                          Text(
+                            'Click to view  •  Slide to dismiss',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF94A3B8),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 );
               },
             ),
@@ -447,5 +689,51 @@ class NotificationsPopover extends ConsumerWidget {
       ),
     );
   }
+
+  Widget _buildSlideDismissBackground({required Alignment alignment}) {
+    final isLeft = alignment == Alignment.centerLeft;
+    return Container(
+      alignment: alignment,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      color: const Color(0xFF414A51),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: isLeft
+            ? const [
+                Icon(Icons.done_all_rounded, color: Color(0xFF9CC70A), size: 18),
+                SizedBox(width: 6),
+                Text(
+                  'Dismiss',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ]
+            : const [
+                Text(
+                  'Dismiss',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(width: 6),
+                Icon(Icons.done_all_rounded, color: Color(0xFF9CC70A), size: 18),
+              ],
+      ),
+    );
+  }
 }
 
+class _PopoverListEntry {
+  const _PopoverListEntry.header(this.headerTitle) : notification = null;
+  const _PopoverListEntry.item(this.notification) : headerTitle = null;
+
+  final String? headerTitle;
+  final AppNotification? notification;
+
+  bool get isHeader => headerTitle != null;
+}

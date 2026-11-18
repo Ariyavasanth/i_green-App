@@ -18,6 +18,16 @@ abstract class NotificationRepository {
     required List<String> notificationIds,
   });
 
+  Future<void> dismissNotification({
+    required String notificationId,
+    required String employeeId,
+  });
+
+  Future<void> clearNotifications({
+    required String employeeId,
+    required List<String> notificationIds,
+  });
+
   Future<void> deleteNotification(String notificationId);
 
   Future<void> saveFcmToken({

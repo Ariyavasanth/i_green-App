@@ -9,6 +9,7 @@ class AppNotification {
   final String route;
   final DateTime createdAt;
   final List<String> readByEmployeeIds;
+  final List<String> dismissedByEmployeeIds;
   final Map<String, dynamic> metadata;
 
   const AppNotification({
@@ -22,11 +23,16 @@ class AppNotification {
     required this.route,
     required this.createdAt,
     this.readByEmployeeIds = const [],
+    this.dismissedByEmployeeIds = const [],
     this.metadata = const {},
   });
 
   bool isReadBy(String employeeId) {
     return readByEmployeeIds.contains(employeeId);
+  }
+
+  bool isDismissedBy(String employeeId) {
+    return dismissedByEmployeeIds.contains(employeeId);
   }
 
   Map<String, dynamic> toMap() {
@@ -41,6 +47,7 @@ class AppNotification {
       'route': route,
       'created_at': createdAt.toIso8601String(),
       'read_by_employee_ids': readByEmployeeIds,
+      'dismissed_by_employee_ids': dismissedByEmployeeIds,
       'metadata': metadata,
     };
   }
@@ -69,6 +76,12 @@ class AppNotification {
       readByList = readByRaw.map((e) => e.toString()).toList();
     }
 
+    final dismissedByRaw = map['dismissed_by_employee_ids'];
+    List<String> dismissedByList = [];
+    if (dismissedByRaw is List) {
+      dismissedByList = dismissedByRaw.map((e) => e.toString()).toList();
+    }
+
     final metaRaw = map['metadata'];
     Map<String, dynamic> metaMap = {};
     if (metaRaw is Map) {
@@ -86,6 +99,7 @@ class AppNotification {
       route: map['route']?.toString() ?? '',
       createdAt: parsedDate,
       readByEmployeeIds: readByList,
+      dismissedByEmployeeIds: dismissedByList,
       metadata: metaMap,
     );
   }
@@ -101,6 +115,7 @@ class AppNotification {
     String? route,
     DateTime? createdAt,
     List<String>? readByEmployeeIds,
+    List<String>? dismissedByEmployeeIds,
     Map<String, dynamic>? metadata,
   }) {
     return AppNotification(
@@ -114,6 +129,8 @@ class AppNotification {
       route: route ?? this.route,
       createdAt: createdAt ?? this.createdAt,
       readByEmployeeIds: readByEmployeeIds ?? this.readByEmployeeIds,
+      dismissedByEmployeeIds:
+          dismissedByEmployeeIds ?? this.dismissedByEmployeeIds,
       metadata: metadata ?? this.metadata,
     );
   }

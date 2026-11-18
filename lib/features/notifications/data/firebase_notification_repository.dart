@@ -40,29 +40,47 @@ class FirebaseNotificationRepository implements NotificationRepository {
     }
   }
 
+  static const int _maxVisibleNotifications = 50;
+  static const Duration _retentionWindow = Duration(days: 30);
+
   @override
   Stream<List<AppNotification>> watchNotificationsForUser({
     required Employee currentEmployee,
   }) {
-    // Stream all recent notifications, ordered by created_at desc (limit 100)
+    final empIdStr = currentEmployee.id.toString();
+    final empCodeStr = currentEmployee.employeeId.trim();
+
     return _notificationsRef.snapshots().map((snapshot) {
-      final all = snapshot.docs.map((doc) {
-        return AppNotification.fromMap(doc.data(), doc.id);
-      }).toList();
+      final cutoff = DateTime.now().subtract(_retentionWindow);
 
-      // Sort newest first
-      all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      final all = snapshot.docs
+          .map((doc) => AppNotification.fromMap(doc.data(), doc.id))
+          .where((n) {
+        // Hide notifications older than the retention window
+        if (n.createdAt.isBefore(cutoff)) return false;
 
-      // Filter by permissions or SuperAdmin
-      if (currentEmployee.isSuperAdmin) {
-        return all;
-      }
+        // Hide notifications already seen (read) or dismissed by this user
+        if (empIdStr.isNotEmpty &&
+            (n.isReadBy(empIdStr) || n.isDismissedBy(empIdStr))) {
+          return false;
+        }
+        if (empCodeStr.isNotEmpty &&
+            (n.isReadBy(empCodeStr) || n.isDismissedBy(empCodeStr))) {
+          return false;
+        }
 
-      return all.where((n) {
+        // Filter by permissions or SuperAdmin
+        if (currentEmployee.isSuperAdmin) return true;
         if (n.requiredPermission.isEmpty) return true;
-        // User has explicit permission for the module
         return currentEmployee.hasPermission(n.requiredPermission);
       }).toList();
+
+      // Sort newest first and cap to most recent 50
+      all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      if (all.length > _maxVisibleNotifications) {
+        return all.sublist(0, _maxVisibleNotifications);
+      }
+      return all;
     });
   }
 
@@ -83,6 +101,7 @@ class FirebaseNotificationRepository implements NotificationRepository {
     required String employeeId,
     required List<String> notificationIds,
   }) async {
+    if (employeeId.isEmpty || notificationIds.isEmpty) return;
     try {
       final batch = _firestore.batch();
       for (final id in notificationIds) {
@@ -92,6 +111,48 @@ class FirebaseNotificationRepository implements NotificationRepository {
         });
       }
       await batch.commit();
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> dismissNotification({
+    required String notificationId,
+    required String employeeId,
+  }) async {
+    if (employeeId.isEmpty || notificationId.isEmpty) return;
+    try {
+      await _notificationsRef.doc(notificationId).update({
+        'read_by_employee_ids': FieldValue.arrayUnion([employeeId]),
+        'dismissed_by_employee_ids': FieldValue.arrayUnion([employeeId]),
+      });
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> clearNotifications({
+    required String employeeId,
+    required List<String> notificationIds,
+  }) async {
+    if (employeeId.isEmpty || notificationIds.isEmpty) return;
+    try {
+      const batchSize = 400;
+      for (var i = 0; i < notificationIds.length; i += batchSize) {
+        final chunk = notificationIds.sublist(
+          i,
+          (i + batchSize > notificationIds.length)
+              ? notificationIds.length
+              : i + batchSize,
+        );
+        final batch = _firestore.batch();
+        for (final id in chunk) {
+          final doc = _notificationsRef.doc(id);
+          batch.update(doc, {
+            'read_by_employee_ids': FieldValue.arrayUnion([employeeId]),
+            'dismissed_by_employee_ids': FieldValue.arrayUnion([employeeId]),
+          });
+        }
+        await batch.commit();
+      }
     } catch (_) {}
   }
 

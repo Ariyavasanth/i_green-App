@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../employee/providers/employee_providers.dart';
 import '../../tenders/providers/company_document_providers.dart';
@@ -11,6 +12,61 @@ import '../services/fcm_push_service.dart';
 
 const String kVaultAlertPrefix = 'vault_alert_';
 const String kTenderClosingAlertPrefix = 'tender_closing_live_';
+
+/// Tracks live alert IDs (Vault expiry / Tender closing) dismissed by the user for today.
+class DismissedLiveAlertsNotifier extends StateNotifier<Set<String>> {
+  DismissedLiveAlertsNotifier(this._employeeKey) : super(const {}) {
+    _load();
+  }
+
+  final String _employeeKey;
+
+  String get _prefsKey {
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    return 'dismissed_live_alerts_${_employeeKey}_$today';
+  }
+
+  Future<void> _load() async {
+    if (_employeeKey.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getStringList(_prefsKey) ?? const [];
+      if (mounted) {
+        state = saved.toSet();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> dismissForToday(String alertId) async {
+    if (alertId.isEmpty) return;
+    final next = {...state, alertId};
+    state = next;
+    if (_employeeKey.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_prefsKey, next.toList());
+    } catch (_) {}
+  }
+
+  Future<void> dismissAllForToday(Iterable<String> alertIds) async {
+    final ids = alertIds.where((id) => id.isNotEmpty).toSet();
+    if (ids.isEmpty) return;
+    final next = {...state, ...ids};
+    state = next;
+    if (_employeeKey.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_prefsKey, next.toList());
+    } catch (_) {}
+  }
+}
+
+final dismissedLiveAlertIdsProvider =
+    StateNotifierProvider<DismissedLiveAlertsNotifier, Set<String>>((ref) {
+  final currentEmp = ref.watch(currentEmployeeProvider);
+  final key = currentEmp != null ? currentEmp.id.toString() : '';
+  return DismissedLiveAlertsNotifier(key);
+});
 
 final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {
   return FirebaseNotificationRepository();
@@ -37,6 +93,7 @@ final userNotificationsStreamProvider =
 /// Live expiry alerts derived from Company Vault documents.
 final vaultExpiryNotificationsProvider = Provider<List<AppNotification>>((ref) {
   final docsAsync = ref.watch(companyDocumentsStreamProvider);
+  final dismissedIds = ref.watch(dismissedLiveAlertIdsProvider);
   final df = DateFormat('dd-MM-yyyy');
 
   return docsAsync.maybeWhen(
@@ -44,6 +101,8 @@ final vaultExpiryNotificationsProvider = Provider<List<AppNotification>>((ref) {
       final alerts = <AppNotification>[];
       for (final doc in docs) {
         if (!doc.isExpired && !doc.isExpiringSoon) continue;
+        final alertId = '$kVaultAlertPrefix${doc.id}';
+        if (dismissedIds.contains(alertId)) continue;
         final expDateStr =
             doc.expiryDate != null ? df.format(doc.expiryDate!) : '';
         final days = doc.daysUntilExpiry ?? 0;
@@ -67,7 +126,7 @@ final vaultExpiryNotificationsProvider = Provider<List<AppNotification>>((ref) {
 
         alerts.add(
           AppNotification(
-            id: '$kVaultAlertPrefix${doc.id}',
+            id: alertId,
             title: title,
             message: message,
             type: type,
@@ -104,6 +163,7 @@ final tenderClosingNotificationsProvider = Provider<List<AppNotification>>((ref)
   }
 
   final tendersAsync = ref.watch(tendersStreamProvider);
+  final dismissedIds = ref.watch(dismissedLiveAlertIdsProvider);
   final df = DateFormat('dd MMM yyyy');
 
   return tendersAsync.maybeWhen(
@@ -111,6 +171,8 @@ final tenderClosingNotificationsProvider = Provider<List<AppNotification>>((ref)
       final alerts = <AppNotification>[];
       for (final tender in tenders) {
         if (!tender.isClosingSoon) continue;
+        final alertId = '$kTenderClosingAlertPrefix${tender.id}';
+        if (dismissedIds.contains(alertId)) continue;
         final days = tender.daysUntilClosing ?? 0;
         final closeDateStr =
             tender.closingDate != null ? df.format(tender.closingDate!) : '';
@@ -136,7 +198,7 @@ final tenderClosingNotificationsProvider = Provider<List<AppNotification>>((ref)
 
         alerts.add(
           AppNotification(
-            id: '$kTenderClosingAlertPrefix${tender.id}',
+            id: alertId,
             title: days == 0
                 ? 'Tender Closing TODAY: $displayName'
                 : 'Tender Closing Soon: $displayName',

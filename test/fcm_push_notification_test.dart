@@ -27,6 +27,18 @@ class _FakeNotificationRepository implements NotificationRepository {
   }) async {}
 
   @override
+  Future<void> dismissNotification({
+    required String notificationId,
+    required String employeeId,
+  }) async {}
+
+  @override
+  Future<void> clearNotifications({
+    required String employeeId,
+    required List<String> notificationIds,
+  }) async {}
+
+  @override
   Future<void> sendNotification(AppNotification notification) async {}
 
   @override
@@ -122,21 +134,44 @@ void main() {
       ],
       financialBidDocuments: [
         ProjectDocument(
-          id: 'fb1',
           name: 'bid.pdf',
-          url: 'https://example.com/bid.pdf',
+          size: 1024,
+          downloadUrl: 'https://example.com/bid.pdf',
           uploadedAt: now,
         ),
       ],
       emdDocuments: [
         ProjectDocument(
-          id: 'emd1',
           name: 'emd.pdf',
-          url: 'https://example.com/emd.pdf',
+          size: 1024,
+          downloadUrl: 'https://example.com/emd.pdf',
           uploadedAt: now,
         ),
       ],
     );
     expect(readyTender.pendingDocumentCount, 0);
+  });
+
+  test('AppNotification tracks per-user read and dismissed state accurately', () {
+    final now = DateTime.now();
+    final original = AppNotification(
+      id: 'notif-1',
+      title: 'New Leave Request',
+      message: 'Submitted leave request',
+      type: 'leave_request',
+      requiredPermission: 'Leave Management',
+      route: '/leave-management',
+      createdAt: now,
+      readByEmployeeIds: const ['101'],
+      dismissedByEmployeeIds: const ['101'],
+    );
+
+    final serialized = original.toMap();
+    final parsed = AppNotification.fromMap(serialized, 'notif-1');
+
+    expect(parsed.isReadBy('101'), isTrue);
+    expect(parsed.isDismissedBy('101'), isTrue);
+    expect(parsed.isReadBy('202'), isFalse);
+    expect(parsed.isDismissedBy('202'), isFalse);
   });
 }
