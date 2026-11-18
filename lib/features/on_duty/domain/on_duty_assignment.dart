@@ -307,6 +307,23 @@ class OnDutyAssignment {
     return [];
   }
 
+  static String? _cleanTimestamp(dynamic value) {
+    if (value == null) return null;
+    final trimmed = value.toString().trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  /// Verified actual OD start timestamp only (never falls back to plannedStartTime).
+  String? get verifiedActualStartTime {
+    final direct = _cleanTimestamp(travelStartTime) ?? _cleanTimestamp(actualStartTime);
+    if (direct != null) return direct;
+    if (sites.isNotEmpty) {
+      return _cleanTimestamp(sites.first.travelStartTime) ??
+          _cleanTimestamp(sites.first.reachedTime);
+    }
+    return null;
+  }
+
   Map<String, dynamic> toMap() => {
         if (id != 0) 'id': id,
         'employee_id': employeeId,
@@ -323,22 +340,22 @@ class OnDutyAssignment {
         'date': date,
         'planned_start_time': plannedStartTime,
         'planned_end_time': plannedEndTime,
-        'actual_start_time': actualStartTime ?? travelStartTime,
-        'actual_end_time': actualEndTime ?? officeReachedTime ?? workCompletedTime,
+        'actual_start_time': _cleanTimestamp(actualStartTime) ?? _cleanTimestamp(travelStartTime),
+        'actual_end_time': _cleanTimestamp(actualEndTime) ?? _cleanTimestamp(officeReachedTime) ?? _cleanTimestamp(workCompletedTime),
         'start_latitude': startLatitude ?? startTripLatitude,
         'start_longitude': startLongitude ?? startTripLongitude,
         'end_latitude': endLatitude ?? effectiveDestinationLatitude,
         'end_longitude': endLongitude ?? effectiveDestinationLongitude,
         'start_photo': startPhoto ?? reachedPhoto,
         'end_photo': endPhoto ?? workPhoto,
-        'travel_start_time': travelStartTime,
-        'reached_time': reachedTime,
+        'travel_start_time': _cleanTimestamp(travelStartTime),
+        'reached_time': _cleanTimestamp(reachedTime),
         'reached_photo': reachedPhoto,
-        'work_completed_time': workCompletedTime,
+        'work_completed_time': _cleanTimestamp(workCompletedTime),
         'work_photo': workPhoto,
         if (workPhotos.isNotEmpty) 'work_photos': workPhotos,
-        'return_start_time': returnStartTime,
-        'office_reached_time': officeReachedTime,
+        'return_start_time': _cleanTimestamp(returnStartTime),
+        'office_reached_time': _cleanTimestamp(officeReachedTime),
         'start_trip_latitude': startTripLatitude,
         'start_trip_longitude': startTripLongitude,
         'reached_latitude': reachedLatitude,
@@ -505,22 +522,28 @@ class OnDutyAssignment {
       date: map['date']?.toString() ?? '',
       plannedStartTime: map['planned_start_time']?.toString() ?? map['assigned_time']?.toString() ?? '',
       plannedEndTime: map['planned_end_time']?.toString(),
-      actualStartTime: map['actual_start_time']?.toString() ?? map['travel_start_time']?.toString() ?? map['started_time']?.toString(),
-      actualEndTime: map['actual_end_time']?.toString() ?? map['office_reached_time']?.toString() ?? map['completed_time']?.toString(),
+      actualStartTime: _cleanTimestamp(map['actual_start_time']) ??
+          _cleanTimestamp(map['travel_start_time']) ??
+          _cleanTimestamp(map['started_time']),
+      actualEndTime: _cleanTimestamp(map['actual_end_time']) ??
+          _cleanTimestamp(map['office_reached_time']) ??
+          _cleanTimestamp(map['completed_time']),
       startLatitude: (map['start_latitude'] as num?)?.toDouble() ?? (map['from_latitude'] as num?)?.toDouble(),
       startLongitude: (map['start_longitude'] as num?)?.toDouble() ?? (map['from_longitude'] as num?)?.toDouble(),
       endLatitude: (map['end_latitude'] as num?)?.toDouble() ?? destLat,
       endLongitude: (map['end_longitude'] as num?)?.toDouble() ?? destLng,
       startPhoto: map['start_photo']?.toString() ?? map['reached_photo']?.toString(),
       endPhoto: map['end_photo']?.toString() ?? map['work_photo']?.toString() ?? map['photo_proof_path']?.toString(),
-      travelStartTime: map['travel_start_time']?.toString() ?? map['actual_start_time']?.toString(),
-      reachedTime: map['reached_time']?.toString(),
+      travelStartTime: _cleanTimestamp(map['travel_start_time']) ??
+          _cleanTimestamp(map['actual_start_time']),
+      reachedTime: _cleanTimestamp(map['reached_time']),
       reachedPhoto: map['reached_photo']?.toString() ?? map['start_photo']?.toString(),
-      workCompletedTime: map['work_completed_time']?.toString(),
+      workCompletedTime: _cleanTimestamp(map['work_completed_time']),
       workPhoto: map['work_photo']?.toString() ?? map['end_photo']?.toString() ?? (parsedWorkPhotos.isNotEmpty ? parsedWorkPhotos.first : null),
       workPhotos: parsedWorkPhotos,
-      returnStartTime: map['return_start_time']?.toString(),
-      officeReachedTime: map['office_reached_time']?.toString() ?? map['actual_end_time']?.toString(),
+      returnStartTime: _cleanTimestamp(map['return_start_time']),
+      officeReachedTime: _cleanTimestamp(map['office_reached_time']) ??
+          _cleanTimestamp(map['actual_end_time']),
       startTripLatitude: (map['start_trip_latitude'] as num?)?.toDouble() ?? (map['start_latitude'] as num?)?.toDouble(),
       startTripLongitude: (map['start_trip_longitude'] as num?)?.toDouble() ?? (map['start_longitude'] as num?)?.toDouble(),
       reachedLatitude: (map['reached_latitude'] as num?)?.toDouble(),

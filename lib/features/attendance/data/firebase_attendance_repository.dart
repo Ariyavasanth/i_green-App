@@ -41,6 +41,69 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
   static List<Map<String, dynamic>>? _cachedEmployeeDocs;
   static DateTime? _cachedEmployeeDocsTime;
 
+  static String? _firstNonEmptyString(List<dynamic> candidates) {
+    for (final c in candidates) {
+      if (c == null) continue;
+      final str = c.toString().trim();
+      if (str.isNotEmpty) return str;
+    }
+    return null;
+  }
+
+  /// Resolves ONLY a verified actual OD start time from Firestore assignment data.
+  /// Never uses planned_start_time, attendance check-in/out times, or hardcoded defaults.
+  static String? resolveVerifiedOdStartTime(Map<String, dynamic> assign) {
+    final topLevel = _firstNonEmptyString([
+      assign['travel_start_time'],
+      assign['actual_start_time'],
+    ]);
+    if (topLevel != null) return topLevel;
+
+    final sites = assign['sites'] as List?;
+    if (sites != null && sites.isNotEmpty && sites.first is Map) {
+      final firstSite = sites.first as Map;
+      final siteStart = _firstNonEmptyString([
+        firstSite['travel_start_time'],
+        firstSite['reached_time'],
+      ]);
+      if (siteStart != null) return siteStart;
+    }
+    return null;
+  }
+
+  /// Resolves ONLY a verified actual OD end time from Firestore assignment data.
+  static String? resolveVerifiedOdEndTime(Map<String, dynamic> assign) {
+    return _firstNonEmptyString([
+      assign['office_reached_time'],
+      assign['actual_end_time'],
+      assign['work_completed_time'],
+    ]);
+  }
+
+  Future<void> _flagUnverifiedOdAssignmentForReview({
+    required AttendanceRecord rec,
+    required String normDate,
+    required int assignId,
+    required String purpose,
+    required List<String> missingFields,
+  }) async {
+    try {
+      final reviewDocId = 'od_unverified_start_${rec.employeeId}_${normDate.replaceAll('-', '')}_$assignId';
+      await _attemptsRef.doc(reviewDocId).set({
+        'employee_id': rec.employeeId,
+        'employee_name': rec.employeeName,
+        'date': normDate,
+        'time': rec.effectiveCheckInTime,
+        'verification_status': 'OD Unverified Start Time - Admin Review Required',
+        'similarity_score': 0.0,
+        'assignment_id': assignId,
+        'missing_fields': missingFields,
+        'message': 'Skipped auto-creating OD session for assignment #$assignId ($purpose) on $normDate: missing verified ${missingFields.join(", ")}. Flagged for admin review.',
+        'created_at': DateTime.now().toIso8601String(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
   Future<void> autoSyncCompletedOdSessions({int? employeeId}) async {
     try {
       final assignmentsSnap = employeeId != null && employeeId > 0
@@ -147,11 +210,8 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
                   (matchingAssign['office_reached_time'] != null && matchingAssign['office_reached_time'].toString().trim().isNotEmpty);
 
               if (isCompleted && (s.isActive || s.checkOutTime.trim().isEmpty)) {
-                final outTime = (matchingAssign['office_reached_time'] ??
-                        matchingAssign['actual_end_time'] ??
-                        matchingAssign['work_completed_time'] ??
-                        s.checkInTime)
-                    .toString();
+                final outTime = resolveVerifiedOdEndTime(matchingAssign);
+                if (outTime == null) continue; // Do not fabricate checkout time
 
                 int sessionDurationMinutes = 0;
                 double sessionDurationHours = 0.0;
@@ -163,7 +223,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
                 }
 
                 final closedSession = s.copyWith(
-                  checkOutTime: outTime.isNotEmpty ? outTime : s.checkInTime,
+                  checkOutTime: outTime,
                   checkOutVerificationStatus: 'OD Completed',
                   checkOutSimilarityScore: 1.0,
                   checkOutMethod: 'OD Auto Sync',
@@ -177,11 +237,17 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           }
         }
 
-        // 2. Insert any OD assignment that is missing from updatedSessions
+        // 2. Sync ONLY completed OD assignments that have verified actual start & end times
         for (final assign in matchingAssignments) {
           final assignId = int.tryParse(assign['id']?.toString() ?? '') ?? 0;
           final assignStatus = (assign['status'] ?? '').toString().toUpperCase();
           if (assignStatus == 'CANCELLED' || assignStatus == 'REJECTED') continue;
+
+          // Never auto-create attendance sessions for unstarted (ASSIGNED) or incomplete OD assignments
+          final isCompleted = assignStatus == 'COMPLETED' ||
+              (assign['office_reached_time'] != null &&
+                  assign['office_reached_time'].toString().trim().isNotEmpty);
+          if (!isCompleted) continue;
 
           final bool alreadyPresent = updatedSessions.any((s) {
             if (assignId > 0 && s.assignmentId == assignId) return true;
@@ -194,48 +260,37 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           });
 
           if (!alreadyPresent) {
-            String startTime = (assign['travel_start_time'] ??
-                    assign['actual_start_time'] ??
-                    assign['planned_start_time'] ??
-                    '')
-                .toString()
-                .trim();
-            if (startTime.isEmpty) {
-              final sites = assign['sites'] as List?;
-              if (sites != null && sites.isNotEmpty) {
-                final firstSite = sites.first as Map?;
-                startTime = (firstSite?['travel_start_time'] ?? firstSite?['reached_time'] ?? '').toString().trim();
-              }
-            }
-            if (startTime.isEmpty) {
-              startTime = rec.checkOutTime.isNotEmpty ? rec.checkOutTime : '08:00 AM';
-            }
+            final startTime = resolveVerifiedOdStartTime(assign);
+            final outTime = resolveVerifiedOdEndTime(assign);
+            final purposeStr = (assign['purpose'] ?? 'On Duty').toString().trim();
 
-            final isCompleted = assignStatus == 'COMPLETED' ||
-                (assign['office_reached_time'] != null && assign['office_reached_time'].toString().trim().isNotEmpty);
-
-            final outTime = isCompleted
-                ? (assign['office_reached_time'] ??
-                        assign['actual_end_time'] ??
-                        assign['work_completed_time'] ??
-                        startTime)
-                    .toString()
-                    .trim()
-                : '';
+            // Do NOT fall back to planned_start_time, rec.checkOutTime, rec.checkInTime, or '08:00 AM'.
+            // Flag missing timestamps for admin review instead of creating a synthetic session.
+            if (startTime == null || outTime == null) {
+              final missing = <String>[
+                if (startTime == null) 'actual start time (travel_start_time / actual_start_time)',
+                if (outTime == null) 'actual end time (office_reached_time / actual_end_time / work_completed_time)',
+              ];
+              await _flagUnverifiedOdAssignmentForReview(
+                rec: rec,
+                normDate: normDate,
+                assignId: assignId,
+                purpose: purposeStr,
+                missingFields: missing,
+              );
+              continue;
+            }
 
             int sessionDurationMinutes = 0;
             double sessionDurationHours = 0.0;
-            if (isCompleted) {
-              final inMin = _parseMinutes(startTime);
-              final outMin = _parseMinutes(outTime);
-              if (inMin != null && outMin != null && outMin >= inMin) {
-                sessionDurationMinutes = outMin - inMin;
-                sessionDurationHours = double.parse((sessionDurationMinutes / 60.0).toStringAsFixed(2));
-              }
+            final inMin = _parseMinutes(startTime);
+            final outMin = _parseMinutes(outTime);
+            if (inMin != null && outMin != null && outMin >= inMin) {
+              sessionDurationMinutes = outMin - inMin;
+              sessionDurationHours = double.parse((sessionDurationMinutes / 60.0).toStringAsFixed(2));
             }
 
             final destName = (assign['destination_name'] ?? assign['destination'] ?? '').toString().trim();
-            final purposeStr = (assign['purpose'] ?? 'On Duty').toString().trim();
             final destAddr = (assign['destination_address'] ?? '').toString().trim();
 
             final newOdSession = AttendanceSession(
@@ -243,12 +298,12 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
               type: 'od',
               checkInTime: startTime,
               checkOutTime: outTime,
-              checkInVerificationStatus: isCompleted ? 'OD Completed' : 'OD In Progress',
-              checkOutVerificationStatus: isCompleted ? 'OD Completed' : '',
+              checkInVerificationStatus: 'OD Completed',
+              checkOutVerificationStatus: 'OD Completed',
               checkInSimilarityScore: 1.0,
-              checkOutSimilarityScore: isCompleted ? 1.0 : 0.0,
+              checkOutSimilarityScore: 1.0,
               checkInMethod: 'OD Auto Sync',
-              checkOutMethod: isCompleted ? 'OD Auto Sync' : '',
+              checkOutMethod: 'OD Auto Sync',
               assignmentId: assignId > 0 ? assignId : null,
               purpose: purposeStr,
               destination: destName,
@@ -285,13 +340,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
             return aMin.compareTo(bMin);
           });
 
-          double totalDailyHours = 0.0;
-          for (final session in updatedSessions) {
-            if (session.isCompleted) {
-              totalDailyHours += session.effectiveDurationHours;
-            }
-          }
-          totalDailyHours = double.parse(totalDailyHours.toStringAsFixed(2));
+          final totalDailyHours = AttendanceRecord.calculateNonOverlappingDurationHours(updatedSessions);
 
           final hasActiveNow = updatedSessions.any((sess) => sess.isActive);
           final updatedRec = rec.copyWith(
@@ -1154,13 +1203,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       createdAt: DateTime.now().toIso8601String(),
     ));
 
-    double totalDailyHours = 0.0;
-    for (final s in updatedSessions) {
-      if (s.isCompleted) {
-        totalDailyHours += s.effectiveDurationHours;
-      }
-    }
-    totalDailyHours = double.parse(totalDailyHours.toStringAsFixed(2));
+    final totalDailyHours = AttendanceRecord.calculateNonOverlappingDurationHours(updatedSessions);
 
     final updatedRecord = existingRecord.copyWith(
       sessions: updatedSessions,
@@ -1225,13 +1268,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       ));
     }
 
-    double totalDailyHours = 0.0;
-    for (final s in updatedSessions) {
-      if (s.isCompleted) {
-        totalDailyHours += s.effectiveDurationHours;
-      }
-    }
-    totalDailyHours = double.parse(totalDailyHours.toStringAsFixed(2));
+    final totalDailyHours = AttendanceRecord.calculateNonOverlappingDurationHours(updatedSessions);
 
     final updatedRecord = existingRecord.copyWith(
       sessions: updatedSessions,
@@ -1830,14 +1867,8 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     );
     updatedSessions[activeIndex] = completedSession;
 
-    // 5. Calculate total daily hours as the sum of all completed sessions
-    double totalDailyHours = 0.0;
-    for (final session in updatedSessions) {
-      if (session.isCompleted) {
-        totalDailyHours += session.effectiveDurationHours;
-      }
-    }
-    totalDailyHours = double.parse(totalDailyHours.toStringAsFixed(2));
+    // 5. Calculate total daily hours as non-overlapping union of all completed sessions
+    final totalDailyHours = AttendanceRecord.calculateNonOverlappingDurationHours(updatedSessions);
 
     final employee = await _getEmployeeById(employeeId);
     final isDynamic = employee?.isDynamicEmployee ?? false;
@@ -2121,27 +2152,38 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         createdAt: DateTime.now().toIso8601String(),
       );
 
-      // 6. Append new OD session
+      // 6. Append new OD session (preserving/closing legacy office session if sessions list was empty)
       if (updatedSessions.isEmpty &&
           existingRecord != null &&
-          existingRecord.checkInTime.isNotEmpty &&
-          existingRecord.checkOutTime.isNotEmpty) {
-        // Preserve legacy single session
+          existingRecord.effectiveCheckInTime.isNotEmpty) {
+        final legacyCheckIn = existingRecord.effectiveCheckInTime;
+        final isLegacyCompleted = existingRecord.checkOutTime.isNotEmpty;
+        final legacyOut = isLegacyCompleted ? existingRecord.checkOutTime : time;
+        final inMin = _parseMinutes(legacyCheckIn);
+        final outMin = _parseMinutes(legacyOut);
+        int legacyMins = (existingRecord.totalHours * 60).round();
+        double legacyHrs = existingRecord.totalHours;
+        if (!isLegacyCompleted && inMin != null && outMin != null && outMin >= inMin) {
+          legacyMins = outMin - inMin;
+          legacyHrs = double.parse((legacyMins / 60.0).toStringAsFixed(2));
+        }
         updatedSessions.add(AttendanceSession(
           id: 'session_legacy_1',
           type: 'office',
-          checkInTime: existingRecord.checkInTime,
-          checkOutTime: existingRecord.checkOutTime,
+          checkInTime: legacyCheckIn,
+          checkOutTime: legacyOut,
           checkInVerificationStatus: existingRecord.checkInVerificationStatus.isNotEmpty
               ? existingRecord.checkInVerificationStatus
               : existingRecord.verificationStatus,
-          checkOutVerificationStatus: existingRecord.checkOutVerificationStatus,
+          checkOutVerificationStatus: isLegacyCompleted
+              ? existingRecord.checkOutVerificationStatus
+              : 'Auto Checked Out for OD',
           checkInSimilarityScore: existingRecord.checkInSimilarityScore > 0
               ? existingRecord.checkInSimilarityScore
               : existingRecord.similarityScore,
-          checkOutSimilarityScore: existingRecord.checkOutSimilarityScore,
-          durationHours: existingRecord.totalHours,
-          durationMinutes: (existingRecord.totalHours * 60).round(),
+          checkOutSimilarityScore: isLegacyCompleted ? existingRecord.checkOutSimilarityScore : 1.0,
+          durationHours: legacyHrs,
+          durationMinutes: legacyMins,
           notes: existingRecord.notes,
           createdAt: existingRecord.markedAt,
         ));
@@ -2260,12 +2302,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     }
 
     List<AttendanceSession> updatedSessions = List<AttendanceSession>.from(existingRecord.sessions);
-    int activeIndex = updatedSessions.indexWhere((s) => s.isActive && (s.isOd || s.assignmentId == assignmentId));
-
-    // Fallback: any active session
-    if (activeIndex == -1) {
-      activeIndex = updatedSessions.indexWhere((s) => s.isActive);
-    }
+    int activeIndex = updatedSessions.indexWhere(
+      (s) => s.isActive && (s.isOd || (assignmentId > 0 && s.assignmentId == assignmentId)),
+    );
 
     if (activeIndex == -1) {
       return const AttendanceVerificationResult(
@@ -2392,14 +2431,8 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       }
     }
 
-    // Calculate total daily hours as the sum of all completed sessions (Office + OD + Breaks)
-    double totalDailyHours = 0.0;
-    for (final session in updatedSessions) {
-      if (session.isCompleted) {
-        totalDailyHours += session.effectiveDurationHours;
-      }
-    }
-    totalDailyHours = double.parse(totalDailyHours.toStringAsFixed(2));
+    // Calculate total daily hours as non-overlapping union of all completed sessions (Office + OD + Breaks)
+    final totalDailyHours = AttendanceRecord.calculateNonOverlappingDurationHours(updatedSessions);
 
     String finalStatus = existingRecord.status;
     String updatedNotes = existingRecord.notes;
@@ -2680,15 +2713,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       ));
     }
 
-    double hours = 0.0;
-    if (updatedSessions.isNotEmpty) {
-      for (final s in updatedSessions) {
-        if (s.isCompleted) {
-          hours += s.effectiveDurationHours;
-        }
-      }
-      hours = double.parse(hours.toStringAsFixed(2));
-    }
+    double hours = updatedSessions.isNotEmpty
+        ? AttendanceRecord.calculateNonOverlappingDurationHours(updatedSessions)
+        : 0.0;
     if (hours == 0.0) {
       final inTime = record.effectiveCheckInTime;
       if (inTime.isNotEmpty && checkOutTime.isNotEmpty) {
@@ -2812,15 +2839,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
   Future<void> adminSaveAttendance(AttendanceRecord record) async {
     final inTime = record.effectiveCheckInTime;
     final outTime = record.checkOutTime;
-    double hours = 0.0;
-    if (record.sessions.isNotEmpty) {
-      for (final s in record.sessions) {
-        if (s.isCompleted) {
-          hours += s.effectiveDurationHours;
-        }
-      }
-      hours = double.parse(hours.toStringAsFixed(2));
-    }
+    double hours = record.sessions.isNotEmpty
+        ? AttendanceRecord.calculateNonOverlappingDurationHours(record.sessions)
+        : 0.0;
     if (hours == 0.0 && record.totalHours > 0) {
       hours = record.totalHours;
     }
@@ -3279,15 +3300,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           newNotes = isWeeklyOff ? 'Weekly off attendance' : 'Flexible schedule';
         } else {
           final checkOutTime = record.checkOutTime.trim();
-          double hours = 0.0;
-          if (record.sessions.isNotEmpty) {
-            for (final s in record.sessions) {
-              if (s.isCompleted) {
-                hours += s.effectiveDurationHours;
-              }
-            }
-            hours = double.parse(hours.toStringAsFixed(2));
-          }
+          double hours = record.sessions.isNotEmpty
+              ? AttendanceRecord.calculateNonOverlappingDurationHours(record.sessions)
+              : 0.0;
           if (hours == 0.0 && record.totalHours > 0) {
             hours = record.totalHours;
           }
@@ -3353,15 +3368,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           }
         } else {
           final checkOutTime = record.checkOutTime.trim();
-          double hours = 0.0;
-          if (record.sessions.isNotEmpty) {
-            for (final s in record.sessions) {
-              if (s.isCompleted) {
-                hours += s.effectiveDurationHours;
-              }
-            }
-            hours = double.parse(hours.toStringAsFixed(2));
-          }
+          double hours = record.sessions.isNotEmpty
+              ? AttendanceRecord.calculateNonOverlappingDurationHours(record.sessions)
+              : 0.0;
           if (hours == 0.0 && record.totalHours > 0) {
             hours = record.totalHours;
           }

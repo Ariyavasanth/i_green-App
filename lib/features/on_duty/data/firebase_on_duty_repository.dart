@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../domain/on_duty_assignment.dart';
 import '../domain/on_duty_repository.dart';
@@ -195,8 +195,15 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
       final updates = <String, dynamic>{
         'status': status.toUpperCase(),
       };
-      if (actualStartTime != null) updates['actual_start_time'] = actualStartTime;
-      if (actualEndTime != null) updates['actual_end_time'] = actualEndTime;
+      if (actualStartTime != null && actualStartTime.trim().isNotEmpty) {
+        updates['actual_start_time'] = actualStartTime.trim();
+        if (status.toUpperCase() == 'IN_PROGRESS' || status.toUpperCase() == 'TRAVELING_TO_DESTINATION') {
+          updates['travel_start_time'] = actualStartTime.trim();
+        }
+      }
+      if (actualEndTime != null && actualEndTime.trim().isNotEmpty) {
+        updates['actual_end_time'] = actualEndTime.trim();
+      }
       if (status.toUpperCase() == 'IN_PROGRESS' || status.toUpperCase() == 'TRAVELING_TO_DESTINATION') {
         if (latitude != null) updates['start_latitude'] = latitude;
         if (longitude != null) updates['start_longitude'] = longitude;

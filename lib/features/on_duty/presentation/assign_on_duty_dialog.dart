@@ -1167,16 +1167,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
               false;
         }
 
-        if (shouldAutoCheckOut) {
-          final nowTimeStr = DateFormat('hh:mm a').format(DateTime.now());
-          await attendanceRepo.checkOut(
-            employeeId: empIdInt,
-            date: todayStr,
-            checkOutTime: nowTimeStr,
-            verificationStatus: 'AUTO_OFFICE_CHECKOUT_FOR_OD',
-            similarityScore: 1.0,
-          );
-        } else {
+        if (!shouldAutoCheckOut) {
           return;
         }
       }
@@ -1234,15 +1225,14 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
 
       final primarySite = _addedSites.first;
       final capturedPosition = position ?? await _getGpsPosition();
-      final nowStr = DateFormat('hh:mm a').format(DateTime.now());
-      final nowTime24 = '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:${DateTime.now().second.toString().padLeft(2, '0')}';
+      final startTimestamp = DateFormat('hh:mm:ss a').format(DateTime.now());
 
       // Auto-complete previous active OD assignment when starting a new OD session
       if (existingActiveAssignment != null) {
         await repo.updateAssignmentStatus(
           id: existingActiveAssignment.id,
           status: 'COMPLETED',
-          actualEndTime: nowStr,
+          actualEndTime: startTimestamp,
         );
       }
 
@@ -1251,7 +1241,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
       if (updatedSites.isNotEmpty) {
         updatedSites[0] = updatedSites[0].copyWith(
           status: 'TRAVELING',
-          travelStartTime: nowStr,
+          travelStartTime: startTimestamp,
           startLatitude: capturedPosition?.latitude,
           startLongitude: capturedPosition?.longitude,
         );
@@ -1273,8 +1263,8 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
         destinationRadius: primarySite.radius,
         sites: updatedSites,
         date: DateFormat('dd-MM-yyyy').format(DateTime.now()),
-        actualStartTime: nowStr,
-        travelStartTime: nowStr,
+        actualStartTime: startTimestamp,
+        travelStartTime: startTimestamp,
         startTripLatitude: capturedPosition?.latitude,
         startTripLongitude: capturedPosition?.longitude,
         startLatitude: capturedPosition?.latitude,
@@ -1308,13 +1298,13 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
       } catch (_) {}
 
       // Start OD Attendance Session only if NOT starting from home.
-      // For first OD starting from home, check-in will be recorded when the employee reaches the OD site.
+      // startOdAttendanceSession atomically closes any active Office session at startTimestamp.
       if (!_startOdFromHome) {
         final sessionResult = await attendanceRepo.startOdAttendanceSession(
           employeeId: empIdInt,
           employeeName: _selectedEmployee!.fullName,
           date: todayStr,
-          time: nowTime24,
+          time: startTimestamp,
           assignmentId: createdId > 0 ? createdId : DateTime.now().millisecondsSinceEpoch,
           purpose: _purposeController.text.trim(),
           destination: primarySite.effectiveName,

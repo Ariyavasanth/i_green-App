@@ -127,19 +127,116 @@ class AttendanceRecord {
     return !_isOfficeType(type) && !_isOdType(type) && !_isLunchType(type) && !_isTeaBreakType(type);
   }
 
-  /// Computes the total working hours by summing all valid completed sessions
-  /// (Office, OD, Lunch Break, Tea Break, Meeting, and other activity sessions).
+  /// Computes exact non-overlapping work duration in seconds across all completed
+  /// sessions (Office, OD, Lunch Break, Tea Break, Meeting, etc.) by merging
+  /// overlapping [start, end] intervals.
+  static int calculateNonOverlappingDurationSeconds(List<AttendanceSession> sessions) {
+    final List<({int start, int end})> intervals = [];
+    int fallbackSeconds = 0;
+
+    for (final s in sessions) {
+      if (!s.isCompleted && s.durationMinutes <= 0 && s.durationHours <= 0) continue;
+
+      final startSec = s.checkInTime.isNotEmpty
+          ? TimeFormatter.parseTimeToSeconds(s.checkInTime)
+          : null;
+      final endSec = s.checkOutTime.isNotEmpty
+          ? TimeFormatter.parseTimeToSeconds(s.checkOutTime)
+          : null;
+
+      if (startSec != null && endSec != null) {
+        int adjustedEnd = endSec;
+        if (adjustedEnd < startSec) {
+          adjustedEnd += 86400; // Overnight wrap-around
+        }
+        if (adjustedEnd > startSec) {
+          intervals.add((start: startSec, end: adjustedEnd));
+        }
+      } else if (s.isCompleted || s.durationMinutes > 0 || s.durationHours > 0) {
+        // Legacy completed session without parseable timestamps
+        fallbackSeconds += s.effectiveDurationSeconds;
+      }
+    }
+
+    if (intervals.isEmpty) return fallbackSeconds;
+
+    intervals.sort((a, b) {
+      final cmp = a.start.compareTo(b.start);
+      return cmp != 0 ? cmp : a.end.compareTo(b.end);
+    });
+
+    int mergedTotalSeconds = 0;
+    int curStart = intervals.first.start;
+    int curEnd = intervals.first.end;
+
+    for (int i = 1; i < intervals.length; i++) {
+      final next = intervals[i];
+      if (next.start <= curEnd) {
+        if (next.end > curEnd) curEnd = next.end;
+      } else {
+        mergedTotalSeconds += (curEnd - curStart);
+        curStart = next.start;
+        curEnd = next.end;
+      }
+    }
+    mergedTotalSeconds += (curEnd - curStart);
+
+    return mergedTotalSeconds + fallbackSeconds;
+  }
+
+  /// Computes exact non-overlapping work duration in hours (rounded to 2 decimals).
+  static double calculateNonOverlappingDurationHours(List<AttendanceSession> sessions) {
+    final secs = calculateNonOverlappingDurationSeconds(sessions);
+    if (secs <= 0) return 0.0;
+    return double.parse((secs / 3600.0).toStringAsFixed(2));
+  }
+
+  /// Returns true if any two completed sessions overlap in time (historical data check).
+  bool get hasOverlappingSessions {
+    final List<({int start, int end})> intervals = [];
+    for (final s in effectiveSessions) {
+      if (!s.isCompleted) continue;
+      final startSec = TimeFormatter.parseTimeToSeconds(s.checkInTime);
+      final endSec = TimeFormatter.parseTimeToSeconds(s.checkOutTime);
+      if (startSec == null || endSec == null) continue;
+      final adjustedEnd = endSec < startSec ? endSec + 86400 : endSec;
+      if (adjustedEnd > startSec) {
+        intervals.add((start: startSec, end: adjustedEnd));
+      }
+    }
+    if (intervals.length < 2) return false;
+    intervals.sort((a, b) => a.start.compareTo(b.start));
+    for (int i = 1; i < intervals.length; i++) {
+      if (intervals[i].start < intervals[i - 1].end) return true;
+    }
+    return false;
+  }
+
+  /// Flags historical records containing an auto-synced OD session with an
+  /// unverified start time (e.g., legacy '08:00 AM' fallback) for admin review.
+  bool get hasUnverifiedOdStartTime {
+    return effectiveSessions.any((s) {
+      if (!s.isOd) return false;
+      final isAutoSynced = s.checkInMethod.trim().toLowerCase() == 'od auto sync';
+      if (!isAutoSynced) return false;
+      if (s.checkInTime.trim().isEmpty) return true;
+      final normalized = TimeFormatter.formatTo24HourTime(s.checkInTime);
+      return normalized == '08:00:00' && hasOverlappingSessions;
+    });
+  }
+
+  /// Read-only flag indicating this record should be reviewed by an admin.
+  bool get requiresAdminTimeReview => hasOverlappingSessions || hasUnverifiedOdStartTime;
+
+  /// Computes the total working hours by merging all valid completed sessions
+  /// (Office, OD, Lunch Break, Tea Break, Meeting, and other activity sessions)
+  /// without double-counting overlapping time intervals.
   /// Falls back to top-level check-in and check-out difference if sessions list is empty.
   double get computedTotalHours {
     if (sessions.isNotEmpty) {
-      double sum = 0.0;
-      for (final s in sessions) {
-        if (s.isCompleted) {
-          sum += s.effectiveDurationHours;
-        }
-      }
-      if (sum > 0) {
-        return double.parse(sum.toStringAsFixed(2));
+      final mergedHours = calculateNonOverlappingDurationHours(sessions);
+      if (mergedHours > 0) {
+        return mergedHours;
       }
     }
 
@@ -326,16 +423,7 @@ class AttendanceRecord {
   String get formattedTotalHours {
     int totalSeconds = 0;
     if (sessions.isNotEmpty) {
-      totalSeconds = sessions.fold<int>(0, (sum, s) {
-        if (s.isCompleted) {
-          if (s.durationMinutes > 0) {
-            return sum + (s.durationMinutes * 60);
-          } else if (s.effectiveDurationMinutes > 0) {
-            return sum + (s.effectiveDurationMinutes * 60);
-          }
-        }
-        return sum;
-      });
+      totalSeconds = calculateNonOverlappingDurationSeconds(sessions);
     }
 
     if (totalSeconds == 0 && totalHours > 0) {
@@ -375,18 +463,13 @@ class AttendanceRecord {
     }
   }
 
-  /// Computes total work duration in seconds across all completed sessions,
+  /// Computes total non-overlapping work duration in seconds across all completed sessions,
   /// falling back to totalHours or checkIn/checkOut difference.
   int get totalWorkDurationSeconds {
     int totalSeconds = 0;
     final list = effectiveSessions;
     if (list.isNotEmpty) {
-      totalSeconds = list.fold<int>(0, (sum, s) {
-        if (s.isCompleted || s.durationMinutes > 0) {
-          return sum + s.effectiveDurationSeconds;
-        }
-        return sum;
-      });
+      totalSeconds = calculateNonOverlappingDurationSeconds(list);
     }
 
     if (totalSeconds == 0 && totalHours > 0) {

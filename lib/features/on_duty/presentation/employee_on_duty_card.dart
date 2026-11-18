@@ -16,6 +16,7 @@ import 'widgets/work_proof_upload_dialog.dart';
 import '../../attendance/providers/attendance_providers.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../../../core/widgets/reverse_geocoded_location_text.dart';
+import '../../../core/utils/time_formatter.dart';
 
 String _sanitizePurposeText(String text) {
   if (text.isEmpty) return text;
@@ -147,12 +148,15 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
   }
 
   DateTime _parseTimeString(String? timeStr) {
-    if (timeStr != null && timeStr.isNotEmpty) {
-      try {
-        final parsed = DateFormat('hh:mm a').parse(timeStr);
+    if (timeStr != null && timeStr.trim().isNotEmpty) {
+      final totalSecs = TimeFormatter.parseTimeToSeconds(timeStr);
+      if (totalSecs != null) {
         final now = DateTime.now();
-        return DateTime(now.year, now.month, now.day, parsed.hour, parsed.minute);
-      } catch (_) {}
+        final h = totalSecs ~/ 3600;
+        final m = (totalSecs % 3600) ~/ 60;
+        final s = totalSecs % 60;
+        return DateTime(now.year, now.month, now.day, h, m, s);
+      }
     }
     return DateTime.now();
   }
@@ -1015,16 +1019,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
               false;
         }
 
-        if (shouldAutoCheckOut) {
-          final nowTimeStr = DateFormat('hh:mm a').format(DateTime.now());
-          await attendanceRepo.checkOut(
-            employeeId: empIdInt,
-            date: todayStr,
-            checkOutTime: nowTimeStr,
-            verificationStatus: 'AUTO_OFFICE_CHECKOUT_FOR_OD',
-            similarityScore: 1.0,
-          );
-        } else {
+        if (!shouldAutoCheckOut) {
           return;
         }
       }
@@ -1033,8 +1028,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
     setState(() => _isActionLoading = true);
     try {
       final position = await _getGpsPosition();
-      final nowStr = DateFormat('hh:mm a').format(DateTime.now());
-      final nowTime24 = '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:${DateTime.now().second.toString().padLeft(2, '0')}';
+      final startTimestamp = DateFormat('hh:mm:ss a').format(DateTime.now());
 
       final sitesList = List<OnDutySite>.from(_assignment.effectiveSites);
       final targetIndex = siteIndex < sitesList.length ? siteIndex : 0;
@@ -1042,20 +1036,20 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
 
       sitesList[targetIndex] = site.copyWith(
         status: 'TRAVELING',
-        travelStartTime: nowStr,
+        travelStartTime: startTimestamp,
         startLatitude: position?.latitude,
         startLongitude: position?.longitude,
       );
 
       if (siteIndex == 0) {
         // Only start attendance session when starting trip if NOT starting from home.
-        // If starting from home, check-in time will be recorded when the employee actually reaches the site.
+        // startOdAttendanceSession atomically closes any active Office session at startTimestamp.
         if (!widget.assignment.startOdFromHome) {
           await attendanceRepo.startOdAttendanceSession(
             employeeId: empIdInt,
             employeeName: widget.assignment.employeeName,
             date: todayStr,
-            time: nowTime24,
+            time: startTimestamp,
             assignmentId: widget.assignment.id,
             purpose: site.purpose.isNotEmpty ? site.purpose : widget.assignment.purpose,
             destination: site.effectiveName,
@@ -1073,8 +1067,10 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
 
       final updated = widget.assignment.copyWith(
         status: 'TRAVELING_TO_DESTINATION',
-        travelStartTime: nowStr,
-        actualStartTime: widget.assignment.actualStartTime ?? nowStr,
+        travelStartTime: startTimestamp,
+        actualStartTime: (widget.assignment.actualStartTime != null && widget.assignment.actualStartTime!.trim().isNotEmpty)
+            ? widget.assignment.actualStartTime
+            : startTimestamp,
         destination: site.effectiveName,
         destinationName: site.effectiveName,
         destinationAddress: site.destinationAddress,
@@ -1249,20 +1245,19 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
 
       setState(() => _isActionLoading = true);
 
-      final nowStr = DateFormat('hh:mm a').format(DateTime.now());
+      final reachedTimestamp = DateFormat('hh:mm:ss a').format(DateTime.now());
 
       // For first OD started from home, record attendance check-in NOW upon reaching site location
       if (siteIndex == 0 && _assignment.startOdFromHome) {
         final attendanceRepo = ref.read(attendanceRepositoryProvider);
         final empIdInt = _assignment.employeeId > 0 ? _assignment.employeeId : 1;
         final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-        final nowTime24 = '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:${DateTime.now().second.toString().padLeft(2, '0')}';
 
         await attendanceRepo.startOdAttendanceSession(
           employeeId: empIdInt,
           employeeName: _assignment.employeeName,
           date: todayStr,
-          time: nowTime24,
+          time: reachedTimestamp,
           assignmentId: _assignment.id,
           purpose: site.purpose.isNotEmpty ? site.purpose : _assignment.purpose,
           destination: site.effectiveName,
@@ -1280,7 +1275,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
       final sitesList = List<OnDutySite>.from(_assignment.effectiveSites);
       final updatedSite = site.copyWith(
         status: 'REACHED',
-        reachedTime: nowStr,
+        reachedTime: reachedTimestamp,
         reachedPhoto: photo,
         reachedLatitude: position.latitude,
         reachedLongitude: position.longitude,
@@ -1294,7 +1289,10 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
 
       final updated = _assignment.copyWith(
         status: 'REACHED_DESTINATION',
-        reachedTime: nowStr,
+        actualStartTime: (_assignment.actualStartTime != null && _assignment.actualStartTime!.trim().isNotEmpty)
+            ? _assignment.actualStartTime
+            : (_assignment.startOdFromHome ? reachedTimestamp : _assignment.actualStartTime),
+        reachedTime: reachedTimestamp,
         reachedPhoto: photo,
         reachedLatitude: position.latitude,
         reachedLongitude: position.longitude,
@@ -1575,15 +1573,14 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
     setState(() => _isActionLoading = true);
     try {
       final position = await _getGpsPosition();
-      final nowStr = DateFormat('hh:mm a').format(DateTime.now());
+      final completedTimestamp = DateFormat('hh:mm:ss a').format(DateTime.now());
       final empIdInt = widget.assignment.employeeId > 0 ? widget.assignment.employeeId : 1;
       final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      final nowTime24 = '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:${DateTime.now().second.toString().padLeft(2, '0')}';
 
       final sitesList = List<OnDutySite>.from(_assignment.effectiveSites);
       final updatedSite = site.copyWith(
         status: 'COMPLETED',
-        workCompletedTime: nowStr,
+        workCompletedTime: completedTimestamp,
         workPhoto: photos.first,
         workPhotos: photos,
         notes: purposeDetails.isNotEmpty ? purposeDetails : site.notes,
@@ -1611,7 +1608,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
             employeeId: empIdInt,
             employeeName: _assignment.employeeName,
             date: todayStr,
-            time: nowTime24,
+            time: completedTimestamp,
             assignmentId: _assignment.id,
             latitude: position?.latitude,
             longitude: position?.longitude,
@@ -1631,13 +1628,13 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
           voiceNoteText: purposeDetails.isNotEmpty ? purposeDetails : _assignment.voiceNoteText,
           originalVoiceText: origVoice ?? _assignment.originalVoiceText,
           voiceLanguage: voiceLang ?? _assignment.voiceLanguage,
-          workCompletedTime: nowStr,
+          workCompletedTime: completedTimestamp,
           workPhoto: photos.first,
           workPhotos: photos,
-          actualEndTime: isReturnToOffice ? null : nowStr,
+          actualEndTime: isReturnToOffice ? null : completedTimestamp,
           workEndLatitude: position?.latitude,
           workEndLongitude: position?.longitude,
-          returnStartTime: isReturnToOffice ? nowStr : _assignment.returnStartTime,
+          returnStartTime: isReturnToOffice ? completedTimestamp : _assignment.returnStartTime,
           returnLatitude: isReturnToOffice ? position?.latitude : _assignment.returnLatitude,
           returnLongitude: isReturnToOffice ? position?.longitude : _assignment.returnLongitude,
           sites: sitesList,
@@ -1671,7 +1668,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
           voiceNoteText: purposeDetails.isNotEmpty ? purposeDetails : _assignment.voiceNoteText,
           originalVoiceText: origVoice ?? _assignment.originalVoiceText,
           voiceLanguage: voiceLang ?? _assignment.voiceLanguage,
-          workCompletedTime: nowStr,
+          workCompletedTime: completedTimestamp,
           workPhoto: photos.first,
           workPhotos: photos,
           sites: sitesList,
@@ -1838,8 +1835,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
     setState(() => _isActionLoading = true);
     try {
       final position = await _getGpsPosition();
-      final nowStr = DateFormat('hh:mm a').format(DateTime.now());
-      final nowTime24 = '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:${DateTime.now().second.toString().padLeft(2, '0')}';
+      final returnTimestamp = DateFormat('hh:mm:ss a').format(DateTime.now());
       final empIdInt = widget.assignment.employeeId > 0 ? widget.assignment.employeeId : 1;
       final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
@@ -1849,7 +1845,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
           employeeId: empIdInt,
           employeeName: widget.assignment.employeeName,
           date: todayStr,
-          time: nowTime24,
+          time: returnTimestamp,
           assignmentId: widget.assignment.id,
           latitude: position?.latitude,
           longitude: position?.longitude,
@@ -1859,8 +1855,8 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
 
       final updated = widget.assignment.copyWith(
         status: 'COMPLETED',
-        officeReachedTime: nowStr,
-        actualEndTime: nowStr,
+        officeReachedTime: returnTimestamp,
+        actualEndTime: returnTimestamp,
         officeLatitude: position?.latitude,
         officeLongitude: position?.longitude,
         returnTravelDurationMinutes: returnMins,
